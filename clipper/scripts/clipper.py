@@ -180,12 +180,20 @@ def ytdlp_common_args():
 
     cookies_file = os.environ.get("YTDLP_COOKIES_FILE", "").strip()
     cookies_browser = os.environ.get("YTDLP_COOKIES_FROM_BROWSER", "").strip()
+    user_agent = os.environ.get("YTDLP_USER_AGENT", "").strip()
+    referer = os.environ.get("YTDLP_REFERER", "").strip()
     js_runtimes = os.environ.get("YTDLP_JS_RUNTIMES", "node").strip()
     remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github").strip()
+    sleep_requests = os.environ.get("YTDLP_SLEEP_REQUESTS", "").strip()
+    sleep_interval = os.environ.get("YTDLP_SLEEP_INTERVAL", "").strip()
+    max_sleep_interval = os.environ.get("YTDLP_MAX_SLEEP_INTERVAL", "").strip()
+    retries = os.environ.get("YTDLP_RETRIES", "").strip()
+    fragment_retries = os.environ.get("YTDLP_FRAGMENT_RETRIES", "").strip()
+    retry_sleep = os.environ.get("YTDLP_RETRY_SLEEP", "").strip()
 
-    # Prioritas 1: pakai file cookies.txt
-    # Letakkan cookies.txt di root project:
-    # C:\xampp\htdocs\auto-video-clipper\cookies.txt
+    # Prioritas 1: pakai file cookies.txt.
+    # Di GitHub Actions file ini dibuat dari secret YTDLP_COOKIES_TXT.
+    # Di lokal, letakkan cookies.txt di root folder clipper.
     if not cookies_file and os.path.exists("cookies.txt"):
         cookies_file = "cookies.txt"
 
@@ -194,14 +202,40 @@ def ytdlp_common_args():
     elif cookies_browser:
         args.extend(["--cookies-from-browser", cookies_browser])
 
+    # Samakan identitas request dengan browser yang dipakai saat export cookies.
+    # Ini membantu saat YouTube menolak cookies karena user-agent runner berbeda jauh.
+    if user_agent:
+        args.extend(["--user-agent", user_agent])
+
+    if referer:
+        args.extend(["--referer", referer])
+
     if remote_components:
         args.extend(["--remote-components", remote_components])
 
     if js_runtimes:
         args.extend(["--js-runtimes", js_runtimes])
 
-    return args
+    # Opsi throttling/retry ini opsional. Isi lewat env jika GitHub Actions sering dianggap bot.
+    if sleep_requests:
+        args.extend(["--sleep-requests", sleep_requests])
 
+    if sleep_interval:
+        args.extend(["--sleep-interval", sleep_interval])
+
+    if max_sleep_interval:
+        args.extend(["--max-sleep-interval", max_sleep_interval])
+
+    if retries:
+        args.extend(["--retries", retries])
+
+    if fragment_retries:
+        args.extend(["--fragment-retries", fragment_retries])
+
+    if retry_sleep:
+        args.extend(["--retry-sleep", retry_sleep])
+
+    return args
 
 def get_video_info(url):
     result = run_ytdlp(["-J", "--skip-download", "--no-warnings", url], capture=True)
