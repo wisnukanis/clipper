@@ -116,6 +116,9 @@ export async function runWorkflow(options = {}) {
       const videoPublicOk = await validatePublicUrl(upload.videoUrl);
       if (!videoPublicOk) throw new Error(`Public video URL belum valid: ${upload.videoUrl}`);
     }
+    console.log("Public video URL valid:", upload.videoUrl);
+console.log("Waiting 20 seconds before Instagram container creation...");
+await new Promise((resolve) => setTimeout(resolve, 20000));
 
     await updateJob(job.job_id, {
       status: "ready_to_publish",
