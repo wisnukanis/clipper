@@ -73,7 +73,8 @@ export const config = {
   instagram: {
     enabled: boolEnv("INSTAGRAM_UPLOAD_ENABLED", true),
     igUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
-    accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || ""
+    accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || "",
+    maxUploadBytes: numberEnv("INSTAGRAM_MAX_UPLOAD_BYTES", 7800000)
   },
   facebook: {
     enabled: boolEnv("FACEBOOK_UPLOAD_ENABLED", false),

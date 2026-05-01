@@ -10,6 +10,7 @@ import { generateCaption, generateThumbnailText } from "./caption.js";
 import { generateThumbnail } from "./thumbnail.js";
 import { fileExists, uploadHistoryFile, uploadJobFiles, validatePublicUrl } from "./uploader.js";
 import { publishReel } from "./instagram.js";
+import { prepareInstagramVideo } from "./instagram-video.js";
 import { publishToFacebook } from "./facebook.js";
 import { buildYoutubeMetadata, publishToYoutube } from "./youtube-publisher.js";
 import { todayDate } from "./job-id.js";
@@ -278,7 +279,15 @@ async function publishPlatforms({ job, output, caption, upload }) {
     platformResults.instagram = await publishPlatform("instagram", platformResults, job.job_id, async () => {
       if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Instagram.");
       await updateJob(job.job_id, { instagram_status: "processing", instagram_error: "" });
-      return publishReel({ videoUrl: upload.videoUrl, caption });
+      const instagramVideo = await prepareInstagramVideo({
+        job,
+        sourcePath: output.finalAbsPath,
+        currentVideoUrl: upload.videoUrl
+      });
+      return publishReel({
+        videoUrl: instagramVideo.videoUrl,
+        caption
+      });
     });
   }
 

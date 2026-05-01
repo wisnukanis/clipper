@@ -72,6 +72,17 @@ export async function uploadJobFiles({ job, videoPath, thumbnailPath, metadataPa
   };
 }
 
+export async function uploadVideoFile({ videoPath, videoName }) {
+  if (!shouldUploadToFtp()) return "";
+
+  await withFtpClient(async (client) => {
+    await client.ensureDir(path.posix.join(config.ftp.remoteDir, "videos"));
+    await client.uploadFrom(videoPath, videoName);
+  }, { timeoutMs: config.ftp.timeoutMs });
+
+  return publicVideoUrl(videoName);
+}
+
 export async function uploadHistoryFile(historyFile) {
   if (!shouldUploadToFtp()) return "";
   await withFtpClient(async (client) => {

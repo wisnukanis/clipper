@@ -33,6 +33,15 @@ function isMetaMediaUploadFailed2207076(error) {
   );
 }
 
+function isRuploadProcessingFailure(error) {
+  const message = String(error?.message || "");
+  return (
+    message.includes("ProcessingFailedError") ||
+    message.includes("Rupload gagal") ||
+    message.toLowerCase().includes("request processing failed")
+  );
+}
+
 function getReelUploadMethod() {
   return String(process.env.INSTAGRAM_REEL_UPLOAD_METHOD || "auto")
     .trim()
@@ -326,11 +335,27 @@ export async function publishReel({ videoUrl, caption }) {
   console.log("IG REEL UPLOAD METHOD:", method);
 
   if (method === "resumable") {
-    return publishReelViaResumable({ videoUrl, caption });
+    try {
+      return await publishReelViaResumable({ videoUrl, caption });
+    } catch (error) {
+      if (!isRuploadProcessingFailure(error)) throw error;
+      console.log("IG resumable gagal saat rupload. Mencoba fallback video_url.", {
+        message: error.message
+      });
+      return publishReelViaVideoUrl({ videoUrl, caption });
+    }
   }
 
   if (method === "video_url") {
-    return publishReelViaVideoUrl({ videoUrl, caption });
+    try {
+      return await publishReelViaVideoUrl({ videoUrl, caption });
+    } catch (error) {
+      if (!isMetaMediaUploadFailed2207076(error)) throw error;
+      console.log("IG video_url gagal dengan 2207076. Mencoba fallback resumable upload.", {
+        message: error.message
+      });
+      return publishReelViaResumable({ videoUrl, caption });
+    }
   }
 
   try {
