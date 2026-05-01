@@ -317,15 +317,28 @@ export async function runPreflight(options = {}) {
   const youtubeOnline = options.youtubeOnline ?? online;
   const publishRequired = options.publishRequired ?? canPublish();
   const socialPublishRequired = options.socialPublishRequired ?? false;
-  const ai = await aiChecks(aiOnline);
-  const checks = [
+  const preChecks = [
     ...await localChecks(),
-    await checkDeepgram(deepgramOnline),
-    ...ai,
     await checkFtp(ftpOnline),
     await checkInstagram(socialOnline, socialPublishRequired),
     await checkFacebook(socialOnline, socialPublishRequired),
     await checkYoutube(youtubeOnline, publishRequired)
+  ];
+  const precheckFailed = preChecks.some((check) => check.required && !check.ok);
+
+  if (precheckFailed) {
+    return {
+      online,
+      ok: false,
+      checks: preChecks
+    };
+  }
+
+  const ai = await aiChecks(aiOnline);
+  const checks = [
+    ...preChecks,
+    await checkDeepgram(deepgramOnline),
+    ...ai
   ];
 
   return {

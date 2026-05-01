@@ -20,11 +20,20 @@ import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflig
 export async function runWorkflow(options = {}) {
   await ensureProjectDirs();
 
+  const publishRequired = Boolean(options.publish && canPublish());
   const preflight = await runPreflight({
-    publishRequired: Boolean(options.publish && canPublish())
+    publishRequired,
+    socialPublishRequired: publishRequired,
+    socialOnline: publishRequired,
+    deepgramOnline: false
   });
   printPreflightReport(preflight);
-  assertPreflightOk(preflight);
+  try {
+    assertPreflightOk(preflight);
+  } catch (error) {
+    await appendLog("precheck_failed", { error: error.message });
+    throw error;
+  }
 
   await downloadStateFromRemote().catch((error) => {
     console.warn(`State remote dilewati: ${error.message}`);
@@ -322,6 +331,7 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     theme: theme?.name || job.theme,
     prompt_id: prompt?.id || "",
     status: "done",
+    transcriptSource: output.transcriptSource || "",
     finalPath: output.finalAbsPath,
     transcriptPath: output.transcriptReviewAbsPath || "",
     subtitlePath: output.subtitleAbsPath || "",
@@ -331,6 +341,11 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     startTime: output.start,
     endTime: output.end,
     duration: output.duration,
+    clipTranscript: output.clipTranscript || "",
+    viralScore: output.viralScore || 0,
+    selectedAngle: output.selectedAngle || "",
+    publishDecision: output.publishDecision || "",
+    candidateId: output.candidateId || "",
     clipperJobId: clipperResult.jobId,
     createdAt: new Date().toISOString()
   };

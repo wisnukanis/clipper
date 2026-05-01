@@ -41,6 +41,10 @@ function collectText(value, texts) {
 }
 
 export async function generateCaption({ job, output, promptTemplate, clipperRoot }) {
+  if (hasStrategyCaption(output)) {
+    return output.caption.trim();
+  }
+
   const context = await readClipContext(clipperRoot, output);
   const fallback = fallbackCaption(output, promptTemplate);
   const prompt = [
@@ -68,6 +72,10 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
 }
 
 export async function generateThumbnailText({ job, output, promptTemplate }) {
+  if (output.thumbnailText) {
+    return normalizeThumbnailText(output.thumbnailText);
+  }
+
   const fallback = normalizeThumbnailText(output.hook || output.title || "CERITA YANG JARANG DIBUKA");
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
@@ -80,6 +88,19 @@ export async function generateThumbnailText({ job, output, promptTemplate }) {
   ].join("\n");
   const text = await generateGeminiText(prompt, { maxOutputTokens: 80, temperature: 0.65 });
   return normalizeThumbnailText(text || fallback);
+}
+
+function hasStrategyCaption(output) {
+  return Boolean(
+    output?.caption
+    && String(output.caption).trim().length >= 20
+    && (
+      output.viralScore
+      || output.selectedAngle
+      || output.publishDecision
+      || output.candidateId
+    )
+  );
 }
 
 function fallbackCaption(output, promptTemplate) {

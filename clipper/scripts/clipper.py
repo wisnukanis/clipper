@@ -42,6 +42,11 @@ def load_env():
 
 
 def parse_int(value, default):
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "yes", "on"}:
+        return 1
+    if normalized in {"false", "no", "off"}:
+        return 0
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -99,7 +104,14 @@ def cfg():
         "active_speaker_initial_min_score": parse_float(os.environ.get("ACTIVE_SPEAKER_INITIAL_MIN_SCORE"), 0.010),
         "active_speaker_initial_side_bias": parse_float(os.environ.get("ACTIVE_SPEAKER_INITIAL_SIDE_BIAS"), 0.06),
         "transcript_review": parse_int(os.environ.get("TRANSCRIPT_REVIEW_ENABLED"), 1),
+        "transcript_review_required": parse_int(os.environ.get("TRANSCRIPT_REVIEW_REQUIRED"), 0),
         "transcript_review_batch": parse_int(os.environ.get("TRANSCRIPT_REVIEW_BATCH_SIZE"), 80),
+        "viral_strategy_enabled": parse_int(os.environ.get("VIRAL_STRATEGY_ENABLED"), 1),
+        "viral_strategy_required": parse_int(os.environ.get("VIRAL_STRATEGY_REQUIRED"), 0),
+        "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 5),
+        "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 4000),
+        "min_viral_score_to_publish": parse_int(os.environ.get("MIN_VIRAL_SCORE_TO_PUBLISH"), 0),
+        "force_publish": parse_int(os.environ.get("FORCE_PUBLISH"), 1),
         "language": os.environ.get("VIDEO_LANGUAGE", "id"),
         "deepgram_enabled": parse_int(os.environ.get("DEEPGRAM_ENABLED"), 1),
         "deepgram_keys": parse_keys(os.environ.get("DEEPGRAM_API_KEYS") or os.environ.get("DEEPGRAM_API_KEY")),
@@ -787,11 +799,11 @@ def extract_json(text):
         data, _ = decoder.raw_decode(fenced.group(1).strip())
         return data
 
-    start = raw.find("[")
-    if start < 0:
-        raise ValueError("Gemini tidak mengembalikan JSON array valid.")
+    starts = [pos for pos in [raw.find("["), raw.find("{")] if pos >= 0]
+    if not starts:
+        raise ValueError("Gemini tidak mengembalikan JSON valid.")
 
-    data, _ = decoder.raw_decode(raw[start:])
+    data, _ = decoder.raw_decode(raw[min(starts):])
     return data
 
 
@@ -857,7 +869,7 @@ def call_clod(prompt, config, max_tokens=1200):
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"CLōD HTTP {exc.code}: {detail}") from exc
+        raise RuntimeError(f"CLOD HTTP {exc.code}: {detail}") from exc
 
     return str(data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
 
@@ -999,71 +1011,271 @@ def find_local_important_clips(segments, config, reason=""):
     return clips
 
 
-def find_important_clips(segments, config):
-    if not config["gemini_keys"] and not config.get("clod_key"):
-        log_warn("GEMINI_API_KEYS dan CLOD_API_KEY kosong. Pakai fallback analisis lokal.")
-        return validate_clips(find_local_important_clips(segments, config), segments, config)
+def build_candidate_clips(segments, config):
+    min_duration = max(10, int(config.get("min_clip_seconds", 40)))
+    max_duration = max(min_duration, int(config.get("max_clip_seconds", 60)))
+    max_candidates = max(1, min(5, int(config.get("ai_candidate_max_count", 5))))
+    max_total_chars = max(700, int(config.get("ai_candidate_max_chars", 4000)))
+    per_candidate_chars = max(220, min(1100, max_total_chars // max_candidates))
 
-    prompt = f"""
-Anda adalah editor video short-form profesional.
+    scored = []
+    for start_index, segment in enumerate(segments):
+        start = float(segment.get("start", 0))
+        end = start
 
-Tugas:
-Pilih {config['clip_count']} bagian terbaik dari transkrip video untuk dijadikan clip pendek.
+        for next_segment in segments[start_index:]:
+            end = float(next_segment.get("end", end))
+            duration = end - start
+            if duration < min_duration:
+                continue
+            if duration > max_duration:
+                break
 
-Kriteria:
-- Ada hook kuat.
-- Ada insight, konflik, edukasi, data menarik, kejutan, emosi, atau kalimat yang cocok untuk short video.
-- Durasi minimal {config['min_clip_seconds']} detik.
-- Durasi maksimal {config['max_clip_seconds']} detik.
-- Mudah dipahami tanpa konteks terlalu panjang.
-- Hindari opening basa-basi.
-- Cocok untuk TikTok, Instagram Reels, dan YouTube Shorts.
-- Untuk tahap ini pilih hanya bagian paling kuat, jangan banyak-banyak.
-- Output harus JSON valid saja, tanpa markdown.
+            text = segment_text_window(segments, start, end, max_chars=per_candidate_chars)
+            if len(text.split()) < 8:
+                continue
 
-Format output:
-[
-  {{
-    "title": "Judul singkat clip",
-    "reason": "Alasan bagian ini menarik",
-    "start": 80,
-    "end": 130,
-    "hook": "Kalimat pembuka yang menarik",
-    "caption": "Caption posting singkat"
-  }}
-]
+            scored.append({
+                "score": local_clip_score(text, start, duration),
+                "start": start,
+                "end": end,
+                "duration": duration,
+                "text": text,
+            })
 
-Gunakan start dan end dalam satuan detik berdasarkan timestamp transkrip.
+    scored.sort(key=lambda item: item["score"], reverse=True)
+    selected = []
+    for candidate in scored:
+        overlaps = any(
+            candidate["start"] < item["end"] and candidate["end"] > item["start"]
+            for item in selected
+        )
+        if overlaps:
+            continue
+        selected.append(candidate)
+        if len(selected) >= max_candidates:
+            break
 
-Transkrip:
-{transcript_text(segments)}
+    if not selected and segments:
+        start = float(segments[0].get("start", 0))
+        end = min(float(segments[-1].get("end", start + max_duration)), start + max_duration)
+        selected.append({
+            "score": 0,
+            "start": start,
+            "end": end,
+            "duration": end - start,
+            "text": segment_text_window(segments, start, end, max_chars=per_candidate_chars),
+        })
+
+    candidates = []
+    used_chars = 0
+    for index, item in enumerate(selected):
+        room = max_total_chars - used_chars
+        if room <= 80:
+            break
+
+        text = str(item["text"]).strip()
+        if len(text) > room:
+            text = text[: room - 3].rstrip() + "..."
+
+        used_chars += len(text)
+        candidates.append({
+            "candidate_id": index + 1,
+            "start": round(float(item["start"]), 2),
+            "end": round(float(item["end"]), 2),
+            "duration": round(float(item["duration"]), 2),
+            "text": text,
+            "local_score": round(float(item["score"]), 2),
+        })
+
+    return candidates
+
+
+def candidate_to_clip(candidate, index=0, reason=""):
+    text = str(candidate.get("text", "")).strip()
+    return {
+        "title": local_clip_title(text, index),
+        "reason": reason or "Fallback lokal memilih bagian dengan sinyal hook, angka, konflik, dan kata kunci kuat.",
+        "start": float(candidate.get("start", 0)),
+        "end": float(candidate.get("end", 0)),
+        "hook": text,
+        "caption": text,
+        "candidate_id": candidate.get("candidate_id") or index + 1,
+        "clip_transcript": text,
+        "viral_score": int(float(candidate.get("local_score", 0))),
+        "publish_decision": "local_fallback",
+    }
+
+
+def build_viral_strategy_prompt(candidates, config):
+    theme = os.environ.get("DEFAULT_THEME", "podcast artis")
+    source_title = os.environ.get("SOURCE_TITLE", "")
+    candidate_payload = [
+        {
+            "candidate_id": item["candidate_id"],
+            "start": item["start"],
+            "end": item["end"],
+            "duration": item["duration"],
+            "text": item["text"],
+        }
+        for item in candidates
+    ]
+
+    return f"""
+Kamu adalah Viral Content Strategist untuk konten Shorts, Reels, dan TikTok.
+
+Tugas kamu bukan hanya membuat caption.
+Tugas kamu adalah memilih kandidat clip yang paling berpotensi viral berdasarkan candidate transcript yang diberikan.
+
+Aturan:
+- Semua output wajib berdasarkan transcript.
+- Jangan mengarang fakta.
+- Jangan membuat klaim yang tidak ada di transcript.
+- Jangan membuat clickbait menipu.
+- Gunakan bahasa Indonesia.
+- Hook harus kuat dan pendek.
+- Caption harus natural, singkat, dan relevan.
+- CTA harus ringan dan memancing komentar.
+- Hashtag harus relevan dengan niche.
+- Thumbnail text harus 3 sampai 7 kata.
+- Pilih angle yang paling kuat secara emosi, konflik, curiosity, relate, atau pelajaran hidup.
+- Output wajib JSON valid saja, tanpa markdown.
+
+Niche:
+{theme}
+
+Judul video sumber:
+{source_title}
+
+Candidate clips:
+{json.dumps(candidate_payload, ensure_ascii=False, indent=2)}
+
+Output wajib JSON valid:
+{{
+  "selected_candidate_id": 1,
+  "viral_score": 0,
+  "selected_angle": "",
+  "viral_reason": "",
+  "hook": "",
+  "caption": "",
+  "cta": "",
+  "hashtags": [],
+  "thumbnail_text": "",
+  "publish_decision": "approved_or_low_quality"
+}}
 """
 
+
+def strategy_result_to_clips(data, candidates, config):
+    if isinstance(data, list):
+        return data
+
+    if not isinstance(data, dict):
+        raise ValueError("Output Gemini viral strategy harus object JSON.")
+
+    try:
+        selected_id = int(data.get("selected_candidate_id") or 0)
+    except (TypeError, ValueError):
+        selected_id = 0
+
+    candidate = next((item for item in candidates if int(item["candidate_id"]) == selected_id), None)
+    if candidate is None:
+        candidate = candidates[0]
+
+    try:
+        viral_score = int(float(data.get("viral_score") or 0))
+    except (TypeError, ValueError):
+        viral_score = 0
+
+    hashtags = data.get("hashtags") or []
+    if isinstance(hashtags, str):
+        hashtags = [item.strip() for item in re.split(r"[\s,]+", hashtags) if item.strip()]
+    hashtags_text = " ".join(str(item).strip() for item in hashtags if str(item).strip())
+    hook = str(data.get("hook") or "").strip() or candidate["text"]
+
+    caption_parts = [
+        hook,
+        str(data.get("caption") or "").strip(),
+        str(data.get("cta") or "").strip(),
+        hashtags_text,
+    ]
+    caption = "\n\n".join(part for part in caption_parts if part)
+    thumbnail_text = str(data.get("thumbnail_text") or "").strip()
+    publish_decision = str(data.get("publish_decision") or "approved").strip()
+
+    minimum = int(config.get("min_viral_score_to_publish", 0))
+    if minimum > 0 and not int(config.get("force_publish", 1)) and viral_score < minimum:
+        publish_decision = "low_quality_clip"
+        log_warn(f"Viral score {viral_score} di bawah batas {minimum}. Clip ditandai low_quality_clip.")
+
+    return [{
+        "title": thumbnail_text or hook,
+        "reason": str(data.get("viral_reason") or data.get("selected_angle") or "").strip(),
+        "start": float(candidate["start"]),
+        "end": float(candidate["end"]),
+        "hook": hook,
+        "caption": caption or candidate["text"],
+        "thumbnail_text": thumbnail_text,
+        "viral_score": viral_score,
+        "selected_angle": str(data.get("selected_angle") or "").strip(),
+        "publish_decision": publish_decision,
+        "candidate_id": candidate["candidate_id"],
+        "clip_transcript": candidate["text"],
+    }]
+
+
+def find_important_clips(segments, config):
+    candidates = build_candidate_clips(segments, config)
+    if not candidates:
+        return validate_clips(find_local_important_clips(segments, config), segments, config)
+
+    log_info(
+        f"Candidate clip lokal: {len(candidates)} kandidat, "
+        f"Gemini hanya menerima potongan pendek <= {config.get('ai_candidate_max_chars', 4000)} karakter."
+    )
+
+    if int(config.get("viral_strategy_enabled", 1)) != 1:
+        log_warn("Viral strategy Gemini nonaktif. Pakai kandidat lokal.")
+        local_clips = [candidate_to_clip(item, index) for index, item in enumerate(candidates)]
+        return validate_clips(local_clips, segments, config)
+
+    if not config["gemini_keys"] and not config.get("clod_key"):
+        log_warn("GEMINI_API_KEYS dan CLOD_API_KEY kosong. Pakai fallback analisis lokal.")
+        local_clips = [candidate_to_clip(item, index) for index, item in enumerate(candidates)]
+        return validate_clips(local_clips, segments, config)
+
+    prompt = build_viral_strategy_prompt(candidates, config)
     last_error = None
+
     for index, key in enumerate(config["gemini_keys"]):
         try:
-            log_info(f"Analisis bagian penting memakai Gemini key {index + 1}/{len(config['gemini_keys'])}")
-            clips = extract_json(call_gemini(prompt, key, config["gemini_model"]))
+            log_info(f"Viral strategy memakai Gemini key {index + 1}/{len(config['gemini_keys'])}")
+            data = extract_json(call_gemini(prompt, key, config["gemini_model"]))
+            clips = strategy_result_to_clips(data, candidates, config)
             return validate_clips(clips, segments, config)
         except Exception as exc:
             last_error = exc
-            log_warn(f"Gemini key gagal: {exc}")
+            log_warn(f"Gemini viral strategy gagal: {exc}")
 
     if config.get("clod_key"):
         try:
-            log_info(f"Analisis bagian penting memakai CLōD model {config.get('clod_model', 'DeepSeek V3')}")
-            clips = extract_json(call_clod(prompt, config, max_tokens=1400))
+            log_info(f"Viral strategy memakai CLOD model {config.get('clod_model', 'DeepSeek V3')}")
+            data = extract_json(call_clod(prompt, config, max_tokens=1400))
+            clips = strategy_result_to_clips(data, candidates, config)
             return validate_clips(clips, segments, config)
         except Exception as exc:
             last_error = exc
-            log_warn(f"CLōD gagal: {exc}")
+            log_warn(f"CLOD viral strategy gagal: {exc}")
 
-    log_warn(f"Semua provider analisis gagal. Pakai fallback analisis lokal: {last_error}")
-    return validate_clips(
-        find_local_important_clips(segments, config, f"Fallback lokal setelah provider AI gagal: {last_error}"),
-        segments,
-        config,
-    )
+    if int(config.get("viral_strategy_required", 0)) == 1:
+        raise RuntimeError(f"Viral strategy gagal dan wajib berhasil: {last_error}")
+
+    log_warn(f"Viral strategy gagal. Pakai fallback kandidat lokal: {last_error}")
+    local_clips = [
+        candidate_to_clip(item, index, f"Fallback lokal setelah provider AI gagal: {last_error}")
+        for index, item in enumerate(candidates)
+    ]
+    return validate_clips(local_clips, segments, config)
 
 
 def validate_clips(clips, segments, config):
@@ -1097,6 +1309,14 @@ def validate_clips(clips, segments, config):
                 "end": end,
                 "hook": clip.get("hook") or "",
                 "caption": clip.get("caption") or "",
+                "thumbnail_text": clip.get("thumbnail_text") or clip.get("thumbnailText") or "",
+                "viral_score": clip.get("viral_score") or clip.get("viralScore") or 0,
+                "selected_angle": clip.get("selected_angle") or clip.get("selectedAngle") or "",
+                "publish_decision": clip.get("publish_decision") or clip.get("publishDecision") or "",
+                "candidate_id": clip.get("candidate_id") or clip.get("candidateId") or "",
+                "clip_transcript": clip.get("clip_transcript")
+                or clip.get("clipTranscript")
+                or segment_text_window(segments, start, end, max_chars=1200),
             }
         )
 
@@ -1211,8 +1431,10 @@ Segmen subtitle:
 
 def call_gemini_for_transcript_review(prompt, config):
     last_error = None
+    review_required = int(config.get("transcript_review_required", 0)) == 1
+    gemini_keys = config["gemini_keys"] if review_required else config["gemini_keys"][:1]
 
-    for index, key in enumerate(config["gemini_keys"]):
+    for index, key in enumerate(gemini_keys):
         try:
             log_info(f"Review subtitle memakai Gemini key {index + 1}/{len(config['gemini_keys'])}")
             data = extract_json(call_gemini(prompt, key, config["gemini_model"]))
@@ -1221,14 +1443,14 @@ def call_gemini_for_transcript_review(prompt, config):
             last_error = exc
             log_warn(f"Gemini transcript review gagal: {exc}")
 
-    if config.get("clod_key"):
+    if review_required and config.get("clod_key"):
         try:
-            log_info(f"Review subtitle memakai CLōD model {config.get('clod_model', 'DeepSeek V3')}")
+            log_info(f"Review subtitle memakai CLOD model {config.get('clod_model', 'DeepSeek V3')}")
             data = extract_json(call_clod(prompt, config, max_tokens=1200))
             return data if isinstance(data, list) else []
         except Exception as exc:
             last_error = exc
-            log_warn(f"CLōD transcript review gagal: {exc}")
+            log_warn(f"CLOD transcript review gagal: {exc}")
 
     log_warn(f"Transcript review dilewati: {last_error}")
     return []
@@ -2578,14 +2800,17 @@ def main():
 
     subtitle_path = download_subtitle(args.url, job_id, config["language"]) or latest_cached_subtitle(args.url)
     segments = parse_vtt(subtitle_path) if subtitle_path else []
+    transcript_source = "youtube" if segments else ""
 
     if not segments and not args.range:
         cached_segments = latest_cached_json(args.url, "segments")
         if cached_segments:
             segments = cached_segments
+            transcript_source = "cache"
         else:
             audio_path = download_audio(args.url, job_id)
             segments = transcribe_audio(audio_path, job_id, config)
+            transcript_source = "deepgram"
 
     if not segments and not args.range:
         raise RuntimeError("Transkrip kosong. Tidak bisa lanjut.")
@@ -2605,7 +2830,7 @@ def main():
         if cached_clips:
             clips = validate_clips(cached_clips, segments, config)
         else:
-            log_step("Gemini mencari bagian penting dari transcript.")
+            log_step("Buat kandidat clip lokal, lalu Gemini pilih strategi viral.")
             clips = find_important_clips(segments, config)
 
     if not clips:
@@ -2632,6 +2857,13 @@ def main():
                 "duration": clip["end"] - clip["start"],
                 "hook": clip["hook"],
                 "caption": clip["caption"],
+                "transcriptSource": transcript_source,
+                "thumbnailText": clip.get("thumbnail_text", ""),
+                "viralScore": clip.get("viral_score", 0),
+                "selectedAngle": clip.get("selected_angle", ""),
+                "publishDecision": clip.get("publish_decision", ""),
+                "candidateId": clip.get("candidate_id", ""),
+                "clipTranscript": clip.get("clip_transcript", ""),
                 "sourceClipPath": str(source_clip.relative_to(ROOT)),
                 "rawClipPath": str(raw_clip.relative_to(ROOT)),
                 "subtitlePath": str(ass_path.relative_to(ROOT)),
@@ -2646,6 +2878,7 @@ def main():
         "jobId": job_id,
         "sourceUrl": args.url,
         "createdAt": datetime.now(timezone.utc).isoformat(),
+        "transcriptSource": transcript_source,
         "target": "TikTok / Instagram Reels / YouTube Shorts",
         "resolution": f"{config['width']}x{config['height']}",
         "totalClips": len(outputs),
