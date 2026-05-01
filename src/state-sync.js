@@ -30,7 +30,7 @@ export async function downloadStateFromRemote() {
       await client.downloadTo(path.join(config.dataDir, file), file);
       downloaded.push(file);
     }
-  });
+  }, { timeoutMs: config.ftp.stateTimeoutMs });
 
   return { skipped: false, downloaded };
 }
@@ -52,7 +52,7 @@ export async function uploadStateToRemote() {
         // Missing state file is allowed during first setup.
       }
     }
-  });
+  }, { timeoutMs: config.ftp.stateTimeoutMs });
 
   return { skipped: false, uploaded };
 }

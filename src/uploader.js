@@ -18,9 +18,9 @@ function requireFtpConfig() {
   if (missing.length) throw new Error(`FTP config belum lengkap: ${missing.join(", ")}`);
 }
 
-export async function withFtpClient(callback) {
+export async function withFtpClient(callback, options = {}) {
   requireFtpConfig();
-  const client = new Client(60000);
+  const client = new Client(options.timeoutMs || config.ftp.timeoutMs);
   try {
     await client.access({
       host: config.ftp.host,
@@ -60,7 +60,7 @@ export async function uploadJobFiles({ job, videoPath, thumbnailPath, metadataPa
 
     await client.ensureDir(path.posix.join(config.ftp.remoteDir, "metadata"));
     await client.uploadFrom(metadataPath, metadataName);
-  });
+  }, { timeoutMs: config.ftp.timeoutMs });
 
   return {
     videoUrl: publicVideoUrl(videoName),
@@ -77,7 +77,7 @@ export async function uploadHistoryFile(historyFile) {
   await withFtpClient(async (client) => {
     await client.ensureDir(path.posix.join(config.ftp.remoteDir, "history"));
     await client.uploadFrom(historyFile, path.basename(historyFile));
-  });
+  }, { timeoutMs: config.ftp.stateTimeoutMs });
   return `${config.publicBaseUrl}/history/${encodeURIComponent(path.basename(historyFile))}`;
 }
 

@@ -101,7 +101,9 @@ export const config = {
     port: numberEnv("FTP_PORT", 21),
     user: cleanText(process.env.FTP_USER),
     password: process.env.FTP_PASSWORD || "",
-    remoteDir: cleanText(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated")
+    remoteDir: cleanText(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated"),
+    timeoutMs: numberEnv("FTP_TIMEOUT_SECONDS", 300) * 1000,
+    stateTimeoutMs: numberEnv("FTP_STATE_TIMEOUT_SECONDS", 45) * 1000
   },
   clipper: {
     rootDir: path.resolve(rootDir, cleanText(process.env.CLIPPER_ROOT || "clipper")),
