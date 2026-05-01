@@ -15,6 +15,10 @@ on:
         description: Optional manual range, example 00:01:20-00:02:05
         required: false
         default: ""
+      force_reprocess:
+        description: "Force manual URL even if duplicate history exists: true/false"
+        required: false
+        default: "false"
       quality_profile:
         description: "Video quality profile: fast, standard, high, ultra"
         required: false
@@ -549,6 +553,7 @@ jobs:
           THEME: ${{ github.event.inputs.theme || 'auto' }}
           URL: ${{ github.event.inputs.url || '' }}
           RANGE: ${{ github.event.inputs.range || '' }}
+          FORCE_REPROCESS: ${{ github.event.inputs.force_reprocess || 'false' }}
         run: |
           args=(--publish --theme "$THEME")
 
@@ -564,6 +569,10 @@ jobs:
 
           if [ -n "$RANGE" ]; then
             args+=(--range "$RANGE")
+          fi
+
+          if [ "$FORCE_REPROCESS" = "true" ] || [ "$FORCE_REPROCESS" = "1" ]; then
+            args+=(--force-reprocess)
           fi
 
           args+=(--quality "$VIDEO_QUALITY_PROFILE")

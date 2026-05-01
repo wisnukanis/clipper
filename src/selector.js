@@ -30,7 +30,7 @@ export async function selectNextVideo(options = {}) {
   });
 
   for (const video of candidates) {
-    if (await hasProcessedVideo(video)) {
+    if (!options.forceReprocess && !video.force_reprocess && await hasProcessedVideo(video)) {
       await patchItem("videos", video.id, { status: "skipped_duplicate" });
       continue;
     }
@@ -64,6 +64,7 @@ export async function addVideo(input) {
     subtitle_font: input.subtitle_font || "Segoe UI Semibold",
     subtitle_font_size: Number(input.subtitle_font_size || 48),
     subtitle_margin_v: Number(input.subtitle_margin_v || 270),
+    force_reprocess: input.force_reprocess === true,
     created_at: input.created_at || now,
     updated_at: now
   });
@@ -140,6 +141,7 @@ export function normalizeVideo(video) {
     subtitle_font: video.subtitle_font || "Segoe UI Semibold",
     subtitle_font_size: Number(video.subtitle_font_size || 48),
     subtitle_margin_v: Number(video.subtitle_margin_v || 270),
+    force_reprocess: video.force_reprocess === true,
     active: video.active !== false,
     status: video.status || "queued"
   };

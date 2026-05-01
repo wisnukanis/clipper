@@ -241,9 +241,14 @@ async function createManualSelection(options) {
     subtitle_font: options.subtitleFont || "Segoe UI Semibold",
     subtitle_font_size: options.subtitleFontSize || 48,
     subtitle_margin_v: options.subtitleMarginV || 270,
+    force_reprocess: options.forceReprocess === true,
     notes: "Ditambahkan dari CLI/manual run"
   });
-  return selectNextVideo({ theme: video.theme, targetDate: todayDate() });
+  return selectNextVideo({
+    theme: video.theme,
+    targetDate: todayDate(),
+    forceReprocess: options.forceReprocess === true
+  });
 }
 
 async function updateJob(jobId, patch) {
