@@ -44,6 +44,9 @@ function encodePathSegment(value) {
 }
 
 const geminiApiKeys = listEnv("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS");
+const deepgramApiKeys = cleanText(process.env.DEEPGRAM_API_KEYS)
+  ? listEnv("DEEPGRAM_API_KEYS")
+  : listEnv("DEEPGRAM_API_KEY");
 
 export const config = {
   rootDir,
@@ -66,10 +69,19 @@ export const config = {
   dashboardPin: cleanText(process.env.AUTO_DASHBOARD_PIN),
   dashboardAllowRemote: boolEnv("AUTO_DASHBOARD_ALLOW_REMOTE", false),
   graphApiVersion: cleanText(process.env.GRAPH_API_VERSION || "v25.0"),
+  apiCheckTimeoutMs: numberEnv("API_CHECK_TIMEOUT_SECONDS", 30) * 1000,
   instagram: {
     enabled: boolEnv("INSTAGRAM_UPLOAD_ENABLED", true),
     igUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
     accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || ""
+  },
+  facebook: {
+    enabled: boolEnv("FACEBOOK_UPLOAD_ENABLED", false),
+    pageId: cleanText(process.env.FACEBOOK_PAGE_ID),
+    accessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN || "",
+    mediaType: cleanText(process.env.FACEBOOK_MEDIA_TYPE || "reel").toLowerCase(),
+    videoState: cleanText(process.env.FACEBOOK_VIDEO_STATE || "PUBLISHED"),
+    titlePrefix: cleanText(process.env.FACEBOOK_TITLE_PREFIX)
   },
   meta: {
     appId: cleanText(process.env.META_APP_ID),
@@ -95,6 +107,20 @@ export const config = {
     apiKeys: geminiApiKeys,
     model: cleanText(process.env.GEMINI_MODEL || "gemini-flash-latest"),
     temperature: numberEnv("GEMINI_TEMPERATURE", 0.75)
+  },
+  clod: {
+    apiKey: process.env.CLOD_API_KEY || "",
+    baseUrl: cleanBaseUrl(process.env.CLOD_BASE_URL || "https://api.clod.io/v1"),
+    model: cleanText(process.env.CLOD_MODEL || "DeepSeek V3"),
+    temperature: numberEnv("CLOD_TEMPERATURE", 0.45)
+  },
+  deepgram: {
+    enabled: boolEnv("DEEPGRAM_ENABLED", true),
+    apiKey: deepgramApiKeys[0] || "",
+    apiKeys: deepgramApiKeys,
+    model: cleanText(process.env.DEEPGRAM_MODEL || "nova-3"),
+    language: cleanText(process.env.DEEPGRAM_LANGUAGE || process.env.VIDEO_LANGUAGE || "id"),
+    timeoutSeconds: numberEnv("DEEPGRAM_TIMEOUT_SECONDS", 900)
   },
   ftp: {
     host: cleanText(process.env.FTP_HOST),

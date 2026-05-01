@@ -63,6 +63,10 @@ def cfg():
     return {
         "gemini_keys": parse_keys(os.environ.get("GEMINI_API_KEYS") or os.environ.get("GEMINI_API_KEY")),
         "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
+        "clod_key": os.environ.get("CLOD_API_KEY", "").strip(),
+        "clod_base_url": os.environ.get("CLOD_BASE_URL", "https://api.clod.io/v1").rstrip("/"),
+        "clod_model": os.environ.get("CLOD_MODEL", "DeepSeek V3"),
+        "clod_temperature": parse_float(os.environ.get("CLOD_TEMPERATURE"), 0.45),
         "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 1),
         "min_clip_seconds": parse_int(os.environ.get("MIN_CLIP_SECONDS"), 40),
         "max_clip_seconds": parse_int(os.environ.get("MAX_CLIP_SECONDS"), 60),
@@ -102,9 +106,8 @@ def cfg():
         "deepgram_model": os.environ.get("DEEPGRAM_MODEL", "nova-3"),
         "deepgram_language": os.environ.get("DEEPGRAM_LANGUAGE") or os.environ.get("VIDEO_LANGUAGE", "id"),
         "deepgram_timeout": parse_int(os.environ.get("DEEPGRAM_TIMEOUT_SECONDS"), 900),
-        "offline_model": os.environ.get("OFFLINE_TRANSCRIBE_MODEL", "small"),
-        "offline_device": os.environ.get("OFFLINE_TRANSCRIBE_DEVICE", "cpu"),
-        "offline_compute": os.environ.get("OFFLINE_TRANSCRIBE_COMPUTE_TYPE", "int8"),
+        "deepgram_audio_bitrate": os.environ.get("DEEPGRAM_AUDIO_BITRATE", "32k"),
+        "deepgram_audio_sample_rate": parse_int(os.environ.get("DEEPGRAM_AUDIO_SAMPLE_RATE"), 16000),
     }
 
 
@@ -502,6 +505,41 @@ def download_audio(url, job_id):
     return output
 
 
+def prepare_deepgram_audio(audio_path, job_id, config):
+    audio_path = Path(audio_path)
+    output = ROOT / "temp" / f"{job_id}-deepgram.mp3"
+    bitrate = str(config.get("deepgram_audio_bitrate", "32k") or "32k")
+    sample_rate = str(config.get("deepgram_audio_sample_rate", 16000) or 16000)
+
+    try:
+        run([
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(audio_path),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            sample_rate,
+            "-b:a",
+            bitrate,
+            str(output),
+        ], capture=True)
+
+        original_mb = audio_path.stat().st_size / (1024 * 1024)
+        output_mb = output.stat().st_size / (1024 * 1024)
+        if output_mb > 0:
+            log_info(
+                f"Audio Deepgram dikompres: {original_mb:.2f} MB -> {output_mb:.2f} MB "
+                f"({sample_rate} Hz, {bitrate})."
+            )
+            return output
+    except Exception as exc:
+        log_warn(f"Gagal kompres audio Deepgram, pakai audio asli: {exc}")
+
+    return audio_path
+
 
 def audio_content_type(audio_path):
     suffix = Path(audio_path).suffix.lower()
@@ -534,11 +572,13 @@ def transcribe_deepgram(audio_path, job_id, config):
     if not keys:
         raise RuntimeError("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi di .env atau environment variable.")
 
+    upload_audio_path = prepare_deepgram_audio(audio_path, job_id, config)
+
     last_error = None
     for index, api_key in enumerate(keys):
         try:
             log_info(f"Deepgram key {index + 1}/{len(keys)} aktif ({mask_secret(api_key)})")
-            return transcribe_deepgram_single_key(audio_path, job_id, config, api_key, index)
+            return transcribe_deepgram_single_key(upload_audio_path, job_id, config, api_key, index)
         except Exception as exc:
             last_error = exc
             log_warn(f"Deepgram key {index + 1}/{len(keys)} gagal: {exc}")
@@ -708,60 +748,13 @@ def normalize_deepgram_words(words):
 
 
 def transcribe_audio(audio_path, job_id, config):
-    if int(config.get("deepgram_enabled", 1)) == 1:
-        if config.get("deepgram_keys"):
-            try:
-                return transcribe_deepgram(audio_path, job_id, config)
-            except Exception as exc:
-                log_warn(f"Deepgram gagal total: {exc}")
-                log_step("Fallback transkripsi offline dengan faster-whisper.")
-        else:
-            log_warn("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi. Pakai faster-whisper offline.")
-    else:
-        log_warn("DEEPGRAM_ENABLED=0. Pakai faster-whisper offline.")
+    if int(config.get("deepgram_enabled", 1)) != 1:
+        raise RuntimeError("DEEPGRAM_ENABLED harus 1. Pipeline ini hanya memakai Deepgram untuk transkripsi.")
 
-    return transcribe_offline(audio_path, job_id, config)
+    if not config.get("deepgram_keys"):
+        raise RuntimeError("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY wajib diisi. Pipeline ini hanya memakai Deepgram untuk transkripsi.")
 
-
-def transcribe_offline(audio_path, job_id, config):
-    log_step("Transkripsi audio offline dengan faster-whisper.")
-
-    try:
-        from faster_whisper import WhisperModel
-    except ImportError as exc:
-        raise RuntimeError("faster-whisper belum terinstall. Jalankan: npm run setup:offline") from exc
-
-    model = WhisperModel(
-        config["offline_model"],
-        device=config["offline_device"],
-        compute_type=config["offline_compute"],
-    )
-    segments, info = model.transcribe(
-        str(audio_path),
-        language=config["language"],
-        vad_filter=True,
-        beam_size=5,
-    )
-    result = [
-        {"start": float(segment.start), "end": float(segment.end), "text": segment.text.strip()}
-        for segment in segments
-        if segment.text and segment.text.strip()
-    ]
-
-    transcript_path = ROOT / "temp" / f"{job_id}-offline-transcript.json"
-    transcript_path.write_text(
-        json.dumps(
-            {
-                "language": info.language,
-                "language_probability": info.language_probability,
-                "segments": result,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    return result
+    return transcribe_deepgram(audio_path, job_id, config)
 
 
 def format_ts(seconds):
@@ -835,9 +828,181 @@ def call_gemini(prompt, api_key, model):
     return "".join(part.get("text", "") for part in parts)
 
 
+def call_clod(prompt, config, max_tokens=1200):
+    if not config.get("clod_key"):
+        raise RuntimeError("CLOD_API_KEY belum diisi.")
+
+    endpoint = f"{config.get('clod_base_url', 'https://api.clod.io/v1')}/chat/completions"
+    payload = json.dumps(
+        {
+            "model": config.get("clod_model", "DeepSeek V3"),
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": float(config.get("clod_temperature", 0.45)),
+            "max_completion_tokens": int(max_tokens),
+        }
+    ).encode("utf-8")
+
+    request = urllib.request.Request(
+        endpoint,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {config['clod_key']}",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"CLōD HTTP {exc.code}: {detail}") from exc
+
+    return str(data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+
+
+def segment_text_window(segments, start, end, max_chars=180):
+    text = " ".join(
+        str(segment.get("text", "")).strip()
+        for segment in segments
+        if float(segment.get("end", 0)) > start and float(segment.get("start", 0)) < end
+    )
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
+
+
+def local_clip_score(text, start, duration):
+    normalized = normalize_text(text)
+    score = 0.0
+    keyword_weights = {
+        "rahasia": 5,
+        "ternyata": 5,
+        "masalah": 4,
+        "kenapa": 4,
+        "gimana": 4,
+        "caranya": 4,
+        "penting": 4,
+        "viral": 4,
+        "uang": 4,
+        "miliar": 4,
+        "triliun": 4,
+        "ancaman": 4,
+        "takut": 3,
+        "salah": 3,
+        "benar": 3,
+        "jangan": 3,
+        "kalau": 2,
+        "tapi": 2,
+        "karena": 2,
+        "jadi": 2,
+        "gue": 1,
+        "saya": 1,
+    }
+
+    for keyword, weight in keyword_weights.items():
+        if keyword in normalized:
+            score += weight
+
+    if re.search(r"\d", text):
+        score += 4
+    if "?" in text:
+        score += 3
+    if "!" in text:
+        score += 2
+    if 40 <= duration <= 60:
+        score += 3
+    if start < 20:
+        score -= 4
+
+    words = normalized.split()
+    unique_ratio = len(set(words)) / max(len(words), 1)
+    score += min(len(words) / 12, 8)
+    score += unique_ratio * 4
+    return score
+
+
+def local_clip_title(text, index):
+    words = [word for word in re.split(r"\s+", text.strip()) if word]
+    title = " ".join(words[:8]).strip(" .,!?;:-")
+    if not title:
+        return f"Clip {index + 1}"
+    return title[:70]
+
+
+def find_local_important_clips(segments, config, reason=""):
+    min_duration = max(10, int(config.get("min_clip_seconds", 40)))
+    max_duration = max(min_duration, int(config.get("max_clip_seconds", 60)))
+    clip_count = max(1, int(config.get("clip_count", 1)))
+
+    candidates = []
+    for start_index, segment in enumerate(segments):
+        start = float(segment.get("start", 0))
+        end = start
+
+        for next_segment in segments[start_index:]:
+            end = float(next_segment.get("end", end))
+            duration = end - start
+            if duration < min_duration:
+                continue
+            if duration > max_duration:
+                break
+
+            text = segment_text_window(segments, start, end)
+            if len(text.split()) < 8:
+                continue
+
+            candidates.append({
+                "score": local_clip_score(text, start, duration),
+                "start": start,
+                "end": end,
+                "text": text,
+            })
+
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+    selected = []
+    for candidate in candidates:
+        overlaps = any(
+            candidate["start"] < item["end"] and candidate["end"] > item["start"]
+            for item in selected
+        )
+        if overlaps:
+            continue
+        selected.append(candidate)
+        if len(selected) >= clip_count:
+            break
+
+    if not selected and segments:
+        start = float(segments[0].get("start", 0))
+        end = min(float(segments[-1].get("end", start + max_duration)), start + max_duration)
+        selected.append({
+            "score": 0,
+            "start": start,
+            "end": end,
+            "text": segment_text_window(segments, start, end),
+        })
+
+    clips = []
+    for index, item in enumerate(selected):
+        title = local_clip_title(item["text"], index)
+        clips.append({
+            "title": title,
+            "reason": reason or "Fallback lokal memilih bagian dengan sinyal hook, angka, konflik, dan kata kunci kuat.",
+            "start": round(float(item["start"]), 2),
+            "end": round(float(item["end"]), 2),
+            "hook": item["text"],
+            "caption": item["text"],
+        })
+
+    return clips
+
+
 def find_important_clips(segments, config):
-    if not config["gemini_keys"]:
-        raise RuntimeError("GEMINI_API_KEYS belum diisi di .env")
+    if not config["gemini_keys"] and not config.get("clod_key"):
+        log_warn("GEMINI_API_KEYS dan CLOD_API_KEY kosong. Pakai fallback analisis lokal.")
+        return validate_clips(find_local_important_clips(segments, config), segments, config)
 
     prompt = f"""
 Anda adalah editor video short-form profesional.
@@ -884,7 +1049,21 @@ Transkrip:
             last_error = exc
             log_warn(f"Gemini key gagal: {exc}")
 
-    raise RuntimeError(f"Semua Gemini key gagal: {last_error}")
+    if config.get("clod_key"):
+        try:
+            log_info(f"Analisis bagian penting memakai CLōD model {config.get('clod_model', 'DeepSeek V3')}")
+            clips = extract_json(call_clod(prompt, config, max_tokens=1400))
+            return validate_clips(clips, segments, config)
+        except Exception as exc:
+            last_error = exc
+            log_warn(f"CLōD gagal: {exc}")
+
+    log_warn(f"Semua provider analisis gagal. Pakai fallback analisis lokal: {last_error}")
+    return validate_clips(
+        find_local_important_clips(segments, config, f"Fallback lokal setelah provider AI gagal: {last_error}"),
+        segments,
+        config,
+    )
 
 
 def validate_clips(clips, segments, config):
@@ -928,8 +1107,8 @@ def review_clip_transcript_segments(segments, clip, config, job_id, index):
     if int(config.get("transcript_review", 1)) != 1:
         return segments, None
 
-    if not config.get("gemini_keys"):
-        log_warn("Transcript review dilewati: GEMINI_API_KEYS kosong.")
+    if not config.get("gemini_keys") and not config.get("clod_key"):
+        log_warn("Transcript review dilewati: GEMINI_API_KEYS dan CLOD_API_KEY kosong.")
         return segments, None
 
     clip_start = float(clip["start"])
@@ -947,7 +1126,7 @@ def review_clip_transcript_segments(segments, clip, config, job_id, index):
     batch_size = max(20, int(config.get("transcript_review_batch", 80)))
     corrections = []
 
-    log_step(f"Gemini review subtitle clip {index + 1}.")
+    log_step(f"AI review subtitle clip {index + 1}.")
 
     for offset in range(0, len(target_indexes), batch_size):
         batch_indexes = target_indexes[offset : offset + batch_size]
@@ -1041,6 +1220,15 @@ def call_gemini_for_transcript_review(prompt, config):
         except Exception as exc:
             last_error = exc
             log_warn(f"Gemini transcript review gagal: {exc}")
+
+    if config.get("clod_key"):
+        try:
+            log_info(f"Review subtitle memakai CLōD model {config.get('clod_model', 'DeepSeek V3')}")
+            data = extract_json(call_clod(prompt, config, max_tokens=1200))
+            return data if isinstance(data, list) else []
+        except Exception as exc:
+            last_error = exc
+            log_warn(f"CLōD transcript review gagal: {exc}")
 
     log_warn(f"Transcript review dilewati: {last_error}")
     return []

@@ -10,12 +10,21 @@ import { generateCaption, generateThumbnailText } from "./caption.js";
 import { generateThumbnail } from "./thumbnail.js";
 import { fileExists, uploadHistoryFile, uploadJobFiles, validatePublicUrl } from "./uploader.js";
 import { publishReel } from "./instagram.js";
+import { publishToFacebook } from "./facebook.js";
 import { buildYoutubeMetadata, publishToYoutube } from "./youtube-publisher.js";
 import { todayDate } from "./job-id.js";
 import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
+import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflight.js";
 
 export async function runWorkflow(options = {}) {
   await ensureProjectDirs();
+
+  const preflight = await runPreflight({
+    publishRequired: Boolean(options.publish && canPublish())
+  });
+  printPreflightReport(preflight);
+  assertPreflightOk(preflight);
+
   await downloadStateFromRemote().catch((error) => {
     console.warn(`State remote dilewati: ${error.message}`);
   });
@@ -117,8 +126,6 @@ export async function runWorkflow(options = {}) {
       if (!videoPublicOk) throw new Error(`Public video URL belum valid: ${upload.videoUrl}`);
     }
     console.log("Public video URL valid:", upload.videoUrl);
-console.log("Waiting 20 seconds before Instagram container creation...");
-await new Promise((resolve) => setTimeout(resolve, 20000));
 
     await updateJob(job.job_id, {
       status: "ready_to_publish",
@@ -136,27 +143,58 @@ await new Promise((resolve) => setTimeout(resolve, 20000));
         caption,
         upload
       });
+      const youtubePrimary = config.youtube.enabled;
+      const primaryPublished = youtubePrimary ? Boolean(platformResults.youtube) : platformResults.hasAnySuccess;
+      const finalStatus = primaryPublished ? "published" : "ready_to_publish";
+      const publishStatus = primaryPublished
+        ? platformResults.hasErrors ? "published_with_warnings" : "published"
+        : "publish_failed";
+      const now = new Date().toISOString();
+
       await updateJob(job.job_id, {
-        status: "published",
-        publish_status: "published",
-        instagram_status: platformResults.instagram ? "published" : config.instagram.enabled ? "skipped" : "disabled",
+        status: finalStatus,
+        publish_status: publishStatus,
+        instagram_status: platformResults.instagram ? "published" : config.instagram.enabled ? "failed" : "disabled",
         instagram_media_id: platformResults.instagram?.mediaId || "",
-        youtube_status: platformResults.youtube ? "published" : config.youtube.enabled ? "skipped" : "disabled",
+        instagram_error: platformResults.errors.instagram || "",
+        facebook_status: platformResults.facebook ? "published" : config.facebook.enabled ? "failed" : "disabled",
+        facebook_video_id: platformResults.facebook?.videoId || "",
+        facebook_post_id: platformResults.facebook?.postId || "",
+        facebook_url: platformResults.facebook?.url || "",
+        facebook_error: platformResults.errors.facebook || "",
+        youtube_status: platformResults.youtube ? "published" : config.youtube.enabled ? "failed" : "disabled",
         youtube_video_id: platformResults.youtube?.videoId || "",
         youtube_url: platformResults.youtube?.url || "",
-        youtube_published_at: platformResults.youtube ? new Date().toISOString() : "",
-        published_at: new Date().toISOString()
+        youtube_error: platformResults.errors.youtube || "",
+        youtube_published_at: platformResults.youtube ? now : "",
+        published_at: primaryPublished ? now : ""
       });
-      await updateVideoStatus(video.id, "published");
-      await appendHistoryEntry({ job, video, caption, output, upload, platformResults, status: "published" });
+      await updateVideoStatus(video.id, primaryPublished ? "published" : "ready_to_publish", {
+        youtube_video_id: platformResults.youtube?.videoId || video.youtube_video_id,
+        youtube_url: platformResults.youtube?.url || "",
+        instagram_media_id: platformResults.instagram?.mediaId || "",
+        facebook_video_id: platformResults.facebook?.videoId || "",
+        facebook_url: platformResults.facebook?.url || "",
+        error_message: primaryPublished ? "" : platformResults.errors.youtube || "Publish platform gagal; siap retry."
+      });
+      await appendHistoryEntry({
+        job,
+        video,
+        caption,
+        output,
+        upload,
+        platformResults,
+        status: primaryPublished ? "published" : "publish_failed"
+      });
       await uploadHistoryIfPossible();
       await uploadStateToRemote().catch(() => {});
-      await appendLog("published", {
+      await appendLog(primaryPublished ? "published" : "publish_failed", {
         job_id: job.job_id,
         instagram_media_id: platformResults.instagram?.mediaId || "",
+        facebook_video_id: platformResults.facebook?.videoId || "",
         youtube_video_id: platformResults.youtube?.videoId || ""
       });
-      return { status: "published", job_id: job.job_id, platformResults };
+      return { status: publishStatus, job_id: job.job_id, platformResults };
     }
 
     const status = options.publish ? "dry_run" : "ready_to_publish";
@@ -205,30 +243,64 @@ async function updateJob(jobId, patch) {
 async function publishPlatforms({ job, output, caption, upload }) {
   const platformResults = {
     instagram: null,
-    youtube: null
+    facebook: null,
+    youtube: null,
+    errors: {},
+    hasAnySuccess: false,
+    hasErrors: false
   };
 
-  if (config.instagram.enabled) {
-    const videoUrl = upload.videoUrl;
-    if (!videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Instagram.");
-    await updateJob(job.job_id, { instagram_status: "processing" });
-    platformResults.instagram = await publishReel({ videoUrl, caption });
-  }
-
   if (config.youtube.enabled) {
-    await updateJob(job.job_id, { youtube_status: "processing" });
-    const youtubeMetadata = buildYoutubeMetadata({ job, output, caption });
-    platformResults.youtube = await publishToYoutube({
-      videoPath: output.finalAbsPath,
-      ...youtubeMetadata
+    platformResults.youtube = await publishPlatform("youtube", platformResults, job.job_id, async () => {
+      await updateJob(job.job_id, { youtube_status: "processing", youtube_error: "" });
+      const youtubeMetadata = buildYoutubeMetadata({ job, output, caption });
+      return publishToYoutube({
+        videoPath: output.finalAbsPath,
+        ...youtubeMetadata
+      });
     });
   }
 
-  if (!platformResults.instagram && !platformResults.youtube) {
-    throw new Error("Tidak ada platform publish yang aktif. Aktifkan INSTAGRAM_UPLOAD_ENABLED atau YOUTUBE_UPLOAD_ENABLED.");
+  if (config.facebook.enabled) {
+    platformResults.facebook = await publishPlatform("facebook", platformResults, job.job_id, async () => {
+      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Facebook.");
+      await updateJob(job.job_id, { facebook_status: "processing", facebook_error: "" });
+      return publishToFacebook({
+        videoUrl: upload.videoUrl,
+        videoPath: output.finalAbsPath,
+        title: output.title || job.source_title || "Podcast Clip",
+        description: caption
+      });
+    });
+  }
+
+  if (config.instagram.enabled) {
+    platformResults.instagram = await publishPlatform("instagram", platformResults, job.job_id, async () => {
+      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Instagram.");
+      await updateJob(job.job_id, { instagram_status: "processing", instagram_error: "" });
+      return publishReel({ videoUrl: upload.videoUrl, caption });
+    });
   }
 
   return platformResults;
+}
+
+async function publishPlatform(name, platformResults, jobId, callback) {
+  try {
+    const result = await callback();
+    if (result) platformResults.hasAnySuccess = true;
+    return result;
+  } catch (error) {
+    platformResults.hasErrors = true;
+    platformResults.errors[name] = error.message;
+    await appendLog("platform_publish_failed", {
+      job_id: jobId,
+      platform: name,
+      error: error.message
+    });
+    console.warn(`${name} publish gagal, workflow lanjut: ${error.message}`);
+    return null;
+  }
 }
 
 function buildMetadata({ job, video, theme, prompt, output, clipperResult, caption, thumbnail }) {
@@ -269,6 +341,9 @@ async function appendHistoryEntry({ job, video, caption, output, upload, platfor
     public_thumbnail_url: upload.thumbnailUrl || "",
     caption,
     instagram_media_id: platformResults.instagram?.mediaId || "",
+    facebook_video_id: platformResults.facebook?.videoId || "",
+    facebook_post_id: platformResults.facebook?.postId || "",
+    facebook_url: platformResults.facebook?.url || "",
     youtube_video_id: platformResults.youtube?.videoId || "",
     youtube_url: platformResults.youtube?.url || "",
     published_at: status === "published" ? new Date().toISOString() : ""

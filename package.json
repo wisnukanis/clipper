@@ -15,7 +15,8 @@
     "scheduler": "node src/scheduler.js",
     "youtube:check": "node src/youtube-check.js",
     "instagram:check": "node src/instagram-check.js",
-    "clipper:setup": "python -m pip install -r clipper/requirements-offline.txt"
+    "instagram:token": "node src/instagram-token-fastcheck.js --persist-local",
+    "clipper:setup": "python -m pip install -r clipper/requirements.txt"
   },
   "dependencies": {
     "axios": "^1.7.9",
