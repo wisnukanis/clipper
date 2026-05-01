@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1520,7 +1521,7 @@ def create_ass(segments, clip, index, config, job_id):
 
         text = re.sub(r"\s+", " ", str(segment.get("text", ""))).strip()
         if text and cue_end > cue_start:
-            events.append((cue_start, cue_end, ass_escape(wrap_caption(text))))
+            events.append((cue_start, cue_end, wrap_caption(text, config)))
 
     if not events:
         rounded_duration = max(1, int(round(duration)))
@@ -1534,7 +1535,7 @@ def create_ass(segments, clip, index, config, job_id):
 
             cue_start = float(offset)
             cue_end = min(duration, cue_start + 1.0)
-            events.append((cue_start, cue_end, ass_escape(wrap_caption(text))))
+            events.append((cue_start, cue_end, wrap_caption(text, config)))
 
     ass = build_ass(events, config)
     ass_path.write_text(ass, encoding="utf-8-sig")
@@ -1563,17 +1564,66 @@ def caption_for_window(segments, window_start, window_end):
     return re.sub(r"\s+", " ", best_segment["text"]).strip()
 
 
-def wrap_caption(text, words_per_line=5, lines_per_cue=2):
-    words = re.sub(r"\s+", " ", text).strip().split()
-    if not words:
+def wrap_caption(text, config):
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not clean:
         return ""
 
-    words = words[: words_per_line * lines_per_cue]
-    lines = [
-        " ".join(words[i : i + words_per_line])
-        for i in range(0, len(words), words_per_line)
-    ]
-    return "\\N".join(lines[:lines_per_cue])
+    width = int(config.get("width", 1080))
+    base_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46)
+    min_size = min(base_size, parse_int(os.environ.get("SUBTITLE_MIN_FONT_SIZE"), 34))
+    max_lines = max(2, min(3, parse_int(os.environ.get("SUBTITLE_MAX_LINES"), 3)))
+    margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 120)
+    safe_width = max(360, width - (margin_h * 2))
+
+    for font_size in range(base_size, min_size - 1, -2):
+        chars_per_line = subtitle_chars_per_line(safe_width, font_size)
+        lines = wrap_text_to_lines(clean, chars_per_line, max_lines, truncate=False)
+        if (
+            lines
+            and all(len(line) <= chars_per_line for line in lines)
+            and " ".join(lines).replace("...", "").strip() == clean
+        ):
+            return subtitle_text_with_size(lines, font_size, base_size)
+
+    chars_per_line = subtitle_chars_per_line(safe_width, min_size)
+    lines = wrap_text_to_lines(clean, chars_per_line, max_lines, truncate=True)
+    return subtitle_text_with_size(lines, min_size, base_size)
+
+
+def subtitle_chars_per_line(safe_width, font_size):
+    # Serif fonts are visually wider than the previous sans-serif captions.
+    return max(12, int(float(safe_width) / max(float(font_size) * 0.54, 1.0)))
+
+
+def wrap_text_to_lines(text, chars_per_line, max_lines, truncate=False):
+    wrapped = textwrap.wrap(
+        text,
+        width=max(8, int(chars_per_line)),
+        break_long_words=True,
+        break_on_hyphens=False,
+    )
+
+    if len(wrapped) <= max_lines:
+        return wrapped
+
+    if not truncate:
+        return []
+
+    lines = wrapped[:max_lines]
+    remaining = " ".join(wrapped[max_lines:])
+    if remaining:
+        last = lines[-1]
+        room = max(4, int(chars_per_line) - 3)
+        lines[-1] = f"{last[:room].rstrip()}..."
+    return lines
+
+
+def subtitle_text_with_size(lines, font_size, base_size):
+    text = "\\N".join(ass_escape(line) for line in lines[:3])
+    if font_size < base_size:
+        return f"{{\\fs{font_size}}}{text}"
+    return text
 
 
 def ass_escape(text):
@@ -1588,21 +1638,26 @@ def ass_escape(text):
 def build_ass(events, config):
     width = config["width"]
     height = config["height"]
-    font_family = os.environ.get("SUBTITLE_FONT_FAMILY", "Segoe UI Semibold").strip() or "Segoe UI Semibold"
-    font_family = font_family.replace(",", " ")
-    font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 48)
-    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 270)
+    font_family = subtitle_font_family()
+    font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46)
+    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 300)
+    margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 120)
+    primary_colour = os.environ.get("SUBTITLE_PRIMARY_COLOUR", "&H00E8F1F5").strip() or "&H00E8F1F5"
+    outline_colour = os.environ.get("SUBTITLE_OUTLINE_COLOUR", "&H66000000").strip() or "&H66000000"
+    back_colour = os.environ.get("SUBTITLE_SHADOW_COLOUR", "&H99000000").strip() or "&H99000000"
+    outline = min(1.0, max(0.0, parse_float(os.environ.get("SUBTITLE_OUTLINE"), 1.0)))
+    shadow = max(0.0, parse_float(os.environ.get("SUBTITLE_SHADOW"), 2.0))
 
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
 PlayResY: {height}
 ScaledBorderAndShadow: yes
-WrapStyle: 2
+WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,{font_family},{font_size},&H0000FFFF,&H0000FFFF,&H00111111,&H66000000,-1,0,0,0,100,100,0,0,1,4,1,2,80,80,{margin_v},1
+Style: Caption,{font_family},{font_size},{primary_colour},{primary_colour},{outline_colour},{back_colour},0,0,0,0,100,100,0,0,1,{outline:g},{shadow:g},2,{margin_h},{margin_h},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -1615,6 +1670,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         )
 
     return "".join(lines)
+
+
+def subtitle_font_family():
+    font_family = os.environ.get("SUBTITLE_FONT_FAMILY", "Georgia").strip() or "Georgia"
+    requested = [
+        font_family.split(",")[0].strip(),
+        *parse_keys(os.environ.get("SUBTITLE_FALLBACK_FONTS", "Times New Roman,DejaVu Serif")),
+    ]
+    requested = [font.replace(",", " ").strip() for font in requested if font.strip()]
+
+    try:
+        for font in requested:
+            result = subprocess.run(
+                ["fc-match", "-f", "%{family}", font],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            families = [item.strip().lower() for item in str(result.stdout or "").split(",")]
+            if font.lower() in families:
+                return font
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    return requested[0] if requested else "Georgia"
 
 
 def download_clip_source(url, job_id, clip, index, config):

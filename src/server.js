@@ -152,9 +152,9 @@ app.post("/api/run", async (req, res) => {
     url: body.url || "",
     range: body.range || "",
     qualityProfile: body.quality_profile || "standard",
-    subtitleFont: body.subtitle_font || "Segoe UI Semibold",
-    subtitleFontSize: Number(body.subtitle_font_size || 48),
-    subtitleMarginV: Number(body.subtitle_margin_v || 270)
+    subtitleFont: body.subtitle_font || "Georgia",
+    subtitleFontSize: Number(body.subtitle_font_size || 46),
+    subtitleMarginV: Number(body.subtitle_margin_v || 300)
   })
     .then((result) => {
       activeRun = {

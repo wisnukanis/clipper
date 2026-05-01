@@ -30,15 +30,15 @@ on:
       subtitle_font:
         description: Subtitle font family
         required: false
-        default: "Segoe UI Semibold"
+        default: "Georgia"
       subtitle_font_size:
         description: Subtitle font size
         required: false
-        default: "48"
+        default: "46"
       subtitle_margin_v:
         description: Subtitle bottom margin
         required: false
-        default: "270"
+        default: "300"
 
   schedule:
     # GitHub schedule uses UTC.
@@ -148,9 +148,18 @@ jobs:
       DOWNLOAD_COMPRESS_CRF: "30"
       FINAL_RENDER_CRF: "27"
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
-      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Segoe UI Semibold' }}
-      SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '48' }}
-      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '270' }}
+      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Georgia' }}
+      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Times New Roman,DejaVu Serif' }}
+      SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
+      SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
+      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '300' }}
+      SUBTITLE_MARGIN_H: ${{ secrets.SUBTITLE_MARGIN_H || '120' }}
+      SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '3' }}
+      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H00E8F1F5' }}
+      SUBTITLE_OUTLINE_COLOUR: ${{ secrets.SUBTITLE_OUTLINE_COLOUR || '&H66000000' }}
+      SUBTITLE_SHADOW_COLOUR: ${{ secrets.SUBTITLE_SHADOW_COLOUR || '&H99000000' }}
+      SUBTITLE_OUTLINE: ${{ secrets.SUBTITLE_OUTLINE || '1' }}
+      SUBTITLE_SHADOW: ${{ secrets.SUBTITLE_SHADOW || '2' }}
       SMART_CROP_ENABLED: "1"
       SMART_CROP_MODE: auto
       TRANSCRIPT_REVIEW_ENABLED: "1"
