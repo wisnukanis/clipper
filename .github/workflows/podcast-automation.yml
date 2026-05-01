@@ -1,0 +1,204 @@
+name: Podcast Clipper Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      theme:
+        description: Theme to process
+        required: false
+        default: auto
+      url:
+        description: Optional YouTube URL for manual run
+        required: false
+        default: ""
+      range:
+        description: Optional manual range, example 00:01:20-00:02:05
+        required: false
+        default: ""
+
+  schedule:
+    # GitHub schedule uses UTC.
+    # 22:07 UTC = 05:07 WIB.
+    - cron: "7 22 * * *"
+
+concurrency:
+  group: podcast-clipper-automation
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      LOCAL_PORT: 8788
+      APP_TIMEZONE: Asia/Jakarta
+      PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
+      UPLOAD_DRIVER: ftp
+      DRY_RUN: "false"
+      AUTO_PUBLISH: "true"
+      DEFAULT_THEME: auto
+      GRAPH_API_VERSION: v21.0
+      INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
+      YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'false' }}
+
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+      GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-flash-latest' }}
+
+      DEEPGRAM_ENABLED: ${{ secrets.DEEPGRAM_ENABLED || '1' }}
+      DEEPGRAM_API_KEYS: ${{ secrets.DEEPGRAM_API_KEYS }}
+      DEEPGRAM_MODEL: ${{ secrets.DEEPGRAM_MODEL || 'nova-3' }}
+      DEEPGRAM_LANGUAGE: id
+
+      INSTAGRAM_IG_USER_ID: ${{ secrets.INSTAGRAM_IG_USER_ID }}
+      INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      YOUTUBE_PRIVACY_STATUS: ${{ secrets.YOUTUBE_PRIVACY_STATUS || 'public' }}
+      YOUTUBE_CATEGORY_ID: ${{ secrets.YOUTUBE_CATEGORY_ID || '22' }}
+      YOUTUBE_TAGS: ${{ secrets.YOUTUBE_TAGS || 'podcast,shorts,indonesia' }}
+      YOUTUBE_TITLE_PREFIX: ${{ secrets.YOUTUBE_TITLE_PREFIX }}
+      YOUTUBE_DESCRIPTION_FOOTER: ${{ secrets.YOUTUBE_DESCRIPTION_FOOTER }}
+
+      PYTHON_CMD: python
+      CLIPPER_ROOT: clipper
+      CLIP_COUNT: "1"
+      MIN_CLIP_SECONDS: "40"
+      MAX_CLIP_SECONDS: "60"
+      OUTPUT_WIDTH: "1080"
+      OUTPUT_HEIGHT: "1920"
+      VIDEO_LANGUAGE: id
+      DOWNLOAD_MAX_HEIGHT: "720"
+      DOWNLOAD_COMPRESS_CRF: "30"
+      FINAL_RENDER_CRF: "27"
+      SMART_CROP_ENABLED: "1"
+      SMART_CROP_MODE: auto
+      TRANSCRIPT_REVIEW_ENABLED: "1"
+      YTDLP_JS_RUNTIMES: node
+      YTDLP_REMOTE_COMPONENTS: ejs:github
+      YTDLP_COOKIES_TXT: ${{ secrets.YTDLP_COOKIES_TXT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show trigger info
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Schedule: ${{ github.event.schedule }}"
+          echo "UTC time: $(date -u)"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Restore automation state
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/history.json
+            data/jobs.json
+            data/videos.json
+            generated/metadata
+            generated/logs
+          key: podcast-history-${{ github.run_id }}
+          restore-keys: |
+            podcast-history-
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: python -m pip install -r clipper/requirements-offline.txt
+
+      - name: Write YouTube cookies
+        if: ${{ env.YTDLP_COOKIES_TXT != '' }}
+        run: |
+          printf '%s' "$YTDLP_COOKIES_TXT" > clipper/cookies.txt
+          echo "YTDLP_COOKIES_FILE=cookies.txt" >> "$GITHUB_ENV"
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=0
+          for key in \
+            PUBLIC_BASE_URL \
+            FTP_HOST \
+            FTP_USER \
+            FTP_PASSWORD \
+            FTP_REMOTE_DIR
+          do
+            if [ -z "${!key}" ]; then
+              echo "::error::$key belum diisi di GitHub Secrets"
+              missing=1
+            fi
+          done
+
+          if [ "$INSTAGRAM_UPLOAD_ENABLED" = "true" ]; then
+            for key in INSTAGRAM_IG_USER_ID INSTAGRAM_ACCESS_TOKEN
+            do
+              if [ -z "${!key}" ]; then
+                echo "::error::$key belum diisi di GitHub Secrets"
+                missing=1
+              fi
+            done
+          fi
+
+          if [ "$YOUTUBE_UPLOAD_ENABLED" = "true" ]; then
+            for key in YOUTUBE_CLIENT_ID YOUTUBE_CLIENT_SECRET YOUTUBE_REFRESH_TOKEN
+            do
+              if [ -z "${!key}" ]; then
+                echo "::error::$key belum diisi di GitHub Secrets"
+                missing=1
+              fi
+            done
+          fi
+
+          if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ]; then
+            echo "::error::Minimal satu Gemini key harus diisi"
+            missing=1
+          fi
+
+          exit "$missing"
+
+      - name: Check configuration
+        run: npm run check
+
+      - name: Generate and publish
+        env:
+          THEME: ${{ github.event.inputs.theme || 'auto' }}
+          URL: ${{ github.event.inputs.url || '' }}
+          RANGE: ${{ github.event.inputs.range || '' }}
+        run: |
+          args=(--publish --scheduled --theme "$THEME")
+          if [ -n "$URL" ]; then args+=(--url "$URL"); fi
+          if [ -n "$RANGE" ]; then args+=(--range "$RANGE"); fi
+          node src/run.js "${args[@]}"

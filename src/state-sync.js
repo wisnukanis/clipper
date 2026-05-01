@@ -1,0 +1,58 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { config, shouldUploadToFtp } from "./config.js";
+import { ensureProjectDirs } from "./storage.js";
+import { withFtpClient } from "./uploader.js";
+
+const stateFiles = [
+  "themes.json",
+  "videos.json",
+  "prompts.json",
+  "jobs.json",
+  "history.json"
+];
+
+function remoteStateDir() {
+  return path.posix.join(config.ftp.remoteDir, "state");
+}
+
+export async function downloadStateFromRemote() {
+  if (!shouldUploadToFtp()) return { skipped: true };
+  await ensureProjectDirs();
+  const downloaded = [];
+
+  await withFtpClient(async (client) => {
+    await client.ensureDir(remoteStateDir());
+    const items = await client.list();
+    const names = new Set(items.filter((item) => item.isFile).map((item) => item.name));
+    for (const file of stateFiles) {
+      if (!names.has(file)) continue;
+      await client.downloadTo(path.join(config.dataDir, file), file);
+      downloaded.push(file);
+    }
+  });
+
+  return { skipped: false, downloaded };
+}
+
+export async function uploadStateToRemote() {
+  if (!shouldUploadToFtp()) return { skipped: true };
+  await ensureProjectDirs();
+  const uploaded = [];
+
+  await withFtpClient(async (client) => {
+    await client.ensureDir(remoteStateDir());
+    for (const file of stateFiles) {
+      const localPath = path.join(config.dataDir, file);
+      try {
+        await fs.access(localPath);
+        await client.uploadFrom(localPath, file);
+        uploaded.push(file);
+      } catch {
+        // Missing state file is allowed during first setup.
+      }
+    }
+  });
+
+  return { skipped: false, uploaded };
+}

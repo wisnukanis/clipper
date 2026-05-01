@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Podcast Clipper Automation</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>Podcast Clipper Automation</h1>
+          <p id="configLine">Loading...</p>
+        </div>
+        <div class="toolbar">
+          <button id="refreshBtn" class="iconBtn" type="button" title="Refresh">Refresh</button>
+        </div>
+      </header>
+
+      <section class="metrics" id="metrics"></section>
+
+      <section class="grid">
+        <form id="videoForm" class="panel">
+          <h2>Tambah Link</h2>
+          <label>
+            <span>YouTube URL</span>
+            <input name="url" placeholder="https://www.youtube.com/watch?v=..." required>
+          </label>
+          <div class="two">
+            <label>
+              <span>Theme</span>
+              <input name="theme" value="podcast artis">
+            </label>
+            <label>
+              <span>Target date</span>
+              <input name="target_date" type="date">
+            </label>
+          </div>
+          <div class="two">
+            <label>
+              <span>Priority</span>
+              <input name="priority" type="number" min="1" value="1">
+            </label>
+            <label>
+              <span>Manual range</span>
+              <input name="manual_range" placeholder="00:01:20-00:02:05">
+            </label>
+          </div>
+          <div class="three">
+            <label>
+              <span>Kualitas</span>
+              <select name="quality_profile">
+                <option value="standard">Standard 720p</option>
+                <option value="fast">Fast 480p</option>
+                <option value="high">High 1080p</option>
+                <option value="ultra">Ultra 1080p+</option>
+              </select>
+            </label>
+            <label>
+              <span>Font subtitle</span>
+              <select name="subtitle_font">
+                <option value="Segoe UI Semibold">Segoe UI Semibold</option>
+                <option value="Arial">Arial</option>
+                <option value="Montserrat SemiBold">Montserrat SemiBold</option>
+                <option value="Poppins SemiBold">Poppins SemiBold</option>
+                <option value="Roboto Condensed Bold">Roboto Condensed Bold</option>
+              </select>
+            </label>
+            <label>
+              <span>Ukuran subtitle</span>
+              <input name="subtitle_font_size" type="number" min="32" max="88" value="48">
+            </label>
+          </div>
+          <label>
+            <span>Jarak subtitle dari bawah</span>
+            <input name="subtitle_margin_v" type="range" min="120" max="420" value="240">
+          </label>
+          <label>
+            <span>Notes</span>
+            <input name="notes" placeholder="Catatan internal">
+          </label>
+          <button class="primary" type="submit">Tambah ke Queue</button>
+        </form>
+
+        <form id="runForm" class="panel">
+          <h2>Run Workflow</h2>
+          <label>
+            <span>Theme</span>
+            <input name="theme" value="auto">
+          </label>
+          <label>
+            <span>URL manual opsional</span>
+            <input name="url" placeholder="Kosongkan untuk ambil dari queue">
+          </label>
+          <label>
+            <span>Range manual opsional</span>
+            <input name="range" placeholder="00:01:20-00:02:05">
+          </label>
+          <div class="two">
+            <label>
+              <span>Kualitas</span>
+              <select name="quality_profile">
+                <option value="standard">Standard</option>
+                <option value="fast">Fast</option>
+                <option value="high">High</option>
+                <option value="ultra">Ultra</option>
+              </select>
+            </label>
+            <label>
+              <span>Font subtitle</span>
+              <select name="subtitle_font">
+                <option value="Segoe UI Semibold">Segoe UI Semibold</option>
+                <option value="Arial">Arial</option>
+                <option value="Montserrat SemiBold">Montserrat</option>
+                <option value="Poppins SemiBold">Poppins</option>
+              </select>
+            </label>
+          </div>
+          <div class="two">
+            <label>
+              <span>Ukuran subtitle</span>
+              <input name="subtitle_font_size" type="number" min="32" max="88" value="48">
+            </label>
+            <label>
+              <span>Margin subtitle</span>
+              <input name="subtitle_margin_v" type="number" min="120" max="420" value="240">
+            </label>
+          </div>
+          <label class="check">
+            <input name="publish" type="checkbox">
+            <span>Publish jika env mengizinkan</span>
+          </label>
+          <button class="primary" type="submit">Mulai</button>
+          <div id="runStatus" class="status">Idle</div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="sectionHead">
+          <h2>Queue Video</h2>
+          <span id="videoCount">0 item</span>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Theme</th>
+                <th>Target</th>
+                <th>Priority</th>
+                <th>Kualitas</th>
+                <th>Subtitle</th>
+                <th>Video ID</th>
+                <th>URL</th>
+              </tr>
+            </thead>
+            <tbody id="videoRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="sectionHead">
+          <h2>Jobs</h2>
+          <span id="jobCount">0 item</span>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Job ID</th>
+                <th>Theme</th>
+                <th>Video</th>
+                <th>Instagram</th>
+                <th>YouTube</th>
+                <th>FTP</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="jobRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
