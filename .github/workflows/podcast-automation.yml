@@ -16,9 +16,13 @@ on:
         required: false
         default: ""
       quality_profile:
-        description: Video quality profile: fast, standard, high, ultra
+        description: "Video quality profile: fast, standard, high, ultra"
         required: false
         default: standard
+      deepgram_enabled:
+        description: "Use Deepgram transcription: 0 or 1"
+        required: false
+        default: "0"
       subtitle_font:
         description: Subtitle font family
         required: false
@@ -89,7 +93,7 @@ jobs:
       GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
       GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-flash-latest' }}
 
-      DEEPGRAM_ENABLED: ${{ secrets.DEEPGRAM_ENABLED || '0' }}
+      DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '0' }}
       DEEPGRAM_API_KEYS: ${{ secrets.DEEPGRAM_API_KEYS }}
       DEEPGRAM_MODEL: ${{ secrets.DEEPGRAM_MODEL || 'nova-3' }}
       DEEPGRAM_LANGUAGE: id
@@ -100,6 +104,10 @@ jobs:
 
       INSTAGRAM_IG_USER_ID: ${{ secrets.INSTAGRAM_IG_USER_ID }}
       INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+      META_APP_ID: ${{ secrets.META_APP_ID }}
+      META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+      AUTO_REFRESH_INSTAGRAM_TOKEN: ${{ secrets.AUTO_REFRESH_INSTAGRAM_TOKEN || 'true' }}
+      TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
 
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
       YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
@@ -354,6 +362,10 @@ jobs:
 
       - name: Check configuration
         run: npm run check
+
+      - name: Check Instagram token
+        if: ${{ env.INSTAGRAM_UPLOAD_ENABLED == 'true' }}
+        run: npm run instagram:check
 
       - name: Generate and publish
         env:

@@ -71,6 +71,12 @@ export const config = {
     igUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
     accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || ""
   },
+  meta: {
+    appId: cleanText(process.env.META_APP_ID),
+    appSecret: process.env.META_APP_SECRET || "",
+    autoRefreshInstagramToken: boolEnv("AUTO_REFRESH_INSTAGRAM_TOKEN", true),
+    tokenRefreshBeforeDays: numberEnv("TOKEN_REFRESH_BEFORE_DAYS", 10)
+  },
   youtube: {
     enabled: boolEnv("YOUTUBE_UPLOAD_ENABLED", false),
     clientId: cleanText(process.env.YOUTUBE_CLIENT_ID),

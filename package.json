@@ -14,6 +14,7 @@
     "publish:ready": "node src/publish-ready.js",
     "scheduler": "node src/scheduler.js",
     "youtube:check": "node src/youtube-check.js",
+    "instagram:check": "node src/instagram-check.js",
     "clipper:setup": "python -m pip install -r clipper/requirements-offline.txt"
   },
   "dependencies": {

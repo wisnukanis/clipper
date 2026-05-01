@@ -1,5 +1,6 @@
 import axios from "axios";
 import { config } from "./config.js";
+import { ensureFreshInstagramToken } from "./instagram-token.js";
 
 function apiUrl(apiPath) {
   return `https://graph.facebook.com/${config.graphApiVersion}/${apiPath}`;
@@ -316,6 +317,7 @@ async function publishReelViaResumable({ videoUrl, caption }) {
 }
 
 export async function publishReel({ videoUrl, caption }) {
+  await ensureFreshInstagramToken();
   assertInstagramConfig();
 
   const method = getReelUploadMethod();
