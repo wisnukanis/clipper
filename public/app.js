@@ -1,4 +1,9 @@
 const stateUrl = "/api/state";
+const dashboardPin = new URLSearchParams(window.location.search).get("pin") || window.sessionStorage.getItem("dashboardPin") || "";
+
+if (dashboardPin) {
+  window.sessionStorage.setItem("dashboardPin", dashboardPin);
+}
 
 const els = {
   configLine: document.querySelector("#configLine"),
@@ -16,8 +21,11 @@ const els = {
 };
 
 async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (dashboardPin) headers["X-Dashboard-Pin"] = dashboardPin;
+
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options
   });
   const data = await response.json();

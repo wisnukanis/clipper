@@ -16,11 +16,25 @@ app.use(express.json({ limit: "1mb" }));
 let activeRun = null;
 
 app.use((req, res, next) => {
-  if (config.dashboardAllowRemote) return next();
   const ip = req.ip || req.socket.remoteAddress || "";
   const local = ip === "::1" || ip === "127.0.0.1" || ip === "::ffff:127.0.0.1";
   if (local) return next();
-  res.status(403).json({ error: "Dashboard hanya aktif untuk localhost." });
+  if (!config.dashboardAllowRemote) {
+    res.status(403).json({ error: "Dashboard hanya aktif untuk localhost." });
+    return;
+  }
+
+  if (!req.path.startsWith("/api/")) return next();
+
+  if (!config.dashboardPin) {
+    res.status(403).json({ error: "AUTO_DASHBOARD_PIN wajib diisi untuk akses remote." });
+    return;
+  }
+
+  const pin = req.get("x-dashboard-pin") || req.query.pin || "";
+  if (pin === config.dashboardPin) return next();
+
+  res.status(401).json({ error: "PIN dashboard tidak valid atau belum diisi." });
 });
 
 app.get("/api/state", async (_req, res) => {
