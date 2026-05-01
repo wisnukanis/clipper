@@ -80,6 +80,7 @@ export async function publishReel({ videoUrl, caption }) {
   assertInstagramConfig();
 
   console.log("IG REEL VIDEO URL:", videoUrl);
+  console.log("IG GRAPH VERSION:", config.graphApiVersion);
 
   const created = await postForm(`${config.instagram.igUserId}/media`, {
     media_type: "REELS",
