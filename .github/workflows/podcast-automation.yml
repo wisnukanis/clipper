@@ -44,7 +44,7 @@ jobs:
       AUTO_PUBLISH: "true"
       DEFAULT_THEME: auto
 
-      # PENTING: paksa Graph API v25
+      # Paksa Graph API v25
       GRAPH_API_VERSION: v25.0
 
       INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
@@ -94,18 +94,18 @@ jobs:
       SMART_CROP_MODE: auto
       TRANSCRIPT_REVIEW_ENABLED: "1"
 
-      # yt-dlp JS challenge support
+      # yt-dlp support
       YTDLP_JS_RUNTIMES: node
       YTDLP_REMOTE_COMPONENTS: ejs:github
-
-      # Isi cookies dari GitHub Secret
       YTDLP_COOKIES_TXT: ${{ secrets.YTDLP_COOKIES_TXT }}
+      YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Show trigger info
+        shell: bash
         run: |
           echo "Event name: ${{ github.event_name }}"
           echo "Schedule: ${{ github.event.schedule }}"
@@ -126,6 +126,7 @@ jobs:
           cache: pip
 
       - name: Install FFmpeg
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
@@ -150,6 +151,7 @@ jobs:
         run: python -m pip install -r clipper/requirements-offline.txt
 
       - name: Update yt-dlp
+        shell: bash
         run: |
           python -m pip install -U yt-dlp
           yt-dlp --version
@@ -160,16 +162,17 @@ jobs:
         run: |
           mkdir -p clipper
 
-          # Tulis secret ke file cookies
+          # Tulis isi secret ke file cookies.
+          # Jangan echo isi cookies ke log.
           printf '%s' "$YTDLP_COOKIES_TXT" > clipper/cookies.txt
 
-          # Jika secret ternyata berisi karakter literal \n, ubah menjadi newline asli
+          # Kalau secret berisi karakter literal \n, ubah jadi newline asli.
           if grep -q '\\n' clipper/cookies.txt; then
             echo "Detected literal \\n in cookies secret. Converting to real newlines..."
             perl -0pi -e 's/\\n/\n/g' clipper/cookies.txt
           fi
 
-          # Bersihkan CRLF Windows jika ada
+          # Normalisasi CRLF Windows ke LF Linux.
           sed -i 's/\r$//' clipper/cookies.txt
 
           echo "YTDLP_COOKIES_FILE=cookies.txt" >> "$GITHUB_ENV"
@@ -188,15 +191,20 @@ jobs:
           wc -l clipper/cookies.txt || true
 
           echo "YouTube/Google cookie rows:"
-          grep -Ei "youtube|google" clipper/cookies.txt | wc -l || true
+          COOKIE_ROWS=$(grep -Ei "youtube|google" clipper/cookies.txt | wc -l || true)
+          echo "$COOKIE_ROWS"
 
           echo "First line:"
           head -n 1 clipper/cookies.txt || true
 
-          COOKIE_ROWS=$(grep -Ei "youtube|google" clipper/cookies.txt | wc -l || true)
           if [ "$COOKIE_ROWS" -eq 0 ]; then
-            echo "::error::cookies.txt tidak punya baris youtube/google. Secret YTDLP_COOKIES_TXT kemungkinan kosong/header doang atau salah format."
+            echo "::error::cookies.txt tidak punya baris youtube/google. Secret YTDLP_COOKIES_TXT kemungkinan kosong, header doang, atau salah format."
             exit 1
+          fi
+
+          FIRST_LINE=$(head -n 1 clipper/cookies.txt || true)
+          if [[ "$FIRST_LINE" != "# Netscape HTTP Cookie File"* && "$FIRST_LINE" != "# HTTP Cookie File"* ]]; then
+            echo "::warning::Baris pertama cookies bukan format standar Netscape/HTTP Cookie File."
           fi
 
       - name: Validate required secrets
@@ -255,6 +263,11 @@ jobs:
           echo "YTDLP_COOKIES_FILE=${YTDLP_COOKIES_FILE:-not_set}"
           echo "YTDLP_JS_RUNTIMES=$YTDLP_JS_RUNTIMES"
           echo "YTDLP_REMOTE_COMPONENTS=$YTDLP_REMOTE_COMPONENTS"
+          if [ -n "$YTDLP_USER_AGENT" ]; then
+            echo "YTDLP_USER_AGENT=configured"
+          else
+            echo "YTDLP_USER_AGENT=not_set"
+          fi
 
       - name: Test YouTube cookies before automation
         if: ${{ env.YTDLP_COOKIES_TXT != '' }}
@@ -266,8 +279,14 @@ jobs:
           echo "Testing yt-dlp cookies with URL:"
           echo "$TEST_URL"
 
+          UA_ARGS=()
+          if [ -n "$YTDLP_USER_AGENT" ]; then
+            UA_ARGS+=(--user-agent "$YTDLP_USER_AGENT")
+          fi
+
           yt-dlp \
             --cookies cookies.txt \
+            "${UA_ARGS[@]}" \
             --js-runtimes "$YTDLP_JS_RUNTIMES" \
             --remote-components "$YTDLP_REMOTE_COMPONENTS" \
             --skip-download \
