@@ -42,7 +42,7 @@ jobs:
       DRY_RUN: "false"
       AUTO_PUBLISH: "true"
       DEFAULT_THEME: auto
-      GRAPH_API_VERSION: v21.0
+      GRAPH_API_VERSION: v25.0
       INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
       YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'false' }}
 
