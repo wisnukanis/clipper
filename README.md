@@ -1,6 +1,6 @@
 # Podcast Clipper Automation System
 
-README ini menjelaskan rancangan sistem otomasi konten podcast berbasis **link video YouTube**. Sistem ini dirancang untuk berjalan otomatis setiap hari, mengambil link video yang sudah dimasukkan melalui dashboard, memprosesnya menjadi clip pendek 9:16, membuat caption dan thumbnail dengan AI, menyimpan output ke FTP hosting, lalu mempublikasikannya ke Instagram.
+README ini menjelaskan rancangan sistem otomasi konten podcast berbasis **link video YouTube**. Sistem ini berjalan otomatis atau manual dari GitHub Actions, mengambil link video yang sudah dimasukkan melalui dashboard atau workflow input, memprosesnya menjadi clip pendek 9:16, membuat caption dan thumbnail dengan AI, menyimpan output ke FTP hosting, lalu mempublikasikannya ke YouTube Shorts, Facebook Page/Reels, dan Instagram Reels.
 
 > Catatan keamanan: jangan menyimpan `.env`, API key, token, password FTP, cookies YouTube, atau credential lain di repository. Gunakan `.env` lokal untuk development dan secrets untuk deployment.
 
@@ -51,7 +51,7 @@ Tema / Niche
 → Buat caption AI
 → Buat thumbnail
 → Upload video, thumbnail, metadata ke FTP hosting
-→ Publish otomatis ke Instagram
+→ Publish otomatis ke YouTube, Facebook, dan Instagram
 → Simpan riwayat
 → Cleanup file
 ```
@@ -83,13 +83,14 @@ FFmpeg
 Python
 Deepgram
 Gemini
-faster-whisper
 OpenCV
 MediaPipe
 cookies YouTube
 dashboard
 output video
 FTP hosting
+YouTube Data API
+Facebook Graph API
 Instagram Graph API
 ```
 
@@ -109,7 +110,7 @@ Yang harus berhasil di lokal:
 3. Sistem bisa membaca link dari dashboard.
 4. Sistem bisa mengirim link ke clipper.
 5. Clipper bisa mengambil transcript/subtitle.
-6. Jika transcript tidak tersedia, fallback transkripsi berjalan.
+6. Jika transcript tidak tersedia, transkripsi Deepgram berhasil berjalan.
 7. FFmpeg berhasil membuat video 9:16.
 8. Output MP4 terbentuk di folder output.
 9. Metadata JSON terbentuk.
@@ -140,7 +141,7 @@ input link YouTube
 → validasi public URL
 ```
 
-Publish Instagram sebaiknya dites dalam mode aman terlebih dahulu:
+Publish platform sebaiknya dites dalam mode aman terlebih dahulu:
 
 ```env
 DRY_RUN=true
@@ -173,7 +174,8 @@ Yang harus dipastikan:
 7. Output video berhasil dibuat.
 8. Upload FTP berhasil.
 9. Public URL valid.
-10. Publish Instagram berhasil.
+10. Publish YouTube berhasil.
+11. Publish Facebook/Instagram tidak boleh menjatuhkan workflow jika YouTube sudah berhasil.
 ```
 
 ---
@@ -209,7 +211,7 @@ Yang harus dipantau:
 1. Apakah cron berjalan setiap hari.
 2. Apakah output video terbentuk.
 3. Apakah FTP tidak penuh.
-4. Apakah token Instagram masih valid.
+4. Apakah token YouTube, Facebook, dan Instagram masih valid.
 5. Apakah cookies YouTube masih valid.
 6. Apakah API key masih memiliki kuota.
 7. Apakah history anti-duplikasi berjalan.
@@ -243,11 +245,22 @@ clipper_status
 caption_status
 thumbnail_status
 publish_status
+youtube_status
+facebook_status
+instagram_status
 final_video_path
 transcript_path
 metadata_path
 thumbnail_path
+youtube_video_id
+youtube_url
+facebook_video_id
+facebook_post_id
+facebook_url
 instagram_media_id
+youtube_error
+facebook_error
+instagram_error
 created_at
 published_at
 error_message
@@ -305,7 +318,7 @@ menyimpan thumbnail
 menyimpan metadata JSON
 menyimpan log ringan
 menyimpan history posting
-menyediakan public URL untuk Instagram Graph API
+menyediakan public URL untuk Meta Graph API
 ```
 
 ---
@@ -330,6 +343,10 @@ Caption Generator
 Thumbnail Generator
         ↓
 FTP Uploader
+        ↓
+YouTube Publisher
+        ↓
+Facebook Publisher
         ↓
 Instagram Publisher
         ↓
@@ -357,10 +374,11 @@ Setiap hari pada jam yang ditentukan:
 10. Buat thumbnail dari frame video atau visual AI.
 11. Upload video, thumbnail, dan metadata ke FTP hosting.
 12. Validasi public URL.
-13. Publish ke Instagram.
-14. Simpan history publish.
-15. Cleanup file lokal atau sementara.
-16. Update dashboard status.
+13. Publish ke YouTube sebagai prioritas utama.
+14. Publish ke Facebook Page/Reels dan Instagram Reels jika aktif.
+15. Simpan history publish.
+16. Cleanup file lokal atau sementara.
+17. Update dashboard status.
 ```
 
 ---
@@ -676,7 +694,41 @@ Sistem tidak boleh publish jika public URL tidak bisa diakses.
 
 ---
 
-## 11. Environment Instagram Automation
+## 11. Strategi Publish Multi-Platform
+
+Urutan publish produksi:
+
+```txt
+1. YouTube adalah platform utama.
+2. Facebook Page/Reels dicoba setelah YouTube.
+3. Instagram Reels dicoba setelah Facebook.
+4. Jika YouTube berhasil, workflow tidak gagal hanya karena Facebook atau Instagram error.
+5. Error tiap platform tetap disimpan ke job log untuk retry/diagnosis.
+```
+
+Perilaku khusus saat publish:
+
+```txt
+YouTube gagal      -> status publish_failed jika YouTube aktif.
+Facebook Reels gagal -> fallback ke Facebook Page video.
+Instagram video besar -> buat versi khusus IG yang lebih kecil sebelum upload.
+Instagram resumable gagal -> fallback ke video_url jika error cocok.
+IG/Facebook token atau upload error -> workflow tetap lanjut selama YouTube berhasil.
+```
+
+Nilai penting untuk GitHub Actions:
+
+```env
+YOUTUBE_UPLOAD_ENABLED=true
+FACEBOOK_UPLOAD_ENABLED=true
+INSTAGRAM_UPLOAD_ENABLED=true
+INSTAGRAM_REEL_UPLOAD_METHOD=resumable
+INSTAGRAM_MAX_UPLOAD_BYTES=7800000
+```
+
+---
+
+## 12. Environment Publishing Automation
 
 Contoh `.env.example`:
 
@@ -692,6 +744,10 @@ GEMINI_API_KEY_3=
 GEMINI_API_KEYS=
 GEMINI_MODEL=gemini-flash-latest
 GEMINI_TEMPERATURE=0.85
+CLOD_API_KEY=
+CLOD_BASE_URL=https://api.clod.io/v1
+CLOD_MODEL=DeepSeek V3
+CLOD_TEMPERATURE=0.45
 
 FTP_HOST=
 FTP_PORT=21
@@ -714,6 +770,23 @@ POST_CRON=0 8,13,19 * * *
 DEFAULT_THEME=auto
 
 GRAPH_API_VERSION=v25.0
+YOUTUBE_UPLOAD_ENABLED=true
+YOUTUBE_CLIENT_ID=
+YOUTUBE_CLIENT_SECRET=
+YOUTUBE_REFRESH_TOKEN=
+YOUTUBE_PRIVACY_STATUS=public
+YOUTUBE_CATEGORY_ID=22
+YOUTUBE_TAGS=podcast,shorts,indonesia
+
+FACEBOOK_UPLOAD_ENABLED=true
+FACEBOOK_PAGE_ID=
+FACEBOOK_PAGE_ACCESS_TOKEN=
+FACEBOOK_MEDIA_TYPE=reel
+FACEBOOK_VIDEO_STATE=PUBLISHED
+
+INSTAGRAM_UPLOAD_ENABLED=true
+INSTAGRAM_REEL_UPLOAD_METHOD=resumable
+INSTAGRAM_MAX_UPLOAD_BYTES=7800000
 INSTAGRAM_IG_USER_ID=
 INSTAGRAM_ACCESS_TOKEN=
 
@@ -723,7 +796,7 @@ AUTO_REFRESH_INSTAGRAM_TOKEN=true
 TOKEN_REFRESH_BEFORE_DAYS=10
 ```
 
-### Fungsi Environment Instagram Automation
+### Fungsi Environment Publishing Automation
 
 #### `LOCAL_PORT`
 
@@ -764,6 +837,22 @@ Model Gemini yang digunakan.
 #### `GEMINI_TEMPERATURE`
 
 Mengatur kreativitas AI.
+
+#### `CLOD_API_KEY`
+
+API key CLOD sebagai fallback jika Gemini sedang limit atau error.
+
+#### `CLOD_BASE_URL`
+
+Endpoint OpenAI-compatible CLOD. Default: `https://api.clod.io/v1`.
+
+#### `CLOD_MODEL`
+
+Model CLOD yang dipakai untuk fallback caption, thumbnail, highlight, dan review transkrip.
+
+#### `CLOD_TEMPERATURE`
+
+Mengatur kreativitas output CLOD.
 
 #### `FTP_HOST`
 
@@ -827,7 +916,59 @@ Tema default.
 
 #### `GRAPH_API_VERSION`
 
-Versi Instagram Graph API.
+Versi Meta Graph API untuk Facebook dan Instagram.
+
+#### `YOUTUBE_UPLOAD_ENABLED`
+
+Mengaktifkan publish ke YouTube. Di workflow produksi, YouTube adalah platform utama.
+
+#### `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`
+
+Credential YouTube Data API untuk upload video.
+
+#### `YOUTUBE_PRIVACY_STATUS`
+
+Status privacy upload YouTube: `public`, `unlisted`, atau `private`.
+
+#### `YOUTUBE_CATEGORY_ID`
+
+Kategori video YouTube.
+
+#### `YOUTUBE_TAGS`
+
+Daftar tag YouTube, bisa dipisah koma.
+
+#### `FACEBOOK_UPLOAD_ENABLED`
+
+Mengaktifkan publish ke Facebook Page/Reels.
+
+#### `FACEBOOK_PAGE_ID`
+
+ID Facebook Page tujuan publish.
+
+#### `FACEBOOK_PAGE_ACCESS_TOKEN`
+
+Page access token untuk publish ke Facebook Page.
+
+#### `FACEBOOK_MEDIA_TYPE`
+
+Jenis upload Facebook. Default `reel`; jika Reels gagal, sistem mencoba fallback ke Page video.
+
+#### `FACEBOOK_VIDEO_STATE`
+
+Status video Facebook. Default `PUBLISHED`.
+
+#### `INSTAGRAM_UPLOAD_ENABLED`
+
+Mengaktifkan publish ke Instagram Reels.
+
+#### `INSTAGRAM_REEL_UPLOAD_METHOD`
+
+Metode upload IG Reels: `resumable`, `video_url`, atau `auto`. Produksi memakai `resumable`.
+
+#### `INSTAGRAM_MAX_UPLOAD_BYTES`
+
+Batas ukuran aman khusus upload Instagram. Jika video final lebih besar dari nilai ini, sistem membuat versi IG yang lebih kecil dan meng-upload ulang ke FTP.
 
 #### `INSTAGRAM_IG_USER_ID`
 
@@ -847,15 +988,19 @@ App Secret Meta Developer.
 
 #### `AUTO_REFRESH_INSTAGRAM_TOKEN`
 
-Mengaktifkan refresh token otomatis.
+Mengaktifkan refresh token otomatis. Di lokal, jalankan `npm run instagram:token` untuk validasi dan simpan token baru ke `.env`.
 
 #### `TOKEN_REFRESH_BEFORE_DAYS`
 
 Jumlah hari sebelum expired untuk mulai refresh token.
 
+#### `GH_REPO_SECRET_TOKEN`
+
+GitHub Secret opsional untuk menyimpan token Instagram hasil refresh kembali ke `INSTAGRAM_ACCESS_TOKEN`. Isi dengan PAT yang punya akses mengubah repository secrets. Tanpa ini, GitHub Actions tetap bisa memakai token hasil refresh untuk run saat itu, tapi secret untuk run berikutnya tidak ikut berubah.
+
 ---
 
-## 12. Environment Auto Video Clipper
+## 13. Environment Auto Video Clipper
 
 Contoh `.env.example`:
 
@@ -865,9 +1010,14 @@ DEEPGRAM_API_KEYS=
 DEEPGRAM_MODEL=nova-3
 DEEPGRAM_LANGUAGE=id
 DEEPGRAM_TIMEOUT_SECONDS=900
+DEEPGRAM_AUDIO_BITRATE=32k
+DEEPGRAM_AUDIO_SAMPLE_RATE=16000
 
 GEMINI_API_KEYS=
 GEMINI_MODEL=gemini-flash-latest
+CLOD_API_KEY=
+CLOD_BASE_URL=https://api.clod.io/v1
+CLOD_MODEL=DeepSeek V3
 
 CLIP_COUNT=1
 MIN_CLIP_SECONDS=40
@@ -916,13 +1066,6 @@ ACTIVE_SPEAKER_INITIAL_ANCHOR_ENABLED=1
 ACTIVE_SPEAKER_INITIAL_SCAN_SECONDS=6.0
 ACTIVE_SPEAKER_INITIAL_SAMPLE_SECONDS=0.5
 ACTIVE_SPEAKER_INITIAL_VISUAL_MIN_SCORE=0.010
-
-OFFLINE_TRANSCRIBE_MODEL=small
-OFFLINE_TRANSCRIBE_DEVICE=cpu
-OFFLINE_TRANSCRIBE_COMPUTE_TYPE=int8
-
-HF_TOKEN=
-HF_HUB_DISABLE_SYMLINKS_WARNING=1
 ```
 
 ### Fungsi Environment Auto Video Clipper
@@ -946,6 +1089,14 @@ Bahasa transkripsi.
 #### `DEEPGRAM_TIMEOUT_SECONDS`
 
 Timeout transkripsi.
+
+#### `DEEPGRAM_AUDIO_BITRATE`
+
+Bitrate audio sementara yang dikirim ke Deepgram.
+
+#### `DEEPGRAM_AUDIO_SAMPLE_RATE`
+
+Sample rate audio sementara yang dikirim ke Deepgram.
 
 #### `GEMINI_API_KEYS`
 
@@ -1051,29 +1202,7 @@ Batas gerakan crop per detik.
 
 Konfigurasi active speaker untuk mendeteksi wajah/orang yang sedang bicara.
 
-#### `OFFLINE_TRANSCRIBE_MODEL`
-
-Model fallback faster-whisper.
-
-#### `OFFLINE_TRANSCRIBE_DEVICE`
-
-Device fallback: `cpu` atau `cuda`.
-
-#### `OFFLINE_TRANSCRIBE_COMPUTE_TYPE`
-
-Tipe komputasi fallback.
-
-#### `HF_TOKEN`
-
-Token Hugging Face untuk download model jika dibutuhkan.
-
-#### `HF_HUB_DISABLE_SYMLINKS_WARNING`
-
-Menghilangkan warning symlink Hugging Face.
-
----
-
-## 13. Output Clipper yang Diharapkan
+## 14. Output Clipper yang Diharapkan
 
 ```txt
 output/
@@ -1108,7 +1237,7 @@ Metadata minimal:
 
 ---
 
-## 14. Caption Rules
+## 15. Caption Rules
 
 Caption dibuat dari transkrip atau log clipper.
 
@@ -1126,7 +1255,7 @@ hashtag relevan
 
 ---
 
-## 15. Thumbnail Rules
+## 16. Thumbnail Rules
 
 Default MVP:
 
@@ -1155,7 +1284,7 @@ INI YANG BIKIN BERTAHAN
 
 ---
 
-## 16. Publish Rules
+## 17. Publish Rules
 
 Publish hanya boleh dilakukan jika:
 
@@ -1167,21 +1296,24 @@ metadata lengkap
 belum pernah dipublish
 FTP upload sukses
 public URL bisa diakses
-Instagram token valid
+YouTube credential valid jika YouTube aktif
+Facebook Page token valid jika Facebook aktif
+Instagram token valid jika Instagram aktif
 ```
 
 Jika publish gagal:
 
 ```txt
+YouTube gagal -> tandai publish_failed jika YouTube aktif
+Facebook gagal -> simpan facebook_error, workflow tetap lanjut
+Instagram gagal -> simpan instagram_error, workflow tetap lanjut
 jangan hapus file
-simpan error
-tandai failed_publish
 sediakan retry
 ```
 
 ---
 
-## 17. Cleanup Rules
+## 18. Cleanup Rules
 
 Cleanup hanya setelah publish sukses.
 
@@ -1201,12 +1333,14 @@ metadata JSON
 history publish
 caption final
 error log penting
+youtube video ID
+facebook video/post ID
 instagram media ID
 ```
 
 ---
 
-## 18. Recommended MVP
+## 19. Recommended MVP
 
 Fokus awal:
 
@@ -1217,7 +1351,8 @@ Fokus awal:
 1 clip output
 1 caption AI
 1 thumbnail frame + text overlay
-1 publish Instagram
+1 publish YouTube sebagai platform utama
+Facebook dan Instagram aktif sebagai platform tambahan
 1 FTP upload
 1 cleanup setelah sukses
 1 dashboard CRUD sederhana
@@ -1229,7 +1364,7 @@ Pengembangan setelah stabil:
 channel/playlist mode
 auto-search video
 multi-post per hari
-multi-platform
+multi-platform analytics
 analytics engagement
 auto scoring berdasarkan performa
 AI thumbnail lebih kompleks
@@ -1237,14 +1372,14 @@ AI thumbnail lebih kompleks
 
 ---
 
-## 19. Skill Instruction untuk Sistem
+## 20. Skill Instruction untuk Sistem
 
 ```txt
 SKILL NAME:
 Podcast Clipper Content Automation
 
 OBJECTIVE:
-Menjalankan otomasi produksi dan publikasi konten pendek dari link video YouTube berdasarkan tema aktif, daftar link video mingguan, hasil clipper, transkrip, caption AI, thumbnail AI, FTP storage, dan publish otomatis ke Instagram.
+Menjalankan otomasi produksi dan publikasi konten pendek dari link video YouTube berdasarkan tema aktif, daftar link video mingguan, hasil clipper, transkrip, caption AI, thumbnail AI, FTP storage, dan publish otomatis ke YouTube, Facebook, dan Instagram.
 
 IMPLEMENTATION RULE:
 Kerjakan dan uji di localhost terlebih dahulu. Jangan langsung deploy ke GitHub sebelum pipeline lokal berhasil dari input link YouTube sampai output MP4, metadata, caption, thumbnail, upload FTP, dan validasi public URL.
@@ -1262,9 +1397,10 @@ DAILY FLOW:
 10. Buat thumbnail dari frame video atau visual AI.
 11. Upload video, thumbnail, dan metadata ke FTP.
 12. Validasi public URL.
-13. Publish otomatis ke Instagram.
-14. Simpan media ID dan history publish.
-15. Cleanup file sementara setelah publish sukses.
+13. Publish otomatis ke YouTube sebagai prioritas utama.
+14. Publish ke Facebook dan Instagram jika aktif.
+15. Simpan media ID, URL platform, dan history publish.
+16. Cleanup file sementara setelah publish sukses.
 
 SOURCE RULES:
 - Gunakan link video YouTube dari dashboard sebagai sumber utama.
@@ -1283,7 +1419,7 @@ COOKIES RULES:
 FTP RULES:
 - FTP adalah storage persisten utama.
 - Simpan video, thumbnail, metadata, log, dan history ke FTP.
-- Public URL dari FTP harus bisa diakses Instagram Graph API.
+- Public URL dari FTP harus bisa diakses Meta Graph API.
 - Jangan publish jika public URL tidak valid.
 
 CAPTION RULES:
@@ -1300,8 +1436,10 @@ THUMBNAIL RULES:
 - Frame video asli + text overlay adalah default MVP.
 
 PUBLISH RULES:
-- Publish hanya jika semua validasi sukses.
-- Jika publish sukses, simpan Instagram media ID.
+- Publish hanya jika validasi awal sukses.
+- YouTube adalah platform utama.
+- Jika YouTube berhasil, error Facebook/Instagram tidak membuat workflow gagal.
+- Jika publish sukses, simpan ID/URL setiap platform.
 - Jika publish gagal, jangan hapus file dan simpan error.
 
 CLEANUP RULES:
@@ -1310,12 +1448,12 @@ CLEANUP RULES:
 - Hapus file besar atau file sementara jika sudah aman.
 
 SUCCESS CRITERIA:
-Sistem dianggap berhasil jika setiap hari menghasilkan minimal satu konten dengan status published, memiliki video final, caption final, thumbnail final, public URL, Instagram media ID, dan riwayat proses lengkap.
+Sistem dianggap berhasil jika setiap hari menghasilkan minimal satu konten dengan status published, memiliki video final, caption final, thumbnail final, public URL, YouTube URL, riwayat proses lengkap, dan error platform tambahan tersimpan jelas jika Facebook/Instagram gagal.
 ```
 
 ---
 
-## 20. Catatan Keamanan
+## 21. Catatan Keamanan
 
 Jangan menyimpan data berikut di repository:
 
@@ -1328,7 +1466,9 @@ FTP password
 Meta App Secret
 Deepgram key
 Gemini key
-Hugging Face token
+CLOD key
+YouTube refresh token
+Facebook Page access token
 ```
 
 Gunakan:
@@ -1343,7 +1483,7 @@ Jika credential pernah terlanjur dibagikan ke chat, log, atau repository, anggap
 
 ---
 
-## 21. Kesimpulan
+## 22. Kesimpulan
 
 Sistem ini memakai **link video YouTube manual sebagai input utama**.
 
@@ -1372,6 +1512,8 @@ anti duplikasi
 cookies aman
 FTP rapi
 public URL valid
+YouTube sebagai prioritas publish
+Facebook dan Instagram sebagai platform tambahan
 caption sesuai transkrip
 thumbnail kuat
 history tersimpan
