@@ -1,0 +1,65 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=VeI-bzzDlFY",
+    "theme": "podcast mindset inspirasi",
+    "status": "queued",
+    "active": true,
+    "priority": 1,
+    "target_date": "2026-05-01",
+    "note": "Ariel NOAH - perjalanan hidup, tekanan, kegagalan, cara melihat hidup"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Ib8gxLD5Ij4",
+    "theme": "podcast self development",
+    "status": "queued",
+    "active": true,
+    "priority": 2,
+    "target_date": "2026-05-02",
+    "note": "Rahasia hidup tidak overthinking - cocok untuk mental strength"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=u6QEuxNxeNw",
+    "theme": "podcast karier mindset",
+    "status": "queued",
+    "active": true,
+    "priority": 3,
+    "target_date": "2026-05-03",
+    "note": "Yang menghambat hidup bukan skill - cocok untuk motivasi kerja"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=rT6X7eTK4gk",
+    "theme": "podcast leadership bisnis",
+    "status": "queued",
+    "active": true,
+    "priority": 4,
+    "target_date": "2026-05-04",
+    "note": "CEO Maybank Indonesia di Endgame - leadership dan nilai kemanusiaan"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=gC0QgLw2n3U",
+    "theme": "podcast founder bisnis",
+    "status": "queued",
+    "active": true,
+    "priority": 5,
+    "target_date": "2026-05-05",
+    "note": "William Tanuwijaya / Tokopedia - founder mindset dan perjuangan bisnis"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=DGp1CO1558Q",
+    "theme": "podcast startup bisnis",
+    "status": "queued",
+    "active": true,
+    "priority": 6,
+    "target_date": "2026-05-06",
+    "note": "Raymond Chin - jangan mulai bisnis/startup sebelum memahami ini"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Cqxfjuj-zPw",
+    "theme": "podcast kontroversi edukasi mindset",
+    "status": "queued",
+    "active": true,
+    "priority": 7,
+    "target_date": "2026-05-07",
+    "note": "Timothy Ronald di Close The Door - potensi viral, tapi cek caption agar tidak terlalu provokatif"
+  }
+]
