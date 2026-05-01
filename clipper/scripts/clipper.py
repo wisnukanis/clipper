@@ -2339,19 +2339,30 @@ def run_render(source_clip, final_clip, vf, config):
     )
 
 
-def parse_range(value, index):
+def short_manual_title(source_title, index):
+    cleaned = re.sub(r"\s+", " ", str(source_title or "")).strip()
+    if not cleaned:
+        return f"Manual Clip {index + 1}"
+
+    cleaned = re.split(r"\s[-|]\s", cleaned, maxsplit=1)[0].strip()
+    words = cleaned.split()
+    return " ".join(words[:7]) or f"Manual Clip {index + 1}"
+
+
+def parse_range(value, index, source_title=""):
     start_raw, end_raw = str(value).split("-", 1)
     start = parse_time(start_raw)
     end = parse_time(end_raw)
     if end <= start:
         raise ValueError(f"Range tidak valid: {value}")
 
+    title = short_manual_title(source_title, index)
     return {
-        "title": f"Manual Clip {index + 1}",
+        "title": title,
         "reason": "Timestamp dipilih manual oleh user.",
         "start": start,
         "end": end,
-        "hook": "",
+        "hook": title,
         "caption": "",
     }
 
@@ -2395,7 +2406,12 @@ def main():
     segments_path.write_text(json.dumps(segments, ensure_ascii=False, indent=2), encoding="utf-8")
 
     if args.range:
-        clips = [parse_range(value, index) for index, value in enumerate(args.range)]
+        source_title = ""
+        try:
+            source_title = str(get_video_info(args.url).get("title") or "")
+        except Exception as exc:
+            log_warn(f"Gagal mengambil judul video untuk manual range: {exc}")
+        clips = [parse_range(value, index, source_title) for index, value in enumerate(args.range)]
     else:
         cached_clips = latest_cached_json(args.url, "clips")
         if cached_clips:
