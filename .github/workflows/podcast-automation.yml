@@ -17,9 +17,9 @@ on:
         default: ""
 
   schedule:
-    # GitHub schedule uses UTC.
-    # 22:07 UTC = 05:07 WIB.
-    - cron: "7 22 * * *"
+    - cron: "12 0 * * *"   # 07:12 WIB → publish ±07:22–07:35
+    - cron: "12 5 * * *"   # 12:12 WIB → publish ±12:22–12:35
+    - cron: "12 12 * * *"  # 19:12 WIB → publish ±19:22–19:35
 
 concurrency:
   group: podcast-clipper-automation
@@ -47,6 +47,7 @@ jobs:
       GRAPH_API_VERSION: v25.0
 
       INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
+      INSTAGRAM_REEL_UPLOAD_METHOD: ${{ secrets.INSTAGRAM_REEL_UPLOAD_METHOD || 'resumable' }}
       YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'false' }}
 
       FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -98,12 +99,14 @@ jobs:
       YTDLP_COOKIES_TXT: ${{ secrets.YTDLP_COOKIES_TXT }}
       YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
       YTDLP_REFERER: https://www.youtube.com/
-      YTDLP_SLEEP_REQUESTS: "1"
-      YTDLP_SLEEP_INTERVAL: "1"
-      YTDLP_MAX_SLEEP_INTERVAL: "3"
-      YTDLP_RETRIES: "10"
-      YTDLP_FRAGMENT_RETRIES: "10"
-      YTDLP_RETRY_SLEEP: exp=1:20
+
+      # Dibuat lebih aman untuk 3 run per hari.
+      YTDLP_SLEEP_REQUESTS: "5"
+      YTDLP_SLEEP_INTERVAL: "8"
+      YTDLP_MAX_SLEEP_INTERVAL: "18"
+      YTDLP_RETRIES: "3"
+      YTDLP_FRAGMENT_RETRIES: "3"
+      YTDLP_RETRY_SLEEP: exp=10:60
 
     steps:
       - name: Checkout
@@ -258,12 +261,17 @@ jobs:
           echo "PUBLIC_BASE_URL=$PUBLIC_BASE_URL"
           echo "FTP_REMOTE_DIR=$FTP_REMOTE_DIR"
           echo "INSTAGRAM_UPLOAD_ENABLED=$INSTAGRAM_UPLOAD_ENABLED"
+          echo "INSTAGRAM_REEL_UPLOAD_METHOD=$INSTAGRAM_REEL_UPLOAD_METHOD"
           echo "YOUTUBE_UPLOAD_ENABLED=$YOUTUBE_UPLOAD_ENABLED"
           echo "YTDLP_COOKIES_FILE=${YTDLP_COOKIES_FILE:-not_set}"
           echo "YTDLP_JS_RUNTIMES=$YTDLP_JS_RUNTIMES"
           echo "YTDLP_REMOTE_COMPONENTS=$YTDLP_REMOTE_COMPONENTS"
           echo "YTDLP_REFERER=$YTDLP_REFERER"
           echo "YTDLP_SLEEP_REQUESTS=$YTDLP_SLEEP_REQUESTS"
+          echo "YTDLP_SLEEP_INTERVAL=$YTDLP_SLEEP_INTERVAL"
+          echo "YTDLP_MAX_SLEEP_INTERVAL=$YTDLP_MAX_SLEEP_INTERVAL"
+          echo "YTDLP_RETRIES=$YTDLP_RETRIES"
+          echo "YTDLP_FRAGMENT_RETRIES=$YTDLP_FRAGMENT_RETRIES"
           if [ -n "$YTDLP_USER_AGENT" ]; then
             echo "YTDLP_USER_AGENT=configured"
           else
