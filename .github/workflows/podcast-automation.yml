@@ -258,8 +258,10 @@ jobs:
         if: ${{ env.INSTAGRAM_UPLOAD_ENABLED == 'true' }}
         shell: bash
         run: |
-          node src/instagram-token-fastcheck.js --github-env || \
-            echo "::warning::Instagram token check/refresh gagal. Workflow tetap lanjut dan fokus YouTube."
+          if ! node src/instagram-token-fastcheck.js --github-env; then
+            echo "::warning::Instagram token check/refresh gagal. Instagram dinonaktifkan untuk run ini; workflow tetap fokus platform valid."
+            echo "INSTAGRAM_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
+          fi
 
       - name: Persist refreshed Instagram token secret
         if: ${{ env.INSTAGRAM_UPLOAD_ENABLED == 'true' }}
@@ -277,15 +279,17 @@ jobs:
             exit 0
           fi
 
-          printf '%s' "$INSTAGRAM_ACCESS_TOKEN" | gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" --body-file -
+          printf '%s' "$INSTAGRAM_ACCESS_TOKEN" | gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
           echo "Instagram token GitHub Secret updated."
 
       - name: Refresh Facebook token if possible
         if: ${{ env.FACEBOOK_UPLOAD_ENABLED == 'true' }}
         shell: bash
         run: |
-          node src/facebook-token-fastcheck.js --github-env || \
-            echo "::warning::Facebook token check/refresh gagal. Workflow tetap lanjut dan fokus YouTube."
+          if ! node src/facebook-token-fastcheck.js --github-env; then
+            echo "::warning::Facebook token check/refresh gagal. Facebook dinonaktifkan untuk run ini; workflow tetap fokus platform valid."
+            echo "FACEBOOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
+          fi
 
       - name: Persist refreshed Facebook token secret
         if: ${{ env.FACEBOOK_UPLOAD_ENABLED == 'true' }}
@@ -304,12 +308,12 @@ jobs:
           fi
 
           if [ "${FACEBOOK_TOKEN_REFRESHED:-false}" = "true" ]; then
-            printf '%s' "$FACEBOOK_PAGE_ACCESS_TOKEN" | gh secret set FACEBOOK_PAGE_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" --body-file -
+            printf '%s' "$FACEBOOK_PAGE_ACCESS_TOKEN" | gh secret set FACEBOOK_PAGE_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
             echo "Facebook Page token GitHub Secret updated."
           fi
 
           if [ "${FACEBOOK_USER_TOKEN_REFRESHED:-false}" = "true" ] && [ -n "${FACEBOOK_USER_ACCESS_TOKEN:-}" ]; then
-            printf '%s' "$FACEBOOK_USER_ACCESS_TOKEN" | gh secret set FACEBOOK_USER_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" --body-file -
+            printf '%s' "$FACEBOOK_USER_ACCESS_TOKEN" | gh secret set FACEBOOK_USER_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
             echo "Facebook user token GitHub Secret updated."
           fi
 
