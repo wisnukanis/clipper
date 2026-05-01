@@ -20,7 +20,12 @@ function assertFacebookConfig() {
 
 function wrapFacebookError(error, prefix) {
   const apiError = error.response?.data?.error;
-  if (!apiError) return new Error(`${prefix}: ${error.message}`);
+  if (!apiError) {
+    const detail = error.response?.data
+      ? ` - ${JSON.stringify(error.response.data).slice(0, 600)}`
+      : "";
+    return new Error(`${prefix}: ${error.message}${detail}`);
+  }
 
   const wrapped = new Error(
     `${prefix}: ${apiError.message} ` +
@@ -95,7 +100,7 @@ async function startFacebookReel() {
 async function uploadFacebookReelFromUrl({ uploadUrl, videoUrl }) {
   if (!videoUrl) throw new Error("Facebook Reel butuh public video URL.");
   try {
-    await axios.post(uploadUrl, null, {
+    const response = await axios.post(uploadUrl, null, {
       headers: {
         Authorization: `OAuth ${config.facebook.accessToken}`,
         file_url: videoUrl
@@ -104,6 +109,9 @@ async function uploadFacebookReelFromUrl({ uploadUrl, videoUrl }) {
       maxBodyLength: Infinity,
       maxContentLength: Infinity
     });
+    if (response.data?.success === false) {
+      throw new Error(`Facebook menolak URL upload: ${JSON.stringify(response.data)}`);
+    }
   } catch (error) {
     throw wrapFacebookError(error, "Facebook reel URL upload failed");
   }
@@ -118,6 +126,7 @@ async function uploadFacebookReelFromFile({ uploadUrl, videoPath }) {
         Authorization: `OAuth ${config.facebook.accessToken}`,
         offset: "0",
         file_size: String(stat.size),
+        "Content-Length": String(stat.size),
         "Content-Type": "application/octet-stream"
       },
       timeout: 300000,
@@ -175,5 +184,15 @@ export async function publishToFacebook({ videoUrl, videoPath, title, descriptio
     return publishFacebookVideo({ videoUrl, title, description });
   }
 
-  return publishFacebookReel({ videoUrl, videoPath, title, description });
+  try {
+    return await publishFacebookReel({ videoUrl, videoPath, title, description });
+  } catch (error) {
+    console.warn(`Facebook Reel gagal, coba upload sebagai Page video: ${error.message}`);
+    try {
+      const fallback = await publishFacebookVideo({ videoUrl, title, description });
+      return { ...fallback, fallbackFrom: "facebook_reel" };
+    } catch (fallbackError) {
+      throw new Error(`${error.message}; fallback Page video juga gagal: ${fallbackError.message}`);
+    }
+  }
 }
