@@ -327,11 +327,30 @@ jobs:
 
       - name: Generate and publish
         env:
+          EVENT_NAME: ${{ github.event_name }}
           THEME: ${{ github.event.inputs.theme || 'auto' }}
           URL: ${{ github.event.inputs.url || '' }}
           RANGE: ${{ github.event.inputs.range || '' }}
         run: |
-          args=(--publish --scheduled --theme "$THEME")
-          if [ -n "$URL" ]; then args+=(--url "$URL"); fi
-          if [ -n "$RANGE" ]; then args+=(--range "$RANGE"); fi
+          args=(--publish --theme "$THEME")
+
+          # Pakai --scheduled hanya saat trigger dari cron schedule.
+          # Manual run tidak memakai --scheduled agar tidak kena guard already_published_today.
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            args+=(--scheduled)
+          fi
+
+          if [ -n "$URL" ]; then
+            args+=(--url "$URL")
+          fi
+
+          if [ -n "$RANGE" ]; then
+            args+=(--range "$RANGE")
+          fi
+
+          echo "Running command:"
+          printf 'node src/run.js'
+          printf ' %q' "${args[@]}"
+          printf '\n'
+
           node src/run.js "${args[@]}"
