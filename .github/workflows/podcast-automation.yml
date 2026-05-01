@@ -17,9 +17,19 @@ on:
         default: ""
 
   schedule:
-    - cron: "12 0 * * *"   # 07:12 WIB → publish ±07:22–07:35
-    - cron: "12 5 * * *"   # 12:12 WIB → publish ±12:22–12:35
-    - cron: "12 12 * * *"  # 19:12 WIB → publish ±19:22–19:35
+    # GitHub schedule uses UTC.
+    # Target publish kira-kira:
+    # 07:30 WIB pagi
+    # 12:30 WIB jam istirahat
+    # 19:30 WIB prime time malam
+    #
+    # Workflow mulai sekitar 10 menit lebih awal.
+    # 00:17 UTC = 07:17 WIB
+    # 05:17 UTC = 12:17 WIB
+    # 12:17 UTC = 19:17 WIB
+    - cron: "17 0 * * *"
+    - cron: "17 5 * * *"
+    - cron: "17 12 * * *"
 
 concurrency:
   group: podcast-clipper-automation
@@ -48,6 +58,7 @@ jobs:
 
       INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
       INSTAGRAM_REEL_UPLOAD_METHOD: ${{ secrets.INSTAGRAM_REEL_UPLOAD_METHOD || 'resumable' }}
+
       YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'false' }}
 
       FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -100,13 +111,12 @@ jobs:
       YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
       YTDLP_REFERER: https://www.youtube.com/
 
-      # Dibuat lebih aman untuk 3 run per hari.
       YTDLP_SLEEP_REQUESTS: "5"
       YTDLP_SLEEP_INTERVAL: "8"
       YTDLP_MAX_SLEEP_INTERVAL: "18"
       YTDLP_RETRIES: "3"
       YTDLP_FRAGMENT_RETRIES: "3"
-      YTDLP_RETRY_SLEEP: exp=10:60
+      YTDLP_RETRY_SLEEP: "exp=10:60"
 
     steps:
       - name: Checkout
@@ -121,17 +131,19 @@ jobs:
           echo "Branch/ref: ${{ github.ref }}"
           echo "Commit SHA: ${{ github.sha }}"
 
-      - name: Setup Node
+      - name: Setup Node with cache
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: package-lock.json
 
-      - name: Setup Python
+      - name: Setup Python with cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: clipper/requirements-offline.txt
 
       - name: Install FFmpeg
         shell: bash
@@ -272,6 +284,7 @@ jobs:
           echo "YTDLP_MAX_SLEEP_INTERVAL=$YTDLP_MAX_SLEEP_INTERVAL"
           echo "YTDLP_RETRIES=$YTDLP_RETRIES"
           echo "YTDLP_FRAGMENT_RETRIES=$YTDLP_FRAGMENT_RETRIES"
+
           if [ -n "$YTDLP_USER_AGENT" ]; then
             echo "YTDLP_USER_AGENT=configured"
           else
