@@ -35,6 +35,10 @@ jobs:
     timeout-minutes: 90
 
     env:
+      # GitHub Actions mulai memigrasikan JavaScript actions dari Node 20 ke Node 24.
+      # Ini juga membantu mengurangi warning deprecation Node 20 pada workflow.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
       LOCAL_PORT: 8788
       APP_TIMEZONE: Asia/Jakarta
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
@@ -91,13 +95,19 @@ jobs:
       TRANSCRIPT_REVIEW_ENABLED: "1"
       YTDLP_JS_RUNTIMES: node
       YTDLP_REMOTE_COMPONENTS: ejs:github
+
+      # Pilih salah satu:
+      # 1) YTDLP_COOKIES_TXT  = isi cookies.txt mentah/plain text
+      # 2) YTDLP_COOKIES_B64  = isi cookies.txt yang sudah di-base64-kan, lebih aman untuk multiline secret
       YTDLP_COOKIES_TXT: ${{ secrets.YTDLP_COOKIES_TXT }}
+      YTDLP_COOKIES_B64: ${{ secrets.YTDLP_COOKIES_B64 }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Show trigger info
+        shell: bash
         run: |
           echo "Event name: ${{ github.event_name }}"
           echo "Schedule: ${{ github.event.schedule }}"
@@ -106,7 +116,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Setup Python
@@ -116,6 +126,7 @@ jobs:
           cache: pip
 
       - name: Install FFmpeg
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
@@ -139,16 +150,65 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -r clipper/requirements-offline.txt
 
-      - name: Write YouTube cookies
-        if: ${{ env.YTDLP_COOKIES_TXT != '' }}
+      - name: Show tool versions
+        shell: bash
         run: |
-          printf '%s' "$YTDLP_COOKIES_TXT" > clipper/cookies.txt
-          echo "YTDLP_COOKIES_FILE=cookies.txt" >> "$GITHUB_ENV"
+          echo "Node: $(node --version)"
+          echo "NPM: $(npm --version)"
+          echo "Python: $(python --version)"
+          ffmpeg -version | head -n 1
+          python -m yt_dlp --version || yt-dlp --version || true
+
+      - name: Write YouTube cookies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p clipper
+
+          if [ -n "${YTDLP_COOKIES_B64:-}" ]; then
+            printf '%s' "$YTDLP_COOKIES_B64" | base64 -d > clipper/cookies.txt
+            echo "YTDLP_COOKIES_FILE=cookies.txt" >> "$GITHUB_ENV"
+            echo "YouTube cookies written from YTDLP_COOKIES_B64."
+          elif [ -n "${YTDLP_COOKIES_TXT:-}" ]; then
+            printf '%s\n' "$YTDLP_COOKIES_TXT" > clipper/cookies.txt
+            echo "YTDLP_COOKIES_FILE=cookies.txt" >> "$GITHUB_ENV"
+            echo "YouTube cookies written from YTDLP_COOKIES_TXT."
+          else
+            echo "::warning::YTDLP cookies belum diisi. Jika YouTube meminta login / not a bot, isi secret YTDLP_COOKIES_B64 atau YTDLP_COOKIES_TXT."
+          fi
+
+      - name: Validate YouTube cookies
+        if: ${{ env.YTDLP_COOKIES_TXT != '' || env.YTDLP_COOKIES_B64 != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -s clipper/cookies.txt ]; then
+            echo "::error::clipper/cookies.txt kosong atau tidak terbentuk. Cek secret YTDLP_COOKIES_TXT / YTDLP_COOKIES_B64."
+            exit 1
+          fi
+
+          echo "cookies.txt size: $(wc -c < clipper/cookies.txt) bytes"
+          echo "cookies.txt first line: $(head -n 1 clipper/cookies.txt)"
+
+          youtube_rows=$(grep -Ei 'youtube\.com|google\.com|youtube' clipper/cookies.txt | wc -l | tr -d ' ')
+          echo "YouTube/Google cookie rows: $youtube_rows"
+
+          if [ "$youtube_rows" -eq 0 ]; then
+            echo "::error::cookies.txt tidak berisi cookie YouTube/Google. Export ulang cookies dari browser yang sudah login YouTube."
+            exit 1
+          fi
+
+          if ! head -n 5 clipper/cookies.txt | grep -qi 'Netscape HTTP Cookie File'; then
+            echo "::warning::cookies.txt tidak terlihat seperti format Netscape. yt-dlp biasanya butuh format cookies.txt Netscape."
+          fi
 
       - name: Validate required secrets
         shell: bash
         run: |
+          set -euo pipefail
           missing=0
+
           for key in \
             PUBLIC_BASE_URL \
             FTP_HOST \
@@ -156,33 +216,33 @@ jobs:
             FTP_PASSWORD \
             FTP_REMOTE_DIR
           do
-            if [ -z "${!key}" ]; then
+            if [ -z "${!key:-}" ]; then
               echo "::error::$key belum diisi di GitHub Secrets"
               missing=1
             fi
           done
 
-          if [ "$INSTAGRAM_UPLOAD_ENABLED" = "true" ]; then
+          if [ "${INSTAGRAM_UPLOAD_ENABLED:-true}" = "true" ]; then
             for key in INSTAGRAM_IG_USER_ID INSTAGRAM_ACCESS_TOKEN
             do
-              if [ -z "${!key}" ]; then
+              if [ -z "${!key:-}" ]; then
                 echo "::error::$key belum diisi di GitHub Secrets"
                 missing=1
               fi
             done
           fi
 
-          if [ "$YOUTUBE_UPLOAD_ENABLED" = "true" ]; then
+          if [ "${YOUTUBE_UPLOAD_ENABLED:-false}" = "true" ]; then
             for key in YOUTUBE_CLIENT_ID YOUTUBE_CLIENT_SECRET YOUTUBE_REFRESH_TOKEN
             do
-              if [ -z "${!key}" ]; then
+              if [ -z "${!key:-}" ]; then
                 echo "::error::$key belum diisi di GitHub Secrets"
                 missing=1
               fi
             done
           fi
 
-          if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ]; then
+          if [ -z "${GEMINI_API_KEY:-}" ] && [ -z "${GEMINI_API_KEY_2:-}" ] && [ -z "${GEMINI_API_KEY_3:-}" ] && [ -z "${GEMINI_API_KEYS:-}" ]; then
             echo "::error::Minimal satu Gemini key harus diisi"
             missing=1
           fi
@@ -197,7 +257,9 @@ jobs:
           THEME: ${{ github.event.inputs.theme || 'auto' }}
           URL: ${{ github.event.inputs.url || '' }}
           RANGE: ${{ github.event.inputs.range || '' }}
+        shell: bash
         run: |
+          set -euo pipefail
           args=(--publish --scheduled --theme "$THEME")
           if [ -n "$URL" ]; then args+=(--url "$URL"); fi
           if [ -n "$RANGE" ]; then args+=(--range "$RANGE"); fi
