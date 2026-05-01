@@ -54,27 +54,48 @@ async function waitForContainerReady(containerId, label = "reel") {
   for (let attempt = 1; attempt <= 60; attempt += 1) {
     const status = await getContainerStatus(containerId);
     const code = status.status_code || "";
+
+    console.log("IG CONTAINER STATUS:", {
+      attempt,
+      containerId,
+      status_code: status.status_code,
+      status: status.status
+    });
+
     if (code === "FINISHED") return status;
+
     if (code === "ERROR" || code === "EXPIRED") {
-      throw new Error(`Instagram ${label} gagal diproses: ${status.status || code}`);
+      throw new Error(
+        `Instagram ${label} gagal diproses. container=${containerId}, status_code=${code}, status=${status.status || ""}`
+      );
     }
+
     await sleep(10000);
   }
+
   throw new Error(`Instagram ${label} belum siap setelah 10 menit: ${containerId}`);
 }
 
 export async function publishReel({ videoUrl, caption }) {
   assertInstagramConfig();
+
+  console.log("IG REEL VIDEO URL:", videoUrl);
+
   const created = await postForm(`${config.instagram.igUserId}/media`, {
     media_type: "REELS",
     video_url: videoUrl,
     caption,
     share_to_feed: "true"
   });
+
+  console.log("IG REEL CONTAINER CREATED:", created.id);
+
   await waitForContainerReady(created.id, "reel video");
+
   const published = await postForm(`${config.instagram.igUserId}/media_publish`, {
     creation_id: created.id
   });
+
   return {
     mediaId: published.id,
     containerId: created.id,
