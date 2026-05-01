@@ -76,6 +76,9 @@ async function waitForContainerReady(containerId, label = "reel") {
   throw new Error(`Instagram ${label} belum siap setelah 10 menit: ${containerId}`);
 }
 
+  throw new Error(`Instagram ${label} belum siap setelah 10 menit: ${containerId}`);
+}
+
 export async function publishReel({ videoUrl, caption }) {
   assertInstagramConfig();
 
