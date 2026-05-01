@@ -240,7 +240,7 @@ async function createManualSelection(options) {
     quality_profile: options.qualityProfile || "standard",
     subtitle_font: options.subtitleFont || "Segoe UI Semibold",
     subtitle_font_size: options.subtitleFontSize || 48,
-    subtitle_margin_v: options.subtitleMarginV || 240,
+    subtitle_margin_v: options.subtitleMarginV || 270,
     notes: "Ditambahkan dari CLI/manual run"
   });
   return selectNextVideo({ theme: video.theme, targetDate: todayDate() });

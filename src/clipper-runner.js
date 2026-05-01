@@ -25,7 +25,7 @@ export async function runClipper({ video, job, onLog = () => {} }) {
     FINAL_RENDER_CRF: String(quality.finalCrf),
     SUBTITLE_FONT_FAMILY: String(video.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     SUBTITLE_FONT_SIZE: String(video.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || 48),
-    SUBTITLE_MARGIN_V: String(video.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || 240)
+    SUBTITLE_MARGIN_V: String(video.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || 270)
   };
 
   onLog(`Running clipper: ${config.clipper.pythonCommand} ${args.join(" ")}`);

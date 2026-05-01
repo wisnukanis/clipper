@@ -34,7 +34,7 @@ on:
       subtitle_margin_v:
         description: Subtitle bottom margin
         required: false
-        default: "240"
+        default: "270"
 
   schedule:
     # GitHub schedule uses UTC.
@@ -82,6 +82,8 @@ jobs:
       FACEBOOK_UPLOAD_ENABLED: ${{ secrets.FACEBOOK_UPLOAD_ENABLED || 'false' }}
       FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
       FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+      FACEBOOK_USER_ACCESS_TOKEN: ${{ secrets.FACEBOOK_USER_ACCESS_TOKEN }}
+      AUTO_REFRESH_FACEBOOK_TOKEN: ${{ secrets.AUTO_REFRESH_FACEBOOK_TOKEN || 'true' }}
       FACEBOOK_MEDIA_TYPE: ${{ secrets.FACEBOOK_MEDIA_TYPE || 'reel' }}
       FACEBOOK_VIDEO_STATE: ${{ secrets.FACEBOOK_VIDEO_STATE || 'PUBLISHED' }}
       FACEBOOK_TITLE_PREFIX: ${{ secrets.FACEBOOK_TITLE_PREFIX }}
@@ -144,7 +146,7 @@ jobs:
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Segoe UI Semibold' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '48' }}
-      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '240' }}
+      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '270' }}
       SMART_CROP_ENABLED: "1"
       SMART_CROP_MODE: auto
       TRANSCRIPT_REVIEW_ENABLED: "1"
@@ -221,12 +223,13 @@ jobs:
           fi
 
           if [ "$FACEBOOK_UPLOAD_ENABLED" = "true" ]; then
-            for key in FACEBOOK_PAGE_ID FACEBOOK_PAGE_ACCESS_TOKEN
-            do
-              if [ -z "${!key}" ]; then
-                echo "::warning::$key belum diisi di GitHub Secrets. Facebook akan dilewati; workflow tetap fokus YouTube."
-              fi
-            done
+            if [ -z "$FACEBOOK_PAGE_ID" ]; then
+              echo "::warning::FACEBOOK_PAGE_ID belum diisi di GitHub Secrets. Facebook akan dilewati; workflow tetap fokus YouTube."
+            fi
+
+            if [ -z "$FACEBOOK_PAGE_ACCESS_TOKEN" ] && [ -z "$FACEBOOK_USER_ACCESS_TOKEN" ]; then
+              echo "::warning::FACEBOOK_PAGE_ACCESS_TOKEN atau FACEBOOK_USER_ACCESS_TOKEN belum diisi. Facebook akan dilewati; workflow tetap fokus YouTube."
+            fi
           fi
 
           if [ "$YOUTUBE_UPLOAD_ENABLED" = "true" ]; then
@@ -276,6 +279,39 @@ jobs:
 
           printf '%s' "$INSTAGRAM_ACCESS_TOKEN" | gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" --body-file -
           echo "Instagram token GitHub Secret updated."
+
+      - name: Refresh Facebook token if possible
+        if: ${{ env.FACEBOOK_UPLOAD_ENABLED == 'true' }}
+        shell: bash
+        run: |
+          node src/facebook-token-fastcheck.js --github-env || \
+            echo "::warning::Facebook token check/refresh gagal. Workflow tetap lanjut dan fokus YouTube."
+
+      - name: Persist refreshed Facebook token secret
+        if: ${{ env.FACEBOOK_UPLOAD_ENABLED == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
+        run: |
+          if [ "${FACEBOOK_TOKEN_REFRESHED:-false}" != "true" ] && [ "${FACEBOOK_USER_TOKEN_REFRESHED:-false}" != "true" ]; then
+            echo "Facebook token secrets unchanged."
+            exit 0
+          fi
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::Facebook token refreshed for this run, but GH_REPO_SECRET_TOKEN is not set. Update GitHub Secrets manually or add GH_REPO_SECRET_TOKEN."
+            exit 0
+          fi
+
+          if [ "${FACEBOOK_TOKEN_REFRESHED:-false}" = "true" ]; then
+            printf '%s' "$FACEBOOK_PAGE_ACCESS_TOKEN" | gh secret set FACEBOOK_PAGE_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" --body-file -
+            echo "Facebook Page token GitHub Secret updated."
+          fi
+
+          if [ "${FACEBOOK_USER_TOKEN_REFRESHED:-false}" = "true" ] && [ -n "${FACEBOOK_USER_ACCESS_TOKEN:-}" ]; then
+            printf '%s' "$FACEBOOK_USER_ACCESS_TOKEN" | gh secret set FACEBOOK_USER_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" --body-file -
+            echo "Facebook user token GitHub Secret updated."
+          fi
 
       - name: Setup Python with cache
         uses: actions/setup-python@v5
@@ -397,12 +433,13 @@ jobs:
           fi
 
           if [ "$FACEBOOK_UPLOAD_ENABLED" = "true" ]; then
-            for key in FACEBOOK_PAGE_ID FACEBOOK_PAGE_ACCESS_TOKEN
-            do
-              if [ -z "${!key}" ]; then
-                echo "::warning::$key belum diisi di GitHub Secrets. Facebook akan dilewati; workflow tetap fokus YouTube."
-              fi
-            done
+            if [ -z "$FACEBOOK_PAGE_ID" ]; then
+              echo "::warning::FACEBOOK_PAGE_ID belum diisi di GitHub Secrets. Facebook akan dilewati; workflow tetap fokus YouTube."
+            fi
+
+            if [ -z "$FACEBOOK_PAGE_ACCESS_TOKEN" ] && [ -z "$FACEBOOK_USER_ACCESS_TOKEN" ]; then
+              echo "::warning::FACEBOOK_PAGE_ACCESS_TOKEN atau FACEBOOK_USER_ACCESS_TOKEN belum diisi. Facebook akan dilewati; workflow tetap fokus YouTube."
+            fi
           fi
 
           if [ "$YOUTUBE_UPLOAD_ENABLED" = "true" ]; then

@@ -20,7 +20,7 @@ const options = {
   qualityProfile: argValue("--quality", process.env.VIDEO_QUALITY_PROFILE || "standard"),
   subtitleFont: argValue("--subtitle-font", process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
   subtitleFontSize: Number(argValue("--subtitle-font-size", process.env.SUBTITLE_FONT_SIZE || "48")),
-  subtitleMarginV: Number(argValue("--subtitle-margin-v", process.env.SUBTITLE_MARGIN_V || "240"))
+  subtitleMarginV: Number(argValue("--subtitle-margin-v", process.env.SUBTITLE_MARGIN_V || "270"))
 };
 
 if (hasArg("--dry-run")) {

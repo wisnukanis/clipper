@@ -28,17 +28,19 @@ def log_warn(message):
 
 
 def load_env():
-    env_path = ROOT / ".env"
-    if not env_path.exists():
-        return
+    env_paths = [ROOT.parent / ".env", ROOT / ".env"]
 
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    for env_path in env_paths:
+        if not env_path.exists():
             continue
 
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 def parse_int(value, default):
@@ -1589,7 +1591,7 @@ def build_ass(events, config):
     font_family = os.environ.get("SUBTITLE_FONT_FAMILY", "Segoe UI Semibold").strip() or "Segoe UI Semibold"
     font_family = font_family.replace(",", " ")
     font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 48)
-    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 240)
+    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 270)
 
     header = f"""[Script Info]
 ScriptType: v4.00+

@@ -80,6 +80,8 @@ export const config = {
     enabled: boolEnv("FACEBOOK_UPLOAD_ENABLED", false),
     pageId: cleanText(process.env.FACEBOOK_PAGE_ID),
     accessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN || "",
+    userAccessToken: process.env.FACEBOOK_USER_ACCESS_TOKEN || "",
+    autoRefreshToken: boolEnv("AUTO_REFRESH_FACEBOOK_TOKEN", true),
     mediaType: cleanText(process.env.FACEBOOK_MEDIA_TYPE || "reel").toLowerCase(),
     videoState: cleanText(process.env.FACEBOOK_VIDEO_STATE || "PUBLISHED"),
     titlePrefix: cleanText(process.env.FACEBOOK_TITLE_PREFIX)

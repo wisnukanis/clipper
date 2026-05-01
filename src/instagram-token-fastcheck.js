@@ -149,8 +149,7 @@ function updateEnvFile(filePath, token) {
 
 function persistLocalToken(token) {
   const files = [
-    path.join(rootDir, ".env"),
-    path.join(rootDir, "clipper", ".env")
+    path.join(rootDir, ".env")
   ];
   return files.filter((filePath) => updateEnvFile(filePath, token)).length;
 }

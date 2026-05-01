@@ -2,6 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import axios from "axios";
 import { config } from "./config.js";
+import { ensureFreshFacebookToken } from "./facebook-token.js";
 
 function graphUrl(apiPath) {
   return `https://graph.facebook.com/${config.graphApiVersion}/${apiPath}`;
@@ -14,7 +15,9 @@ function graphVideoUrl(apiPath) {
 function assertFacebookConfig() {
   const missing = [];
   if (!config.facebook.pageId) missing.push("FACEBOOK_PAGE_ID");
-  if (!config.facebook.accessToken) missing.push("FACEBOOK_PAGE_ACCESS_TOKEN");
+  if (!config.facebook.accessToken && !config.facebook.userAccessToken) {
+    missing.push("FACEBOOK_PAGE_ACCESS_TOKEN atau FACEBOOK_USER_ACCESS_TOKEN");
+  }
   if (missing.length) throw new Error(`Missing Facebook config: ${missing.join(", ")}`);
 }
 
@@ -179,6 +182,7 @@ async function publishFacebookReel({ videoUrl, videoPath, title, description }) 
 
 export async function publishToFacebook({ videoUrl, videoPath, title, description }) {
   assertFacebookConfig();
+  await ensureFreshFacebookToken({ refreshValid: false });
 
   if (config.facebook.mediaType === "video") {
     return publishFacebookVideo({ videoUrl, title, description });

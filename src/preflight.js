@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { config, canPublish, shouldUploadToFtp } from "./config.js";
 import { ensureFreshInstagramToken } from "./instagram-token.js";
+import { ensureFreshFacebookToken } from "./facebook-token.js";
 import { withFtpClient } from "./uploader.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
 
@@ -268,9 +269,18 @@ async function checkFacebook(online, required = false) {
     return checkResult("Facebook Page API", true, "FACEBOOK_UPLOAD_ENABLED=false", false);
   }
 
-  const missing = missingEnv(["FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_ACCESS_TOKEN"]);
+  const missing = missingEnv(["FACEBOOK_PAGE_ID"]);
   if (missing.length) {
     return checkResult("Facebook Page API", false, `missing env: ${missing.join(", ")}`, required);
+  }
+
+  if (!config.facebook.accessToken && !config.facebook.userAccessToken) {
+    return checkResult(
+      "Facebook Page API",
+      false,
+      "missing env: FACEBOOK_PAGE_ACCESS_TOKEN atau FACEBOOK_USER_ACCESS_TOKEN",
+      required
+    );
   }
 
   if (!online) {
@@ -278,9 +288,9 @@ async function checkFacebook(online, required = false) {
   }
 
   try {
-    const url = `https://graph.facebook.com/${config.graphApiVersion}/${encodeURIComponent(config.facebook.pageId)}?fields=id,name&access_token=${encodeURIComponent(config.facebook.accessToken)}`;
-    const data = await fetchJson(url);
-    return checkResult("Facebook Page API", Boolean(data?.id), data?.name ? `page valid: ${data.name}` : "page valid", required);
+    const status = await ensureFreshFacebookToken({ refreshValid: true });
+    const detail = status.pageName ? `page valid: ${status.pageName}` : "page valid";
+    return checkResult("Facebook Page API", true, status.refreshed ? `${detail}, token refreshed` : detail, required);
   } catch (error) {
     return checkResult("Facebook Page API", false, error.message, required);
   }
