@@ -4,6 +4,8 @@ const els = {
   configLine: document.querySelector("#configLine"),
   refreshBtn: document.querySelector("#refreshBtn"),
   metrics: document.querySelector("#metrics"),
+  workflowGraph: document.querySelector("#workflowGraph"),
+  workflowMeta: document.querySelector("#workflowMeta"),
   videoForm: document.querySelector("#videoForm"),
   runForm: document.querySelector("#runForm"),
   runStatus: document.querySelector("#runStatus"),
@@ -53,6 +55,7 @@ async function refresh() {
   renderVideos(state.videos || []);
   renderJobs(state.jobs || []);
   renderMetrics(state);
+  renderWorkflow(state);
   renderRun(state.activeRun);
 }
 
@@ -73,6 +76,150 @@ function renderMetrics(state) {
 
 function metric(label, value) {
   return `<article class="metric"><span>${label}</span><strong>${value}</strong></article>`;
+}
+
+function renderWorkflow(state) {
+  const jobs = state.jobs || [];
+  const activeRun = state.activeRun || null;
+  const job = currentJob(jobs, activeRun);
+  const steps = workflowSteps(job, activeRun);
+
+  els.workflowMeta.textContent = workflowMeta(job, activeRun);
+  els.workflowGraph.innerHTML = steps.map((step, index) => {
+    const next = steps[index + 1];
+    const edge = next ? `<div class="flowEdge ${edgeState(step, next)}"><span></span></div>` : "";
+    return `${workflowNode(step, index + 1)}${edge}`;
+  }).join("");
+}
+
+function currentJob(jobs, activeRun) {
+  if (activeRun?.result?.job_id) {
+    const fromRun = jobs.find((job) => job.job_id === activeRun.result.job_id);
+    if (fromRun) return fromRun;
+  }
+
+  return [...jobs].sort((a, b) => {
+    const left = String(a.updated_at || a.published_at || a.created_at || "");
+    const right = String(b.updated_at || b.published_at || b.created_at || "");
+    return right.localeCompare(left);
+  })[0] || null;
+}
+
+function workflowMeta(job, activeRun) {
+  if (activeRun?.status === "running") return `Running ${job?.job_id || activeRun.id || ""}`.trim();
+  if (!job) return "Belum ada job";
+  return `${job.job_id || "job"} | ${job.status || "selected"}`;
+}
+
+function workflowSteps(job, activeRun) {
+  const activeWithoutJob = activeRun?.status === "running" && !job;
+  if (!job) {
+    return [
+      step("Queue", activeWithoutJob ? "active" : "pending", activeWithoutJob ? "Memilih video" : "Menunggu link"),
+      step("Clipper", "pending", "Belum mulai"),
+      step("Caption", "pending", "Belum mulai"),
+      step("Thumbnail", "pending", "Belum mulai"),
+      step("FTP", "pending", "Belum mulai"),
+      step("Instagram", "pending", "Belum mulai"),
+      step("YouTube", "pending", "Belum mulai"),
+      step("History", "pending", "Belum mulai")
+    ];
+  }
+
+  const failed = isFailed(job.status) || Boolean(job.error_message);
+  const clipperDone = job.clipper_status === "done" || Boolean(job.final_video_path);
+  const captionDone = job.caption_status === "done" || Boolean(job.caption);
+  const thumbnailDone = job.thumbnail_status === "done" || Boolean(job.thumbnail_path);
+  const ftpDone = Boolean(job.public_video_url);
+  const published = job.status === "published" || job.publish_status === "published";
+
+  return [
+    step("Queue", "done", job.youtube_video_id || "Selected"),
+    step("Clipper", stageState({
+      failed: failed && !clipperDone,
+      active: job.clipper_status === "processing" || job.status === "clipper_processing",
+      done: clipperDone
+    }), stageText(job.clipper_status, clipperDone ? "MP4 siap" : "Render video")),
+    step("Caption", stageState({
+      failed: failed && clipperDone && !captionDone,
+      active: clipperDone && !captionDone && !failed,
+      done: captionDone
+    }), stageText(job.caption_status, captionDone ? "Caption siap" : "Buat caption")),
+    step("Thumbnail", stageState({
+      failed: failed && captionDone && !thumbnailDone,
+      active: captionDone && !thumbnailDone && !failed,
+      done: thumbnailDone
+    }), stageText(job.thumbnail_status, thumbnailDone ? "Thumbnail siap" : "Buat thumbnail")),
+    step("FTP", stageState({
+      failed: failed && thumbnailDone && !ftpDone,
+      active: thumbnailDone && !ftpDone && !failed,
+      done: ftpDone
+    }), ftpDone ? "Public URL valid" : "Upload file"),
+    platformStep("Instagram", job.instagram_status, Boolean(job.instagram_media_id), ftpDone, failed),
+    platformStep("YouTube", job.youtube_status, Boolean(job.youtube_url), ftpDone, failed),
+    step("History", stageState({
+      failed,
+      active: !published && (job.status === "publishing" || job.status === "ready_to_publish"),
+      done: published
+    }), published ? "Published" : job.publish_status || job.status || "Menunggu")
+  ];
+}
+
+function platformStep(label, status, hasResult, ftpDone, failed) {
+  const normalized = String(status || "").toLowerCase();
+  const disabled = normalized === "disabled";
+  return step(label, stageState({
+    failed: isFailed(status) || (failed && ftpDone && !hasResult && !disabled),
+    active: ftpDone && normalized === "processing" && !failed,
+    done: hasResult || normalized === "published",
+    muted: disabled || normalized === "skipped"
+  }), hasResult ? "Published" : status || "Menunggu");
+}
+
+function step(label, state, detail) {
+  return { label, state, detail };
+}
+
+function stageState({ failed = false, active = false, done = false, muted = false }) {
+  if (failed) return "failed";
+  if (active) return "active";
+  if (done) return "done";
+  if (muted) return "muted";
+  return "pending";
+}
+
+function stageText(status, fallback) {
+  return status && status !== "pending" ? status : fallback;
+}
+
+function isFailed(status) {
+  return String(status || "").toLowerCase().includes("failed");
+}
+
+function edgeState(step, next) {
+  if (step.state === "failed" || next.state === "failed") return "failed";
+  if (step.state === "done" && next.state === "done") return "done";
+  if (step.state === "done" && next.state === "active") return "active";
+  return "pending";
+}
+
+function workflowNode(step, index) {
+  return `
+    <article class="flowNode ${step.state}">
+      <span class="flowIndex">${index}</span>
+      <strong>${escapeHtml(step.label)}</strong>
+      <small>${escapeHtml(step.detail || "")}</small>
+    </article>
+  `;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function renderVideos(videos) {

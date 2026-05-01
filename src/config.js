@@ -65,7 +65,7 @@ export const config = {
   postCron: cleanText(process.env.POST_CRON || "7 5 * * *"),
   dashboardPin: cleanText(process.env.AUTO_DASHBOARD_PIN),
   dashboardAllowRemote: boolEnv("AUTO_DASHBOARD_ALLOW_REMOTE", false),
-  graphApiVersion: cleanText(process.env.GRAPH_API_VERSION || "v21.0"),
+  graphApiVersion: cleanText(process.env.GRAPH_API_VERSION || "v25.0"),
   instagram: {
     enabled: boolEnv("INSTAGRAM_UPLOAD_ENABLED", true),
     igUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
@@ -76,7 +76,7 @@ export const config = {
     clientId: cleanText(process.env.YOUTUBE_CLIENT_ID),
     clientSecret: process.env.YOUTUBE_CLIENT_SECRET || "",
     refreshToken: process.env.YOUTUBE_REFRESH_TOKEN || "",
-    privacyStatus: cleanText(process.env.YOUTUBE_PRIVACY_STATUS || "private"),
+    privacyStatus: cleanText(process.env.YOUTUBE_PRIVACY_STATUS || "public"),
     categoryId: cleanText(process.env.YOUTUBE_CATEGORY_ID || "22"),
     tags: listEnv("YOUTUBE_TAGS"),
     titlePrefix: cleanText(process.env.YOUTUBE_TITLE_PREFIX),

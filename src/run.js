@@ -16,7 +16,11 @@ const options = {
   scheduled: hasArg("--scheduled"),
   theme: argValue("--theme", process.env.THEME || config.defaultTheme),
   url: argValue("--url", ""),
-  range: argValue("--range", "")
+  range: argValue("--range", ""),
+  qualityProfile: argValue("--quality", process.env.VIDEO_QUALITY_PROFILE || "standard"),
+  subtitleFont: argValue("--subtitle-font", process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
+  subtitleFontSize: Number(argValue("--subtitle-font-size", process.env.SUBTITLE_FONT_SIZE || "48")),
+  subtitleMarginV: Number(argValue("--subtitle-margin-v", process.env.SUBTITLE_MARGIN_V || "240"))
 };
 
 if (hasArg("--dry-run")) {

@@ -211,6 +211,7 @@ async function publishPlatforms({ job, output, caption, upload }) {
   if (config.instagram.enabled) {
     const videoUrl = upload.videoUrl;
     if (!videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Instagram.");
+    await updateJob(job.job_id, { instagram_status: "processing" });
     platformResults.instagram = await publishReel({ videoUrl, caption });
   }
 

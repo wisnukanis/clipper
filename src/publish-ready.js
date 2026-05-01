@@ -53,17 +53,17 @@ await patchItem("jobs", job.job_id, {
   status: "publishing"
 });
 
-try {
-  let youtube = job.youtube_url ? {
-    videoId: job.youtube_video_id,
-    url: job.youtube_url,
-    skipped: true
-  } : null;
-  let instagram = job.instagram_media_id ? {
-    mediaId: job.instagram_media_id,
-    skipped: true
-  } : null;
+let youtube = job.youtube_url ? {
+  videoId: job.youtube_video_id,
+  url: job.youtube_url,
+  skipped: true
+} : null;
+let instagram = job.instagram_media_id ? {
+  mediaId: job.instagram_media_id,
+  skipped: true
+} : null;
 
+try {
   const output = {
     title: job.source_title,
     hook: job.source_title,
@@ -141,11 +141,13 @@ try {
     youtube
   }, null, 2));
 } catch (error) {
-  const hasYoutube = Boolean(job.youtube_url || job.youtube_video_id);
+  const hasYoutube = Boolean(youtube?.url || youtube?.videoId || job.youtube_url || job.youtube_video_id);
   await patchItem("jobs", job.job_id, {
-    status: hasYoutube ? "published" : "failed_publish",
-    publish_status: hasYoutube ? "published" : "failed_publish",
+    status: "failed_publish",
+    publish_status: "failed_publish",
     youtube_status: hasYoutube ? "published" : config.youtube.enabled ? "failed" : job.youtube_status,
+    youtube_video_id: youtube?.videoId || job.youtube_video_id || "",
+    youtube_url: youtube?.url || job.youtube_url || "",
     instagram_status: config.instagram.enabled ? "failed" : job.instagram_status,
     error_message: error.message
   });
