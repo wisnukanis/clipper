@@ -44,7 +44,6 @@ jobs:
       AUTO_PUBLISH: "true"
       DEFAULT_THEME: auto
 
-      # Paksa Graph API v25
       GRAPH_API_VERSION: v25.0
 
       INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
@@ -94,11 +93,17 @@ jobs:
       SMART_CROP_MODE: auto
       TRANSCRIPT_REVIEW_ENABLED: "1"
 
-      # yt-dlp support
       YTDLP_JS_RUNTIMES: node
       YTDLP_REMOTE_COMPONENTS: ejs:github
       YTDLP_COOKIES_TXT: ${{ secrets.YTDLP_COOKIES_TXT }}
       YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
+      YTDLP_REFERER: https://www.youtube.com/
+      YTDLP_SLEEP_REQUESTS: "1"
+      YTDLP_SLEEP_INTERVAL: "1"
+      YTDLP_MAX_SLEEP_INTERVAL: "3"
+      YTDLP_RETRIES: "10"
+      YTDLP_FRAGMENT_RETRIES: "10"
+      YTDLP_RETRY_SLEEP: exp=1:20
 
     steps:
       - name: Checkout
@@ -161,20 +166,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p clipper
-
-          # Tulis isi secret ke file cookies.
-          # Jangan echo isi cookies ke log.
           printf '%s' "$YTDLP_COOKIES_TXT" > clipper/cookies.txt
 
-          # Kalau secret berisi karakter literal \n, ubah jadi newline asli.
           if grep -q '\\n' clipper/cookies.txt; then
             echo "Detected literal \\n in cookies secret. Converting to real newlines..."
             perl -0pi -e 's/\\n/\n/g' clipper/cookies.txt
           fi
 
-          # Normalisasi CRLF Windows ke LF Linux.
           sed -i 's/\r$//' clipper/cookies.txt
-
           echo "YTDLP_COOKIES_FILE=cookies.txt" >> "$GITHUB_ENV"
 
       - name: Debug YouTube cookies safely
@@ -263,6 +262,8 @@ jobs:
           echo "YTDLP_COOKIES_FILE=${YTDLP_COOKIES_FILE:-not_set}"
           echo "YTDLP_JS_RUNTIMES=$YTDLP_JS_RUNTIMES"
           echo "YTDLP_REMOTE_COMPONENTS=$YTDLP_REMOTE_COMPONENTS"
+          echo "YTDLP_REFERER=$YTDLP_REFERER"
+          echo "YTDLP_SLEEP_REQUESTS=$YTDLP_SLEEP_REQUESTS"
           if [ -n "$YTDLP_USER_AGENT" ]; then
             echo "YTDLP_USER_AGENT=configured"
           else
@@ -287,8 +288,15 @@ jobs:
           yt-dlp \
             --cookies cookies.txt \
             "${UA_ARGS[@]}" \
+            --referer "$YTDLP_REFERER" \
             --js-runtimes "$YTDLP_JS_RUNTIMES" \
             --remote-components "$YTDLP_REMOTE_COMPONENTS" \
+            --sleep-requests "$YTDLP_SLEEP_REQUESTS" \
+            --sleep-interval "$YTDLP_SLEEP_INTERVAL" \
+            --max-sleep-interval "$YTDLP_MAX_SLEEP_INTERVAL" \
+            --retries "$YTDLP_RETRIES" \
+            --fragment-retries "$YTDLP_FRAGMENT_RETRIES" \
+            --retry-sleep "$YTDLP_RETRY_SLEEP" \
             --skip-download \
             --print title \
             "$TEST_URL"
