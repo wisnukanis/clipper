@@ -40,55 +40,49 @@
           <div class="brandText">
             <p class="eyebrow">Clipper Emsa Pro</p>
             <h1>Automation Control</h1>
-            <p id="configLine" class="muted">Memuat konfigurasi...</p>
           </div>
         </div>
+        <p id="configLine" class="configLine muted">Memuat konfigurasi...</p>
         <div class="toolbar">
-          <button id="preflightBtn" class="btn ghost" type="button">Preflight</button>
-          <button id="refreshBtn" class="btn ghost" type="button">Refresh</button>
-          <button id="logoutBtn" class="btn ghost" type="button">Logout</button>
+          <button id="preflightBtn" class="btn ghost small" type="button">Preflight</button>
+          <button id="refreshBtn" class="btn ghost small" type="button">Refresh</button>
+          <button id="logoutBtn" class="btn ghost small" type="button">Logout</button>
         </div>
       </header>
 
-      <nav class="tabs" aria-label="Dashboard tabs">
-        <button class="tabBtn active" type="button" data-tab="monitor">Monitor</button>
-        <button class="tabBtn" type="button" data-tab="environment">Environment</button>
-      </nav>
+      <section class="metrics" id="metrics"></section>
 
-      <section id="tab-monitor" class="tabPage active">
-        <section class="metrics" id="metrics"></section>
-
-        <section class="panel glass heroPanel">
-          <div class="heroHead">
-            <div class="heroLeft">
-              <span id="runBadge" class="runBadge idle">Idle</span>
-              <div>
-                <p class="eyebrow">Live workflow</p>
-                <h2 id="workflowTitle">Menunggu proses</h2>
-                <p id="workflowMeta" class="muted">Belum ada proses berjalan.</p>
-              </div>
-            </div>
-            <div class="heroRight">
-              <a id="runLink" class="btn ghost small" href="#" target="_blank" rel="noreferrer" hidden>Lihat di GitHub</a>
-              <div class="runMetric">
-                <span class="metricLabel">Progress</span>
-                <strong id="runProgressLabel">0%</strong>
-              </div>
+      <section class="panel glass heroPanel">
+        <div class="heroHead">
+          <div class="heroLeft">
+            <span id="runBadge" class="runBadge idle">Idle</span>
+            <div class="heroTitle">
+              <h2 id="workflowTitle">Menunggu proses</h2>
+              <p id="workflowMeta" class="muted">Belum ada workflow yang berjalan.</p>
             </div>
           </div>
-
-          <div class="progressTrack" aria-hidden="true">
-            <span id="progressBar" class="progressFill"></span>
+          <div class="heroRight">
+            <a id="runLink" class="btn ghost small" href="#" target="_blank" rel="noreferrer" hidden>Lihat di GitHub</a>
+            <div class="runMetric">
+              <span class="metricLabel">Progress</span>
+              <strong id="runProgressLabel">0%</strong>
+            </div>
           </div>
+        </div>
 
-          <div class="runDetailRow">
-            <strong id="runStatus">Idle</strong>
-            <span id="runDetail" class="muted">Siap menerima link YouTube atau menjalankan queue.</span>
-          </div>
+        <div class="progressTrack" aria-hidden="true">
+          <span id="progressBar" class="progressFill"></span>
+        </div>
 
-          <div class="workflowGraph" id="workflowGraph"></div>
-        </section>
+        <div class="runDetailRow">
+          <strong id="runStatus">Idle</strong>
+          <span id="runDetail" class="muted">Siap menerima link YouTube atau menjalankan queue.</span>
+        </div>
 
+        <div class="workflowGraph" id="workflowGraph"></div>
+      </section>
+
+      <section class="midGrid">
         <section class="panel glass consolePanel">
           <div class="sectionHead compact">
             <div>
@@ -100,7 +94,7 @@
           <pre id="consoleOutput" class="consoleOutput">Belum ada output.</pre>
         </section>
 
-        <section class="actionGrid">
+        <div class="formStack">
           <form id="runForm" class="panel glass formCard">
             <div class="sectionHead compact">
               <div>
@@ -114,9 +108,9 @@
                 <span>Theme</span>
                 <input name="theme" value="auto">
               </label>
-              <label class="field span2">
-                <span>URL manual (opsional)</span>
-                <input name="url" placeholder="Kosongkan untuk ambil dari queue">
+              <label class="field">
+                <span>URL manual</span>
+                <input name="url" placeholder="Kosongkan = ambil queue">
               </label>
               <label class="field">
                 <span>Range</span>
@@ -131,29 +125,15 @@
                   <option value="ultra">Ultra</option>
                 </select>
               </label>
-              <label class="field">
-                <span>Font</span>
-                <select name="subtitle_font">
-                  <option value="Segoe UI" selected>Segoe UI</option>
-                  <option value="Georgia">Georgia</option>
-                  <option value="Times New Roman">Times New Roman</option>
-                  <option value="DejaVu Serif">DejaVu Serif</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>Size</span>
-                <input name="subtitle_font_size" type="number" min="32" max="88" value="46">
-              </label>
-              <label class="field">
-                <span>Margin</span>
-                <input name="subtitle_margin_v" type="number" min="160" max="520" value="400">
-              </label>
               <label class="field check">
                 <input name="publish" type="checkbox">
                 <span>Publish</span>
               </label>
+              <input name="subtitle_font" type="hidden" value="Segoe UI">
+              <input name="subtitle_font_size" type="hidden" value="46">
+              <input name="subtitle_margin_v" type="hidden" value="400">
             </div>
-            <button class="btn primary" type="submit">Mulai Workflow</button>
+            <button class="btn primary small" type="submit">Mulai Workflow</button>
           </form>
 
           <form id="videoForm" class="panel glass formCard">
@@ -164,7 +144,7 @@
               </div>
               <span class="badge">FTP state</span>
             </div>
-            <div class="denseFields addFields">
+            <div class="denseFields">
               <label class="field span2">
                 <span>YouTube URL</span>
                 <input name="url" placeholder="https://www.youtube.com/watch?v=..." required>
@@ -182,10 +162,6 @@
                 <input name="priority" type="number" min="1" value="1">
               </label>
               <label class="field">
-                <span>Range</span>
-                <input name="manual_range" placeholder="00:01:20-00:02:05">
-              </label>
-              <label class="field">
                 <span>Kualitas</span>
                 <select name="quality_profile">
                   <option value="standard">Standard</option>
@@ -194,93 +170,68 @@
                   <option value="ultra">Ultra</option>
                 </select>
               </label>
-              <label class="field span2">
-                <span>Notes</span>
-                <input name="notes" placeholder="Catatan internal">
-              </label>
+              <input name="manual_range" type="hidden">
+              <input name="notes" type="hidden">
               <input name="subtitle_font" type="hidden" value="Segoe UI">
               <input name="subtitle_font_size" type="hidden" value="46">
               <input name="subtitle_margin_v" type="hidden" value="400">
             </div>
-            <button class="btn primary" type="submit">Tambah ke Queue</button>
+            <button class="btn primary small" type="submit">Tambah ke Queue</button>
           </form>
-        </section>
-
-        <section class="dataGrid">
-          <section class="panel glass">
-            <div class="sectionHead compact">
-              <div>
-                <p class="eyebrow">Queue</p>
-                <h2>Video</h2>
-              </div>
-              <span id="videoCount" class="badge">0 item</span>
-            </div>
-            <div class="tableWrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>Theme</th>
-                    <th>Target</th>
-                    <th>Kualitas</th>
-                    <th>URL</th>
-                  </tr>
-                </thead>
-                <tbody id="videoRows"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <section class="panel glass">
-            <div class="sectionHead compact">
-              <div>
-                <p class="eyebrow">Pipeline</p>
-                <h2>Jobs</h2>
-              </div>
-              <span id="jobCount" class="badge">0 item</span>
-            </div>
-            <div class="tableWrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>Job</th>
-                    <th>IG</th>
-                    <th>FB</th>
-                    <th>YT</th>
-                    <th>TT</th>
-                    <th>Error</th>
-                  </tr>
-                </thead>
-                <tbody id="jobRows"></tbody>
-              </table>
-            </div>
-          </section>
-        </section>
+        </div>
       </section>
 
-      <section id="tab-environment" class="tabPage">
-        <section class="panel glass settingsPanel">
-          <div class="sectionHead">
+      <section class="dataGrid">
+        <section class="panel glass">
+          <div class="sectionHead compact">
             <div>
-              <p class="eyebrow">Environment</p>
-              <h2>API Key & Platform Settings</h2>
+              <p class="eyebrow">Queue</p>
+              <h2>Video</h2>
             </div>
-            <span id="settingsMeta" class="badge">Memuat .env</span>
+            <span id="videoCount" class="badge">0 item</span>
           </div>
-          <form id="settingsForm">
-            <div id="settingsGrid" class="settingsGrid"></div>
-            <div class="settingsActions">
-              <button class="btn primary" type="submit">Simpan .env Lokal</button>
-              <span id="settingsStatus" class="statusText">Secret kosong tidak akan menimpa nilai lama.</span>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Theme</th>
+                  <th>Target</th>
+                  <th>Kualitas</th>
+                  <th>URL</th>
+                </tr>
+              </thead>
+              <tbody id="videoRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel glass">
+          <div class="sectionHead compact">
+            <div>
+              <p class="eyebrow">Pipeline</p>
+              <h2>Jobs</h2>
             </div>
-          </form>
+            <span id="jobCount" class="badge">0 item</span>
+          </div>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Job</th>
+                  <th>IG</th>
+                  <th>FB</th>
+                  <th>YT</th>
+                  <th>TT</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody id="jobRows"></tbody>
+            </table>
+          </div>
         </section>
       </section>
-
-      <footer class="footer">
-        <span class="muted">Clipper Emsa Pro &middot; powered by Vercel + GitHub Actions</span>
-      </footer>
     </main>
     <script src="/app.js" type="module"></script>
   </body>

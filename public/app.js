@@ -2,16 +2,16 @@ const STATE_URL = "/api/state";
 const POLL_ACTIVE_MS = 3000;
 const POLL_IDLE_MS = 30000;
 const FALLBACK_PIPELINE = [
-  { label: "Queue", key: "queue" },
-  { label: "Clipper", key: "clipper" },
-  { label: "Caption", key: "caption" },
-  { label: "Thumbnail", key: "thumbnail" },
-  { label: "FTP", key: "ftp" },
-  { label: "Instagram", key: "instagram" },
-  { label: "Facebook", key: "facebook" },
-  { label: "YouTube", key: "youtube" },
-  { label: "TikTok", key: "tiktok" },
-  { label: "History", key: "history" }
+  { label: "Queue" },
+  { label: "Clipper" },
+  { label: "Caption" },
+  { label: "Thumbnail" },
+  { label: "FTP" },
+  { label: "Instagram" },
+  { label: "Facebook" },
+  { label: "YouTube" },
+  { label: "TikTok" },
+  { label: "History" }
 ];
 
 let dashboardPin =
@@ -19,7 +19,6 @@ let dashboardPin =
   window.sessionStorage.getItem("dashboardPin") ||
   "";
 let authVisible = true;
-let settingsLoaded = false;
 let pollTimer = null;
 let lastRunStatus = "idle";
 
@@ -48,10 +47,6 @@ const els = {
   runStatus: document.querySelector("#runStatus"),
   videoForm: document.querySelector("#videoForm"),
   runForm: document.querySelector("#runForm"),
-  settingsForm: document.querySelector("#settingsForm"),
-  settingsGrid: document.querySelector("#settingsGrid"),
-  settingsMeta: document.querySelector("#settingsMeta"),
-  settingsStatus: document.querySelector("#settingsStatus"),
   consoleOutput: document.querySelector("#consoleOutput"),
   consoleMeta: document.querySelector("#consoleMeta"),
   videoRows: document.querySelector("#videoRows"),
@@ -62,9 +57,7 @@ const els = {
   authForm: document.querySelector("#authForm"),
   authPin: document.querySelector("#authPin"),
   authError: document.querySelector("#authError"),
-  logoutBtn: document.querySelector("#logoutBtn"),
-  tabBtns: document.querySelectorAll(".tabBtn"),
-  tabPages: document.querySelectorAll(".tabPage")
+  logoutBtn: document.querySelector("#logoutBtn")
 };
 
 class ApiError extends Error {
@@ -140,14 +133,12 @@ async function refresh() {
   els.configLine.textContent = [
     cfg.dryRun ? "dry-run" : "live",
     cfg.autoPublish ? "publish on" : "publish off",
-    `upload ${cfg.uploadDriver}`,
     `IG ${cfg.instagramEnabled ? "on" : "off"}`,
     `FB ${cfg.facebookEnabled ? "on" : "off"}`,
     `YT ${cfg.youtubeEnabled ? "on" : "off"}`,
     `TT ${cfg.tiktokEnabled ? "on" : "off"}`,
-    cfg.vercelDashboard ? "vercel" : "local",
     cfg.timezone
-  ].join(" · ");
+  ].filter(Boolean).join(" · ");
 
   renderMetrics(state);
   renderHero(state);
@@ -157,16 +148,6 @@ async function refresh() {
   renderJobs(state.jobs || []);
 
   lastRunStatus = state.activeRun?.status === "running" ? "running" : "idle";
-
-  if (!settingsLoaded && document.querySelector("#tab-environment")?.classList.contains("active")) {
-    await loadSettings();
-  }
-}
-
-async function loadSettings() {
-  const settings = await api("/api/settings");
-  renderSettings(settings);
-  settingsLoaded = true;
 }
 
 function renderMetrics(state) {
@@ -244,7 +225,7 @@ function buildLiveSteps(jobs) {
   const steps = [];
   jobs.forEach((job) => {
     (job.steps || []).forEach((step) => {
-      const state = mapStepState(step);
+      const stepState = mapStepState(step);
       const detail =
         step.status === "completed" && step.completed_at && step.started_at
           ? `${step.conclusion || "done"} · ${durationSeconds(step.started_at, step.completed_at)}s`
@@ -253,7 +234,7 @@ function buildLiveSteps(jobs) {
             : step.status === "queued"
               ? "Menunggu"
               : step.conclusion || step.status || "—";
-      steps.push({ label: step.name, detail, state });
+      steps.push({ label: step.name, detail, state: stepState });
     });
   });
   return steps;
@@ -447,7 +428,7 @@ function renderVideos(videos) {
       <td>${escapeHtml(video.theme || "")}</td>
       <td>${escapeHtml(video.target_date || "-")}</td>
       <td>${escapeHtml(video.quality_profile || "standard")}</td>
-      <td><a href="${escapeAttr(video.url)}" target="_blank" rel="noreferrer">${escapeHtml(short(video.url, 72))}</a></td>
+      <td><a href="${escapeAttr(video.url)}" target="_blank" rel="noreferrer">${escapeHtml(short(video.url, 60))}</a></td>
     </tr>
   `
     );
@@ -463,54 +444,16 @@ function renderJobs(jobs) {
       (job) => `
     <tr>
       <td>${pill(job.status)}</td>
-      <td>${escapeHtml(short(job.job_id || "", 28))}</td>
+      <td>${escapeHtml(short(job.job_id || "", 24))}</td>
       <td>${job.instagram_media_id ? link(`https://www.instagram.com/p/${job.instagram_media_id}`, job.instagram_status || "published") : escapeHtml(job.instagram_status || "-")}</td>
       <td>${job.facebook_url ? link(job.facebook_url, job.facebook_status || "published") : escapeHtml(job.facebook_status || "-")}</td>
       <td>${job.youtube_url ? link(job.youtube_url, job.youtube_status || "published") : escapeHtml(job.youtube_status || "-")}</td>
-      <td>${job.tiktok_publish_id ? escapeHtml(short(job.tiktok_status || "submitted", 22)) : escapeHtml(job.tiktok_status || "-")}</td>
-      <td>${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || "", 60))}</td>
+      <td>${job.tiktok_publish_id ? escapeHtml(short(job.tiktok_status || "submitted", 18)) : escapeHtml(job.tiktok_status || "-")}</td>
+      <td>${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || "", 50))}</td>
     </tr>
   `
     );
   els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="7">Belum ada job.</td></tr>`;
-}
-
-function renderSettings(settings) {
-  els.settingsMeta.textContent = settings.envFile || ".env";
-  els.settingsGrid.innerHTML = (settings.groups || [])
-    .map(
-      (group) => `
-    <fieldset class="settingGroup">
-      <legend>${escapeHtml(group.title)}</legend>
-      ${(group.fields || []).map(settingField).join("")}
-    </fieldset>
-  `
-    )
-    .join("");
-}
-
-function settingField(item) {
-  const type = item.sensitive ? "password" : inferInputType(item.key);
-  const placeholder = item.sensitive && item.configured ? `tersimpan: ${item.masked}` : "";
-  return `
-    <label class="settingField">
-      <span>${escapeHtml(item.label)}</span>
-      <input
-        name="${escapeAttr(item.key)}"
-        type="${type}"
-        value="${item.sensitive ? "" : escapeAttr(item.value || "")}"
-        placeholder="${escapeAttr(placeholder)}"
-        data-sensitive="${item.sensitive ? "1" : "0"}"
-        autocomplete="off">
-    </label>
-  `;
-}
-
-function inferInputType(key) {
-  if (/_PORT$|_SIZE$|_SECONDS$|_COUNT$|_DAYS$|_BYTES$|_MARGIN_|_LINES$|_OUTLINE$|_SHADOW$/.test(key)) {
-    return "number";
-  }
-  return "text";
 }
 
 function showAuth(message = "") {
@@ -581,19 +524,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 els.refreshBtn.addEventListener("click", () => {
-  settingsLoaded = false;
   refresh().catch((error) => handleApiError(error));
-});
-
-els.tabBtns.forEach((button) => {
-  button.addEventListener("click", () => {
-    const target = button.dataset.tab;
-    els.tabBtns.forEach((item) => item.classList.toggle("active", item === button));
-    els.tabPages.forEach((page) => page.classList.toggle("active", page.id === `tab-${target}`));
-    if (target === "environment" && !settingsLoaded) {
-      loadSettings().catch((error) => handleApiError(error, els.settingsStatus));
-    }
-  });
 });
 
 els.preflightBtn.addEventListener("click", async () => {
@@ -639,25 +570,6 @@ els.runForm.addEventListener("submit", async (event) => {
     await refresh();
   } catch (error) {
     handleApiError(error);
-  }
-});
-
-els.settingsForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const values = {};
-    for (const input of els.settingsForm.querySelectorAll("input[name]")) {
-      if (input.dataset.sensitive === "1" && !input.value.trim()) continue;
-      values[input.name] = input.value.trim();
-    }
-    const result = await api("/api/settings", {
-      method: "POST",
-      body: JSON.stringify({ values })
-    });
-    els.settingsStatus.textContent = `${result.updated.length} setting disimpan.`;
-    renderSettings(result.settings);
-  } catch (error) {
-    handleApiError(error, els.settingsStatus);
   }
 });
 

@@ -25,11 +25,11 @@
   --gradient: linear-gradient(135deg, #22d3ee 0%, #a78bfa 100%);
   --gradient-soft: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(167, 139, 250, 0.18));
 
-  --radius: 16px;
-  --radius-sm: 10px;
+  --radius: 12px;
+  --radius-sm: 8px;
   --radius-pill: 999px;
-  --shadow: 0 24px 60px rgba(2, 5, 15, 0.55);
-  --shadow-soft: 0 12px 32px rgba(2, 5, 15, 0.4);
+  --shadow: 0 18px 48px rgba(2, 5, 15, 0.5);
+  --shadow-soft: 0 8px 22px rgba(2, 5, 15, 0.35);
 }
 
 * {
@@ -48,8 +48,8 @@ body {
   background: radial-gradient(120% 80% at 50% 0%, #0d1432 0%, var(--bg-base) 55%, var(--bg-deep) 100%);
   color: var(--text);
   font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -65,22 +65,22 @@ body {
 
 .bgGlow {
   position: absolute;
-  width: 720px;
-  height: 720px;
+  width: 620px;
+  height: 620px;
   border-radius: 50%;
   filter: blur(140px);
-  opacity: 0.45;
+  opacity: 0.4;
 }
 
 .bgGlow--purple {
-  top: -200px;
-  left: -200px;
+  top: -180px;
+  left: -180px;
   background: radial-gradient(closest-side, rgba(124, 58, 237, 0.55), transparent 70%);
 }
 
 .bgGlow--cyan {
-  bottom: -260px;
-  right: -200px;
+  bottom: -220px;
+  right: -180px;
   background: radial-gradient(closest-side, rgba(6, 182, 212, 0.45), transparent 70%);
 }
 
@@ -88,8 +88,8 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(110% 80% at 50% 0%, #000 30%, transparent 80%);
 }
@@ -108,7 +108,7 @@ body {
   z-index: 50;
   display: none;
   place-items: center;
-  padding: 20px;
+  padding: 18px;
   background: rgba(5, 8, 19, 0.78);
   backdrop-filter: blur(14px);
 }
@@ -118,17 +118,17 @@ body {
 }
 
 .authCard {
-  width: min(100%, 420px);
+  width: min(100%, 400px);
   display: grid;
-  gap: 16px;
-  padding: 28px;
+  gap: 14px;
+  padding: 24px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 
 .authCard h2 {
-  margin: 4px 0 4px;
-  font-size: 24px;
+  margin: 2px 0 2px;
+  font-size: 22px;
   font-weight: 700;
   background: var(--gradient);
   -webkit-background-clip: text;
@@ -137,17 +137,19 @@ body {
 }
 
 .authError {
-  min-height: 18px;
+  min-height: 16px;
   margin: 0;
   color: var(--red);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 /* ---- Layout shell ---- */
 .shell {
-  width: min(1440px, calc(100% - 36px));
+  width: min(1480px, calc(100% - 28px));
   margin: 0 auto;
-  padding: 24px 0 60px;
+  padding: 14px 0 22px;
+  display: grid;
+  gap: 10px;
 }
 
 .topbar {
@@ -155,8 +157,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 18px;
-  padding: 16px 20px;
+  padding: 10px 16px;
   border-radius: var(--radius);
   box-shadow: var(--shadow-soft);
 }
@@ -164,77 +165,47 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .brandText {
   display: grid;
-  gap: 2px;
+  gap: 0;
+}
+
+.brandText h1 {
+  font-size: 20px;
 }
 
 .brandMark {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   background: var(--gradient);
   color: #050813;
-  font-family: "Inter", system-ui;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  box-shadow: 0 12px 30px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.32);
+}
+
+.configLine {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .toolbar {
   display: flex;
-  gap: 10px;
-}
-
-/* ---- Tabs ---- */
-.tabs {
-  display: inline-flex;
-  gap: 4px;
-  margin: 0 0 16px;
-  padding: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-.tabBtn {
-  height: 34px;
-  padding: 0 18px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-muted);
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: color 0.18s ease, background 0.18s ease;
-}
-
-.tabBtn:hover {
-  color: var(--text);
-}
-
-.tabBtn.active {
-  background: var(--gradient);
-  color: #050813;
-  box-shadow: 0 6px 18px rgba(34, 211, 238, 0.28);
-}
-
-.tabPage {
-  display: none;
-}
-
-.tabPage.active {
-  display: grid;
-  gap: 16px;
+  gap: 8px;
 }
 
 /* ---- Typography ---- */
@@ -247,13 +218,13 @@ pre {
 }
 
 h1 {
-  font-size: clamp(22px, 2.4vw, 28px);
+  font-size: clamp(18px, 1.8vw, 22px);
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 h2 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -261,33 +232,28 @@ h2 {
 .eyebrow {
   margin: 0;
   color: var(--cyan-light);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .muted {
   margin: 0;
   color: var(--text-muted);
-  font-size: 13px;
-}
-
-.statusText {
-  color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 /* ---- Metrics ---- */
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .metric {
   position: relative;
-  padding: 16px 18px;
+  padding: 10px 14px;
   border-radius: var(--radius);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -295,6 +261,10 @@ h2 {
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   overflow: hidden;
   box-shadow: var(--shadow-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .metric::before {
@@ -313,7 +283,7 @@ h2 {
 
 .metric span {
   display: block;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -322,8 +292,7 @@ h2 {
 
 .metric strong {
   display: block;
-  margin-top: 6px;
-  font-size: 30px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--text);
@@ -333,8 +302,7 @@ h2 {
   color: var(--green);
 }
 
-.metric.amber strong,
-.metric.gold strong {
+.metric.amber strong {
   color: var(--amber);
 }
 
@@ -345,7 +313,7 @@ h2 {
 /* ---- Panels ---- */
 .panel {
   position: relative;
-  padding: 20px;
+  padding: 14px;
   border-radius: var(--radius);
   box-shadow: var(--shadow-soft);
 }
@@ -354,22 +322,23 @@ h2 {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .sectionHead.compact {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .sectionHead h2 {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
 }
 
 /* ---- Hero / live workflow ---- */
 .heroPanel {
   display: grid;
-  gap: 18px;
+  gap: 12px;
+  padding: 14px 16px;
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(6, 182, 212, 0.06)), var(--surface);
   border: 1px solid rgba(167, 139, 250, 0.18);
   overflow: hidden;
@@ -379,40 +348,43 @@ h2 {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
 .heroLeft {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
 }
 
-.heroLeft h2 {
-  margin: 4px 0 4px;
-  font-size: 22px;
+.heroTitle h2 {
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.heroTitle p {
+  font-size: 11px;
 }
 
 .heroRight {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .runBadge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 14px;
+  height: 26px;
+  padding: 0 12px;
   border-radius: var(--radius-pill);
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -421,8 +393,8 @@ h2 {
 
 .runBadge::before {
   content: "";
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--text-subtle);
 }
@@ -439,25 +411,29 @@ h2 {
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.runBadge.success {
+.runBadge.success,
+.runBadge.completed {
   background: var(--green-soft);
   border-color: rgba(34, 197, 94, 0.4);
   color: var(--green);
 }
 
-.runBadge.success::before {
+.runBadge.success::before,
+.runBadge.completed::before {
   background: var(--green);
 }
 
 .runBadge.failure,
-.runBadge.error {
+.runBadge.error,
+.runBadge.cancelled {
   background: var(--red-soft);
   border-color: rgba(251, 113, 133, 0.4);
   color: var(--red);
 }
 
 .runBadge.failure::before,
-.runBadge.error::before {
+.runBadge.error::before,
+.runBadge.cancelled::before {
   background: var(--red);
 }
 
@@ -468,7 +444,7 @@ h2 {
 .metricLabel {
   display: block;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -476,8 +452,8 @@ h2 {
 
 .runMetric strong {
   display: block;
-  margin-top: 4px;
-  font-size: 24px;
+  margin-top: 2px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
   background: var(--gradient);
@@ -488,7 +464,7 @@ h2 {
 
 .progressTrack {
   position: relative;
-  height: 10px;
+  height: 8px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
@@ -501,7 +477,7 @@ h2 {
   border-radius: inherit;
   background: var(--gradient);
   transition: width 0.4s ease;
-  box-shadow: 0 0 18px rgba(34, 211, 238, 0.4);
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.4);
   position: relative;
 }
 
@@ -517,33 +493,35 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 12px;
+  gap: 10px;
 }
 
 .runDetailRow strong {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--text);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cyan-light);
 }
 
 .runDetailRow .muted {
   flex: 1;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 /* ---- Workflow graph ---- */
 .workflowGraph {
   display: flex;
   align-items: stretch;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
-  padding: 4px 4px 12px;
+  padding: 2px 2px 8px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
 .workflowGraph::-webkit-scrollbar {
-  height: 6px;
+  height: 5px;
 }
 
 .workflowGraph::-webkit-scrollbar-thumb {
@@ -554,11 +532,11 @@ h2 {
 .flowNode {
   position: relative;
   display: grid;
-  gap: 6px;
+  gap: 4px;
   align-content: start;
-  min-width: 138px;
-  min-height: 90px;
-  padding: 12px;
+  min-width: 116px;
+  min-height: 70px;
+  padding: 9px 10px;
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
@@ -566,7 +544,7 @@ h2 {
 }
 
 .flowNode strong {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.01em;
@@ -574,21 +552,21 @@ h2 {
 
 .flowNode small {
   display: block;
-  min-height: 30px;
+  min-height: 26px;
   color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .flowIndex {
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -605,7 +583,7 @@ h2 {
 .flowNode.active {
   background: rgba(34, 211, 238, 0.1);
   border-color: rgba(34, 211, 238, 0.5);
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12), 0 8px 24px rgba(34, 211, 238, 0.18);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12), 0 6px 18px rgba(34, 211, 238, 0.18);
 }
 
 .flowNode.active .flowIndex {
@@ -634,12 +612,12 @@ h2 {
 }
 
 .flowNode.muted {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .flowEdge {
   position: relative;
-  flex: 0 0 28px;
+  flex: 0 0 22px;
   align-self: center;
   height: 2px;
   background: rgba(255, 255, 255, 0.08);
@@ -665,24 +643,40 @@ h2 {
   background: rgba(251, 113, 133, 0.6);
 }
 
-/* ---- Console ---- */
+/* ---- Mid grid: console + forms ---- */
+.midGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.formStack {
+  display: grid;
+  gap: 10px;
+}
+
 .consolePanel {
-  padding: 20px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding: 12px 14px;
+  min-height: 0;
 }
 
 .consoleOutput {
   width: 100%;
-  min-height: 240px;
-  max-height: 360px;
+  min-height: 180px;
+  height: 100%;
+  max-height: 260px;
   overflow: auto;
-  padding: 16px;
+  padding: 12px;
   border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.06);
   color: #cbd6f0;
   font-family: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.65;
+  font-size: 11px;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
   scrollbar-width: thin;
@@ -690,7 +684,7 @@ h2 {
 }
 
 .consoleOutput::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 .consoleOutput::-webkit-scrollbar-thumb {
@@ -721,13 +715,14 @@ h2 {
 /* ---- Forms ---- */
 .formCard {
   display: grid;
-  gap: 14px;
+  gap: 10px;
+  padding: 12px 14px;
 }
 
 .field {
   display: grid;
-  gap: 6px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
   color: var(--text-muted);
   font-weight: 500;
 }
@@ -741,14 +736,14 @@ h2 {
 input,
 select {
   width: 100%;
-  height: 38px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-sm);
   background: rgba(8, 12, 28, 0.6);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
@@ -774,8 +769,8 @@ select option {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 38px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-sm);
   background: rgba(8, 12, 28, 0.5);
@@ -784,8 +779,8 @@ select option {
 }
 
 .field.check input {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   margin: 0;
   padding: 0;
   cursor: pointer;
@@ -794,12 +789,8 @@ select option {
 
 .denseFields {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.addFields {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .span2 {
@@ -812,12 +803,12 @@ select option {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 18px;
+  height: 36px;
+  padding: 0 16px;
   border: 0;
   border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -826,20 +817,20 @@ select option {
 }
 
 .btn.small {
-  height: 32px;
-  padding: 0 14px;
-  font-size: 12px;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 11px;
 }
 
 .btn.primary {
   background: var(--gradient);
   color: #050813;
-  box-shadow: 0 10px 26px rgba(34, 211, 238, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 22px rgba(34, 211, 238, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .btn.primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 32px rgba(34, 211, 238, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  box-shadow: 0 12px 28px rgba(34, 211, 238, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .btn.primary:active {
@@ -862,67 +853,17 @@ select option {
   display: none;
 }
 
-/* ---- Grids ---- */
-.actionGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
-}
-
+/* ---- Data grid ---- */
 .dataGrid {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-  gap: 16px;
-}
-
-/* ---- Settings ---- */
-.settingsGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.settingGroup {
-  margin: 0;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.settingGroup legend {
-  padding: 0 8px;
-  color: var(--cyan-light);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.settingField {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.settingField:last-child {
-  margin-bottom: 0;
-}
-
-.settingsActions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-top: 14px;
+  gap: 10px;
 }
 
 /* ---- Tables ---- */
 .tableWrap {
   width: 100%;
-  max-height: 340px;
+  max-height: 220px;
   overflow: auto;
   border-radius: var(--radius-sm);
   scrollbar-width: thin;
@@ -930,8 +871,8 @@ select option {
 }
 
 .tableWrap::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
+  height: 5px;
+  width: 5px;
 }
 
 .tableWrap::-webkit-scrollbar-thumb {
@@ -941,16 +882,16 @@ select option {
 
 table {
   width: 100%;
-  min-width: 620px;
+  min-width: 540px;
   border-collapse: collapse;
 }
 
 th,
 td {
-  padding: 10px 12px;
+  padding: 7px 10px;
   text-align: left;
   vertical-align: top;
-  font-size: 12px;
+  font-size: 11px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
@@ -962,7 +903,7 @@ th {
   -webkit-backdrop-filter: blur(8px);
   color: var(--text-muted);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   z-index: 1;
@@ -989,13 +930,13 @@ td a:hover {
 .pill {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  padding: 0 10px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   white-space: nowrap;
@@ -1032,23 +973,15 @@ td a:hover {
 .badge {
   display: inline-flex;
   align-items: center;
-  height: 24px;
-  padding: 0 12px;
+  height: 22px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
-}
-
-/* ---- Footer ---- */
-.footer {
-  margin-top: 22px;
-  padding-top: 16px;
-  text-align: center;
-  border-top: 1px solid var(--border);
 }
 
 /* ---- Animations ---- */
@@ -1081,27 +1014,26 @@ td a:hover {
 }
 
 /* ---- Responsive ---- */
-@media (max-width: 1100px) {
-  .denseFields,
-  .addFields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .span2 {
-    grid-column: span 2;
+@media (max-width: 1180px) {
+  .midGrid {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 900px) {
   .shell {
-    width: min(100% - 24px, 1440px);
-    padding: 18px 0 50px;
+    width: min(100% - 18px, 1480px);
+    padding: 12px 0 24px;
   }
 
   .topbar {
     flex-direction: column;
     align-items: stretch;
-    gap: 14px;
+    gap: 10px;
+  }
+
+  .configLine {
+    text-align: left;
   }
 
   .toolbar {
@@ -1118,6 +1050,7 @@ td a:hover {
 
   .heroHead {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .heroRight {
@@ -1125,14 +1058,11 @@ td a:hover {
     justify-content: space-between;
   }
 
-  .actionGrid,
-  .dataGrid,
-  .settingsGrid {
+  .dataGrid {
     grid-template-columns: 1fr;
   }
 
-  .denseFields,
-  .addFields {
+  .denseFields {
     grid-template-columns: 1fr;
   }
 

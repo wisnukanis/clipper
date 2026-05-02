@@ -5,106 +5,6 @@ import { Readable } from "node:stream";
 import { Client } from "basic-ftp";
 
 const STATE_FILES = ["themes.json", "videos.json", "prompts.json", "jobs.json", "history.json"];
-const SENSITIVE_KEYS = new Set([
-  "AUTO_DASHBOARD_PIN",
-  "FTP_PASSWORD",
-  "INSTAGRAM_ACCESS_TOKEN",
-  "FACEBOOK_PAGE_ACCESS_TOKEN",
-  "FACEBOOK_USER_ACCESS_TOKEN",
-  "TIKTOK_CLIENT_SECRET",
-  "TIKTOK_ACCESS_TOKEN",
-  "TIKTOK_REFRESH_TOKEN",
-  "META_APP_SECRET",
-  "YOUTUBE_CLIENT_SECRET",
-  "YOUTUBE_REFRESH_TOKEN",
-  "GEMINI_API_KEY",
-  "GEMINI_API_KEY_2",
-  "GEMINI_API_KEY_3",
-  "GEMINI_API_KEYS",
-  "CLOD_API_KEY",
-  "DEEPGRAM_API_KEY",
-  "DEEPGRAM_API_KEYS",
-  "GH_REPO_SECRET_TOKEN",
-  "GITHUB_TOKEN",
-  "YTDLP_COOKIES_TXT"
-]);
-
-export const envGroups = [
-  group("Core", [
-    field("PUBLIC_BASE_URL", "Public base URL"),
-    field("UPLOAD_DRIVER", "Upload driver"),
-    field("DRY_RUN", "Dry run"),
-    field("AUTO_PUBLISH", "Auto publish"),
-    field("DEFAULT_THEME", "Default theme"),
-    field("APP_TIMEZONE", "Timezone"),
-    field("AUTO_DASHBOARD_PIN", "Dashboard PIN", true)
-  ]),
-  group("GitHub / Vercel", [
-    field("DASHBOARD_GITHUB_REPO", "GitHub repo"),
-    field("DASHBOARD_GITHUB_REF", "GitHub ref"),
-    field("GH_REPO_SECRET_TOKEN", "GitHub token", true)
-  ]),
-  group("Discovery", [
-    field("AUTO_DISCOVER_VIDEOS", "Auto discover videos"),
-    field("AUTO_DISCOVER_QUERY", "Discovery query"),
-    field("AUTO_DISCOVER_MAX_RESULTS", "Max search results"),
-    field("AUTO_DISCOVER_ADD_COUNT", "Add count")
-  ]),
-  group("FTP State", [
-    field("FTP_HOST", "Host"),
-    field("FTP_PORT", "Port"),
-    field("FTP_USER", "User"),
-    field("FTP_PASSWORD", "Password", true),
-    field("FTP_REMOTE_DIR", "Remote dir")
-  ]),
-  group("Meta", [
-    field("GRAPH_API_VERSION", "Graph API version"),
-    field("META_APP_ID", "App ID"),
-    field("META_APP_SECRET", "App secret", true),
-    field("TOKEN_REFRESH_BEFORE_DAYS", "Refresh before days")
-  ]),
-  group("Instagram", [
-    field("INSTAGRAM_UPLOAD_ENABLED", "Upload enabled"),
-    field("INSTAGRAM_IG_USER_ID", "IG user ID"),
-    field("INSTAGRAM_ACCESS_TOKEN", "Access token", true)
-  ]),
-  group("Facebook", [
-    field("FACEBOOK_UPLOAD_ENABLED", "Upload enabled"),
-    field("FACEBOOK_PAGE_ID", "Page ID"),
-    field("FACEBOOK_PAGE_ACCESS_TOKEN", "Page token", true),
-    field("FACEBOOK_USER_ACCESS_TOKEN", "User token", true)
-  ]),
-  group("YouTube", [
-    field("YOUTUBE_UPLOAD_ENABLED", "Upload enabled"),
-    field("YOUTUBE_CLIENT_ID", "Client ID"),
-    field("YOUTUBE_CLIENT_SECRET", "Client secret", true),
-    field("YOUTUBE_REFRESH_TOKEN", "Refresh token", true),
-    field("YOUTUBE_PRIVACY_STATUS", "Privacy")
-  ]),
-  group("AI", [
-    field("GEMINI_API_KEY", "Gemini key 1", true),
-    field("GEMINI_API_KEY_2", "Gemini key 2", true),
-    field("GEMINI_API_KEY_3", "Gemini key 3", true),
-    field("DEEPGRAM_API_KEYS", "Deepgram keys", true)
-  ]),
-  group("Subtitle", [
-    field("SUBTITLE_FONT_FAMILY", "Font family"),
-    field("SUBTITLE_FONT_SIZE", "Font size"),
-    field("SUBTITLE_MARGIN_V", "Bottom margin")
-  ])
-];
-
-function group(title, fields) {
-  return {
-    id: title.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
-    title,
-    fields
-  };
-}
-
-function field(key, label, sensitive = false) {
-  return { key, label, sensitive: sensitive || SENSITIVE_KEYS.has(key) };
-}
 
 export function sendJson(res, status, payload) {
   res.statusCode = status;
@@ -160,24 +60,6 @@ export function setPinCookie(res, pin) {
 
 export function clearPinCookie(res) {
   res.setHeader("Set-Cookie", "clipper_dashboard_pin=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
-}
-
-export function settingsPayload() {
-  return {
-    envFile: "Vercel Environment",
-    groups: envGroups.map((group) => ({
-      ...group,
-      fields: group.fields.map((item) => {
-        const value = process.env[item.key] || "";
-        return {
-          ...item,
-          configured: Boolean(clean(value)),
-          masked: item.sensitive ? maskSecret(value) : "",
-          value: item.sensitive ? "" : value
-        };
-      })
-    }))
-  };
 }
 
 export async function readState() {
@@ -473,11 +355,4 @@ function cookieValue(raw, name) {
     if (key === name) return decodeURIComponent(rest.join("="));
   }
   return "";
-}
-
-function maskSecret(value) {
-  const text = clean(value);
-  if (!text) return "";
-  if (text.length <= 8) return "configured";
-  return `${text.slice(0, 3)}...${text.slice(-3)}`;
 }
