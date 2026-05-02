@@ -7,6 +7,23 @@
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
+    <section id="authOverlay" class="authOverlay active" aria-hidden="false">
+      <form id="authForm" class="authCard">
+        <span class="brandMark">CE</span>
+        <div>
+          <p class="eyebrow">Secure dashboard</p>
+          <h2>Masuk dengan PIN</h2>
+          <p class="muted">Gunakan PIN dashboard yang diset di Vercel Environment.</p>
+        </div>
+        <label>
+          <span>Dashboard PIN</span>
+          <input id="authPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required>
+        </label>
+        <button class="primary" type="submit">Masuk</button>
+        <p id="authError" class="authError"></p>
+      </form>
+    </section>
+
     <main class="shell">
       <header class="topbar">
         <div class="brand">
@@ -20,6 +37,7 @@
         <div class="toolbar">
           <button id="preflightBtn" class="ghostBtn" type="button">Preflight</button>
           <button id="refreshBtn" class="ghostBtn" type="button">Refresh</button>
+          <button id="logoutBtn" class="ghostBtn" type="button">Logout</button>
         </div>
       </header>
 
@@ -69,7 +87,7 @@
           <form id="runForm" class="panel compactForm">
             <div class="sectionHead compact">
               <h2>Run Manual</h2>
-              <span>Local node</span>
+              <span>GitHub Actions</span>
             </div>
             <div class="denseFields">
               <label>
@@ -96,6 +114,7 @@
               <label>
                 <span>Font</span>
                 <select name="subtitle_font">
+                  <option value="Segoe UI" selected>Segoe UI</option>
                   <option value="Georgia">Georgia</option>
                   <option value="Times New Roman">Times New Roman</option>
                   <option value="DejaVu Serif">DejaVu Serif</option>
@@ -120,7 +139,7 @@
           <form id="videoForm" class="panel compactForm">
             <div class="sectionHead compact">
               <h2>Tambah Link</h2>
-              <span>Queue lokal</span>
+              <span>Queue FTP state</span>
             </div>
             <div class="denseFields addFields">
               <label>
@@ -156,7 +175,7 @@
                 <span>Notes</span>
                 <input name="notes" placeholder="Catatan internal">
               </label>
-              <input name="subtitle_font" type="hidden" value="Georgia">
+              <input name="subtitle_font" type="hidden" value="Segoe UI">
               <input name="subtitle_font_size" type="hidden" value="46">
               <input name="subtitle_margin_v" type="hidden" value="400">
             </div>

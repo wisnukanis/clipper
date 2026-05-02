@@ -181,6 +181,7 @@ app.use((req, res, next) => {
   }
 
   if (!req.path.startsWith("/api/")) return next();
+  if (req.path === "/api/auth") return next();
 
   if (!config.dashboardPin) {
     res.status(403).json({ error: "AUTO_DASHBOARD_PIN wajib diisi untuk akses remote." });
@@ -191,6 +192,24 @@ app.use((req, res, next) => {
   if (pin === config.dashboardPin) return next();
 
   res.status(401).json({ error: "PIN dashboard tidak valid atau belum diisi." });
+});
+
+app.post("/api/auth", (req, res) => {
+  if (!config.dashboardPin) {
+    res.json({ ok: true, local: true });
+    return;
+  }
+
+  if (String(req.body?.pin || "") === config.dashboardPin) {
+    res.json({ ok: true });
+    return;
+  }
+
+  res.status(401).json({ error: "PIN dashboard salah." });
+});
+
+app.delete("/api/auth", (_req, res) => {
+  res.json({ ok: true });
 });
 
 app.get("/api/state", async (_req, res) => {

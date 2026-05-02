@@ -1,8 +1,14 @@
 const stateUrl = "/api/state";
-const dashboardPin = new URLSearchParams(window.location.search).get("pin") || window.sessionStorage.getItem("dashboardPin") || "";
+let dashboardPin = new URLSearchParams(window.location.search).get("pin") || window.sessionStorage.getItem("dashboardPin") || "";
+let authVisible = true;
 
 if (dashboardPin) {
   window.sessionStorage.setItem("dashboardPin", dashboardPin);
+  const cleanUrl = new URL(window.location.href);
+  if (cleanUrl.searchParams.has("pin")) {
+    cleanUrl.searchParams.delete("pin");
+    window.history.replaceState({}, "", cleanUrl);
+  }
 }
 
 const els = {
@@ -28,6 +34,11 @@ const els = {
   videoCount: document.querySelector("#videoCount"),
   jobRows: document.querySelector("#jobRows"),
   jobCount: document.querySelector("#jobCount"),
+  authOverlay: document.querySelector("#authOverlay"),
+  authForm: document.querySelector("#authForm"),
+  authPin: document.querySelector("#authPin"),
+  authError: document.querySelector("#authError"),
+  logoutBtn: document.querySelector("#logoutBtn"),
   tabBtns: document.querySelectorAll(".tabBtn"),
   tabPages: document.querySelectorAll(".tabPage")
 };
@@ -35,16 +46,37 @@ const els = {
 let settingsLoaded = false;
 
 async function api(path, options = {}) {
-  const headers = { "Content-Type": "application/json" };
+  const headers = { Accept: "application/json" };
+  if (options.body) headers["Content-Type"] = "application/json";
   if (dashboardPin) headers["X-Dashboard-Pin"] = dashboardPin;
 
   const response = await fetch(path, {
-    headers,
-    ...options
+    ...options,
+    headers: {
+      ...headers,
+      ...(options.headers || {})
+    }
   });
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    throw new ApiError(
+      `Server tidak mengembalikan JSON (${response.status}). ${short(text.replace(/\s+/g, " "), 120)}`,
+      response.status
+    );
+  }
+
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Request gagal.");
+  if (!response.ok) throw new ApiError(data.error || "Request gagal.", response.status);
   return data;
+}
+
+class ApiError extends Error {
+  constructor(message, status = 0) {
+    super(message);
+    this.status = status;
+  }
 }
 
 function formData(form) {
@@ -66,6 +98,7 @@ function short(value, length = 54) {
 
 async function refresh() {
   const state = await api(stateUrl);
+  hideAuth();
   const cfg = state.config || {};
   els.configLine.textContent = [
     cfg.dryRun ? "dry-run" : "live",
@@ -75,6 +108,7 @@ async function refresh() {
     `FB ${cfg.facebookEnabled ? "on" : "off"}`,
     `YT ${cfg.youtubeEnabled ? "on" : "off"}`,
     `TT ${cfg.tiktokEnabled ? "on" : "off"}`,
+    cfg.vercelDashboard ? "vercel" : "local",
     cfg.timezone
   ].join(" | ");
 
@@ -299,6 +333,33 @@ function renderRun(run) {
   els.runDetail.textContent = extra;
 }
 
+function showAuth(message = "") {
+  authVisible = true;
+  if (!els.authOverlay) return;
+  els.authOverlay.classList.add("active");
+  els.authOverlay.setAttribute("aria-hidden", "false");
+  els.authError.textContent = message;
+  window.setTimeout(() => els.authPin?.focus(), 30);
+}
+
+function hideAuth() {
+  authVisible = false;
+  if (!els.authOverlay) return;
+  els.authOverlay.classList.remove("active");
+  els.authOverlay.setAttribute("aria-hidden", "true");
+  els.authError.textContent = "";
+}
+
+function handleApiError(error, target = els.runDetail) {
+  if (error.status === 401 || error.status === 403 || /PIN|AUTO_DASHBOARD_PIN/i.test(error.message)) {
+    window.sessionStorage.removeItem("dashboardPin");
+    dashboardPin = "";
+    showAuth(error.message);
+    return;
+  }
+  target.textContent = error.message;
+}
+
 function renderConsole(run) {
   const logs = run?.logs || [];
   els.consoleMeta.textContent = `${logs.length} log`;
@@ -360,7 +421,7 @@ function escapeAttr(value) {
 els.refreshBtn.addEventListener("click", () => {
   settingsLoaded = false;
   refresh().catch((error) => {
-    els.runDetail.textContent = error.message;
+    handleApiError(error);
   });
 });
 
@@ -371,7 +432,7 @@ els.tabBtns.forEach((button) => {
     els.tabPages.forEach((page) => page.classList.toggle("active", page.id === `tab-${target}`));
     if (target === "environment" && !settingsLoaded) {
       loadSettings().catch((error) => {
-        els.settingsStatus.textContent = error.message;
+        handleApiError(error, els.settingsStatus);
       });
     }
   });
@@ -388,7 +449,7 @@ els.preflightBtn.addEventListener("click", async () => {
       .map((item) => `${item.ok ? "OK" : item.required ? "FAIL" : "WARN"} ${item.name}${item.detail ? ` - ${item.detail}` : ""}`)
       .join("\n");
   } catch (error) {
-    els.runDetail.textContent = error.message;
+    handleApiError(error);
   }
 });
 
@@ -404,7 +465,7 @@ els.videoForm.addEventListener("submit", async (event) => {
   els.videoForm.elements.theme.value = "podcast artis";
   els.videoForm.elements.priority.value = "1";
   els.videoForm.elements.quality_profile.value = "standard";
-  els.videoForm.elements.subtitle_font.value = "Georgia";
+  els.videoForm.elements.subtitle_font.value = "Segoe UI";
   els.videoForm.elements.subtitle_font_size.value = "46";
   els.videoForm.elements.subtitle_margin_v.value = "400";
   await refresh();
@@ -423,23 +484,56 @@ els.runForm.addEventListener("submit", async (event) => {
 
 els.settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const values = {};
-  for (const input of els.settingsForm.querySelectorAll("input[name]")) {
-    if (input.dataset.sensitive === "1" && !input.value.trim()) continue;
-    values[input.name] = input.value.trim();
+  try {
+    const values = {};
+    for (const input of els.settingsForm.querySelectorAll("input[name]")) {
+      if (input.dataset.sensitive === "1" && !input.value.trim()) continue;
+      values[input.name] = input.value.trim();
+    }
+    const result = await api("/api/settings", {
+      method: "POST",
+      body: JSON.stringify({ values })
+    });
+    els.settingsStatus.textContent = `${result.updated.length} setting disimpan.`;
+    renderSettings(result.settings);
+  } catch (error) {
+    handleApiError(error, els.settingsStatus);
   }
-  const result = await api("/api/settings", {
-    method: "POST",
-    body: JSON.stringify({ values })
-  });
-  els.settingsStatus.textContent = `${result.updated.length} setting disimpan.`;
-  renderSettings(result.settings);
 });
 
 refresh().catch((error) => {
-  els.runDetail.textContent = error.message;
+  handleApiError(error);
 });
 
 window.setInterval(() => {
-  refresh().catch(() => {});
+  if (!authVisible) refresh().catch(() => {});
 }, 3000);
+
+els.authForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const pin = els.authPin.value.trim();
+  if (!pin) {
+    els.authError.textContent = "PIN wajib diisi.";
+    return;
+  }
+
+  try {
+    await api("/api/auth", {
+      method: "POST",
+      body: JSON.stringify({ pin })
+    });
+    dashboardPin = pin;
+    window.sessionStorage.setItem("dashboardPin", pin);
+    hideAuth();
+    await refresh();
+  } catch (error) {
+    els.authError.textContent = error.message;
+  }
+});
+
+els.logoutBtn?.addEventListener("click", async () => {
+  window.sessionStorage.removeItem("dashboardPin");
+  dashboardPin = "";
+  await api("/api/auth", { method: "DELETE" }).catch(() => {});
+  showAuth("Anda sudah keluar.");
+});

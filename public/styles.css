@@ -28,6 +28,45 @@ body {
   color: var(--text);
 }
 
+.authOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  place-items: center;
+  padding: 22px;
+  background: rgba(5, 8, 7, 0.84);
+  backdrop-filter: blur(10px);
+}
+
+.authOverlay.active {
+  display: grid;
+}
+
+.authCard {
+  width: min(100%, 390px);
+  border: 1px solid rgba(243, 212, 107, 0.38);
+  border-radius: 8px;
+  padding: 20px;
+  background: #151c18;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+}
+
+.authCard .brandMark {
+  margin-bottom: 8px;
+}
+
+.authCard h2 {
+  margin: 3px 0 5px;
+  font-size: 24px;
+}
+
+.authError {
+  min-height: 18px;
+  color: #ff928b;
+  font-size: 13px;
+}
+
 .shell {
   width: min(1440px, calc(100% - 32px));
   margin: 0 auto;
