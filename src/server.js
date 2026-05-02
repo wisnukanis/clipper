@@ -24,6 +24,9 @@ const sensitiveEnvKeys = new Set([
   "INSTAGRAM_ACCESS_TOKEN",
   "FACEBOOK_PAGE_ACCESS_TOKEN",
   "FACEBOOK_USER_ACCESS_TOKEN",
+  "TIKTOK_CLIENT_SECRET",
+  "TIKTOK_ACCESS_TOKEN",
+  "TIKTOK_REFRESH_TOKEN",
   "META_APP_SECRET",
   "YOUTUBE_CLIENT_SECRET",
   "YOUTUBE_REFRESH_TOKEN",
@@ -115,6 +118,25 @@ const envGroups = [
     ]
   },
   {
+    id: "tiktok",
+    title: "TikTok",
+    fields: [
+      field("TIKTOK_UPLOAD_ENABLED", "Upload enabled"),
+      field("TIKTOK_CLIENT_KEY", "Client key"),
+      field("TIKTOK_CLIENT_SECRET", "Client secret", true),
+      field("TIKTOK_ACCESS_TOKEN", "Access token", true),
+      field("TIKTOK_REFRESH_TOKEN", "Refresh token", true),
+      field("TIKTOK_OPEN_ID", "Open ID"),
+      field("TIKTOK_SCOPE", "Scope"),
+      field("TIKTOK_REDIRECT_URI", "Redirect URI"),
+      field("TIKTOK_PUBLISH_MODE", "Publish mode"),
+      field("TIKTOK_PRIVACY_LEVEL", "Privacy level"),
+      field("TIKTOK_DISABLE_DUET", "Disable duet"),
+      field("TIKTOK_DISABLE_COMMENT", "Disable comment"),
+      field("TIKTOK_DISABLE_STITCH", "Disable stitch")
+    ]
+  },
+  {
     id: "ai",
     title: "AI & Transcript",
     fields: [
@@ -184,6 +206,7 @@ app.get("/api/state", async (_req, res) => {
       instagramEnabled: config.instagram.enabled,
       facebookEnabled: config.facebook.enabled,
       youtubeEnabled: config.youtube.enabled,
+      tiktokEnabled: config.tiktok.enabled,
       subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Georgia",
       subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "400"
     },
@@ -544,6 +567,7 @@ function maskSecrets(text) {
   let masked = String(text || "")
     .replace(/EA[A-Za-z0-9_-]{20,}/g, "[META_TOKEN]")
     .replace(/ya29\.[A-Za-z0-9_.-]+/g, "[GOOGLE_TOKEN]")
+    .replace(/\b(act|rft)\.[A-Za-z0-9_.-]{20,}/g, "[TIKTOK_TOKEN]")
     .replace(/AIza[A-Za-z0-9_-]+/g, "[API_KEY]");
 
   for (const key of sensitiveEnvKeys) {

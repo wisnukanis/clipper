@@ -6,6 +6,7 @@ import { ensureFreshInstagramToken } from "./instagram-token.js";
 import { ensureFreshFacebookToken } from "./facebook-token.js";
 import { withFtpClient } from "./uploader.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
+import { queryTikTokCreatorInfo } from "./tiktok.js";
 
 function checkResult(name, ok, detail = "", required = true) {
   return { name, ok, detail, required };
@@ -338,6 +339,43 @@ async function checkYoutube(online, required = canPublish()) {
   }
 }
 
+async function checkTikTok(online, required = false) {
+  if (!config.tiktok.enabled) {
+    return checkResult("TikTok Content Posting API", true, "TIKTOK_UPLOAD_ENABLED=false", false);
+  }
+
+  const missing = missingEnv(["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"]);
+  if (missing.length) {
+    return checkResult("TikTok Content Posting API", false, `missing env: ${missing.join(", ")}`, required);
+  }
+
+  if (!config.tiktok.accessToken && !config.tiktok.refreshToken) {
+    return checkResult(
+      "TikTok Content Posting API",
+      false,
+      "missing env: TIKTOK_ACCESS_TOKEN atau TIKTOK_REFRESH_TOKEN",
+      required
+    );
+  }
+
+  if (!online) {
+    return checkResult("TikTok Content Posting API", true, "env lengkap", required);
+  }
+
+  try {
+    if (config.tiktok.publishMode === "inbox") {
+      return checkResult("TikTok Content Posting API", true, "token siap untuk inbox upload", required);
+    }
+    const creator = await queryTikTokCreatorInfo();
+    const detail = creator.creator_username
+      ? `creator valid: ${creator.creator_username}`
+      : "creator valid";
+    return checkResult("TikTok Content Posting API", true, detail, required);
+  } catch (error) {
+    return checkResult("TikTok Content Posting API", false, error.message, required);
+  }
+}
+
 export async function runPreflight(options = {}) {
   const online = options.online !== false;
   const aiOnline = options.aiOnline ?? false;
@@ -352,7 +390,8 @@ export async function runPreflight(options = {}) {
     await checkFtp(ftpOnline),
     await checkInstagram(socialOnline, socialPublishRequired),
     await checkFacebook(socialOnline, socialPublishRequired),
-    await checkYoutube(youtubeOnline, publishRequired)
+    await checkYoutube(youtubeOnline, publishRequired),
+    await checkTikTok(socialOnline, socialPublishRequired)
   ];
   const precheckFailed = preChecks.some((check) => check.required && !check.ok);
 

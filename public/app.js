@@ -74,6 +74,7 @@ async function refresh() {
     `IG ${cfg.instagramEnabled ? "on" : "off"}`,
     `FB ${cfg.facebookEnabled ? "on" : "off"}`,
     `YT ${cfg.youtubeEnabled ? "on" : "off"}`,
+    `TT ${cfg.tiktokEnabled ? "on" : "off"}`,
     cfg.timezone
   ].join(" | ");
 
@@ -163,6 +164,7 @@ function workflowSteps(job, activeRun) {
       step("Instagram", "pending", "Belum mulai"),
       step("Facebook", "pending", "Belum mulai"),
       step("YouTube", "pending", "Belum mulai"),
+      step("TikTok", "pending", "Belum mulai"),
       step("History", "pending", "Belum mulai")
     ];
   }
@@ -199,6 +201,7 @@ function workflowSteps(job, activeRun) {
     platformStep("Instagram", job.instagram_status, Boolean(job.instagram_media_id), ftpDone, failed),
     platformStep("Facebook", job.facebook_status, Boolean(job.facebook_video_id || job.facebook_post_id), ftpDone, failed),
     platformStep("YouTube", job.youtube_status, Boolean(job.youtube_url), ftpDone, failed),
+    platformStep("TikTok", job.tiktok_status, Boolean(job.tiktok_publish_id), ftpDone, failed),
     step("History", stageState({
       failed,
       active: !published && (job.status === "publishing" || job.status === "ready_to_publish"),
@@ -213,9 +216,9 @@ function platformStep(label, status, hasResult, ftpDone, failed) {
   return step(label, stageState({
     failed: isFailed(status) || (failed && ftpDone && !hasResult && !disabled),
     active: ftpDone && normalized === "processing" && !failed,
-    done: hasResult || normalized === "published",
+    done: hasResult || normalized === "published" || normalized === "submitted",
     muted: disabled || normalized === "skipped"
-  }), hasResult ? "Published" : status || "Menunggu");
+  }), hasResult && normalized === "submitted" ? "Submitted" : hasResult ? "Published" : status || "Menunggu");
 }
 
 function step(label, state, detail) {
@@ -278,10 +281,11 @@ function renderJobs(jobs) {
       <td>${job.instagram_media_id ? link(`https://www.instagram.com/p/${job.instagram_media_id}`, job.instagram_status || "published") : escapeHtml(job.instagram_status || "-")}</td>
       <td>${job.facebook_url ? link(job.facebook_url, job.facebook_status || "published") : escapeHtml(job.facebook_status || "-")}</td>
       <td>${job.youtube_url ? link(job.youtube_url, job.youtube_status || "published") : escapeHtml(job.youtube_status || "-")}</td>
-      <td>${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || "", 64))}</td>
+      <td>${job.tiktok_publish_id ? escapeHtml(short(job.tiktok_status || "submitted", 28)) : escapeHtml(job.tiktok_status || "-")}</td>
+      <td>${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || "", 64))}</td>
     </tr>
   `);
-  els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="6">Belum ada job.</td></tr>`;
+  els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="7">Belum ada job.</td></tr>`;
 }
 
 function renderRun(run) {

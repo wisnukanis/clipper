@@ -13,6 +13,7 @@ import { publishReel } from "./instagram.js";
 import { prepareInstagramVideo } from "./instagram-video.js";
 import { publishToFacebook } from "./facebook.js";
 import { buildYoutubeMetadata, publishToYoutube } from "./youtube-publisher.js";
+import { publishToTikTok } from "./tiktok.js";
 import { todayDate } from "./job-id.js";
 import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflight.js";
@@ -172,6 +173,10 @@ export async function runWorkflow(options = {}) {
         facebook_post_id: platformResults.facebook?.postId || "",
         facebook_url: platformResults.facebook?.url || "",
         facebook_error: platformResults.errors.facebook || "",
+        tiktok_status: platformResults.tiktok ? "submitted" : config.tiktok.enabled ? "failed" : "disabled",
+        tiktok_publish_id: platformResults.tiktok?.publishId || "",
+        tiktok_mode: platformResults.tiktok?.mode || "",
+        tiktok_error: platformResults.errors.tiktok || "",
         youtube_status: platformResults.youtube ? "published" : config.youtube.enabled ? "failed" : "disabled",
         youtube_video_id: platformResults.youtube?.videoId || "",
         youtube_url: platformResults.youtube?.url || "",
@@ -185,6 +190,7 @@ export async function runWorkflow(options = {}) {
         instagram_media_id: platformResults.instagram?.mediaId || "",
         facebook_video_id: platformResults.facebook?.videoId || "",
         facebook_url: platformResults.facebook?.url || "",
+        tiktok_publish_id: platformResults.tiktok?.publishId || "",
         error_message: primaryPublished ? "" : platformResults.errors.youtube || "Publish platform gagal; siap retry."
       });
       await appendHistoryEntry({
@@ -202,6 +208,7 @@ export async function runWorkflow(options = {}) {
         job_id: job.job_id,
         instagram_media_id: platformResults.instagram?.mediaId || "",
         facebook_video_id: platformResults.facebook?.videoId || "",
+        tiktok_publish_id: platformResults.tiktok?.publishId || "",
         youtube_video_id: platformResults.youtube?.videoId || ""
       });
       return { status: publishStatus, job_id: job.job_id, platformResults };
@@ -259,6 +266,7 @@ async function publishPlatforms({ job, output, caption, upload }) {
   const platformResults = {
     instagram: null,
     facebook: null,
+    tiktok: null,
     youtube: null,
     errors: {},
     hasAnySuccess: false,
@@ -300,6 +308,18 @@ async function publishPlatforms({ job, output, caption, upload }) {
       });
       return publishReel({
         videoUrl: instagramVideo.videoUrl,
+        caption
+      });
+    });
+  }
+
+  if (config.tiktok.enabled) {
+    platformResults.tiktok = await publishPlatform("tiktok", platformResults, job.job_id, async () => {
+      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish TikTok.");
+      await updateJob(job.job_id, { tiktok_status: "processing", tiktok_error: "" });
+      return publishToTikTok({
+        videoUrl: upload.videoUrl,
+        videoPath: output.finalAbsPath,
         caption
       });
     });
@@ -375,6 +395,8 @@ async function appendHistoryEntry({ job, video, caption, output, upload, platfor
     facebook_url: platformResults.facebook?.url || "",
     youtube_video_id: platformResults.youtube?.videoId || "",
     youtube_url: platformResults.youtube?.url || "",
+    tiktok_publish_id: platformResults.tiktok?.publishId || "",
+    tiktok_mode: platformResults.tiktok?.mode || "",
     published_at: status === "published" ? new Date().toISOString() : ""
   });
 }

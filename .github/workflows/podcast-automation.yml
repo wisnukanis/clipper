@@ -95,6 +95,21 @@ jobs:
 
       YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'false' }}
 
+      TIKTOK_UPLOAD_ENABLED: ${{ secrets.TIKTOK_UPLOAD_ENABLED || 'false' }}
+      TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+      TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+      TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+      TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+      TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
+      TIKTOK_SCOPE: ${{ secrets.TIKTOK_SCOPE }}
+      TIKTOK_REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI || 'https://emsa.pro/clipper/auth/tiktok/callback.php' }}
+      TIKTOK_PUBLISH_MODE: ${{ secrets.TIKTOK_PUBLISH_MODE || 'direct' }}
+      TIKTOK_PRIVACY_LEVEL: ${{ secrets.TIKTOK_PRIVACY_LEVEL || 'SELF_ONLY' }}
+      TIKTOK_DISABLE_DUET: ${{ secrets.TIKTOK_DISABLE_DUET || 'false' }}
+      TIKTOK_DISABLE_COMMENT: ${{ secrets.TIKTOK_DISABLE_COMMENT || 'false' }}
+      TIKTOK_DISABLE_STITCH: ${{ secrets.TIKTOK_DISABLE_STITCH || 'false' }}
+      TIKTOK_COVER_TIMESTAMP_MS: ${{ secrets.TIKTOK_COVER_TIMESTAMP_MS || '1000' }}
+
       FTP_HOST: ${{ secrets.FTP_HOST }}
       FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
       FTP_USER: ${{ secrets.FTP_USER }}
@@ -257,6 +272,19 @@ jobs:
             done
           fi
 
+          if [ "$TIKTOK_UPLOAD_ENABLED" = "true" ]; then
+            for key in TIKTOK_CLIENT_KEY TIKTOK_CLIENT_SECRET
+            do
+              if [ -z "${!key}" ]; then
+                echo "::warning::$key belum diisi di GitHub Secrets. TikTok akan dilewati; workflow tetap fokus YouTube."
+              fi
+            done
+
+            if [ -z "$TIKTOK_ACCESS_TOKEN" ] && [ -z "$TIKTOK_REFRESH_TOKEN" ]; then
+              echo "::warning::TIKTOK_ACCESS_TOKEN atau TIKTOK_REFRESH_TOKEN belum diisi. TikTok akan dilewati; workflow tetap fokus YouTube."
+            fi
+          fi
+
           if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ] && [ -z "$CLOD_API_KEY" ]; then
             echo "::error::Minimal satu Gemini key atau CLOD_API_KEY harus diisi"
             missing=1
@@ -294,6 +322,15 @@ jobs:
             if [ -n "$FACEBOOK_PAGE_ID" ] && { [ -n "$FACEBOOK_PAGE_ACCESS_TOKEN" ] || [ -n "$FACEBOOK_USER_ACCESS_TOKEN" ]; }; then
               echo "::notice::Facebook credential tersedia; FACEBOOK_UPLOAD_ENABLED diaktifkan untuk run ini."
               echo "FACEBOOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            fi
+          fi
+
+          if normalize_bool "$TIKTOK_UPLOAD_ENABLED"; then
+            echo "TIKTOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+          else
+            if [ -n "$TIKTOK_CLIENT_KEY" ] && [ -n "$TIKTOK_CLIENT_SECRET" ] && { [ -n "$TIKTOK_ACCESS_TOKEN" ] || [ -n "$TIKTOK_REFRESH_TOKEN" ]; }; then
+              echo "::notice::TikTok credential tersedia; TIKTOK_UPLOAD_ENABLED diaktifkan untuk run ini."
+              echo "TIKTOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
             fi
           fi
 
@@ -405,6 +442,57 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Refresh TikTok token if possible
+        shell: bash
+        run: |
+          if [ "$TIKTOK_UPLOAD_ENABLED" != "true" ]; then
+            echo "TikTok upload disabled."
+            exit 0
+          fi
+
+          if ! node src/tiktok-token-fastcheck.js --github-env; then
+            echo "::warning::TikTok token check/refresh gagal. Upload TikTok tetap aktif dan akan dicoba saat publish."
+            echo "TIKTOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Persist refreshed TikTok token secrets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
+        run: |
+          if [ "$TIKTOK_UPLOAD_ENABLED" != "true" ]; then
+            echo "TikTok upload disabled; skip secret persist."
+            exit 0
+          fi
+
+          if [ "${TIKTOK_TOKEN_REFRESHED:-false}" != "true" ]; then
+            echo "TikTok token secrets unchanged."
+            exit 0
+          fi
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::TikTok token refreshed for this run, but GH_REPO_SECRET_TOKEN is not set. Update GitHub Secrets manually or add GH_REPO_SECRET_TOKEN."
+            exit 0
+          fi
+
+          if [ -n "${TIKTOK_ACCESS_TOKEN:-}" ]; then
+            printf '%s' "$TIKTOK_ACCESS_TOKEN" | gh secret set TIKTOK_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
+            echo "TikTok access token GitHub Secret updated."
+          fi
+
+          if [ -n "${TIKTOK_REFRESH_TOKEN:-}" ]; then
+            printf '%s' "$TIKTOK_REFRESH_TOKEN" | gh secret set TIKTOK_REFRESH_TOKEN --repo "$GITHUB_REPOSITORY"
+            echo "TikTok refresh token GitHub Secret updated."
+          fi
+
+          if [ -n "${TIKTOK_OPEN_ID:-}" ]; then
+            printf '%s' "$TIKTOK_OPEN_ID" | gh secret set TIKTOK_OPEN_ID --repo "$GITHUB_REPOSITORY"
+          fi
+
+          if [ -n "${TIKTOK_SCOPE:-}" ]; then
+            printf '%s' "$TIKTOK_SCOPE" | gh secret set TIKTOK_SCOPE --repo "$GITHUB_REPOSITORY"
+          fi
+
       - name: Install Python dependencies
         run: python -m pip install -r clipper/requirements.txt
 
@@ -515,6 +603,19 @@ jobs:
             done
           fi
 
+          if [ "$TIKTOK_UPLOAD_ENABLED" = "true" ]; then
+            for key in TIKTOK_CLIENT_KEY TIKTOK_CLIENT_SECRET
+            do
+              if [ -z "${!key}" ]; then
+                echo "::warning::$key belum diisi di GitHub Secrets. TikTok akan dilewati; workflow tetap fokus YouTube."
+              fi
+            done
+
+            if [ -z "$TIKTOK_ACCESS_TOKEN" ] && [ -z "$TIKTOK_REFRESH_TOKEN" ]; then
+              echo "::warning::TIKTOK_ACCESS_TOKEN atau TIKTOK_REFRESH_TOKEN belum diisi. TikTok akan dilewati; workflow tetap fokus YouTube."
+            fi
+          fi
+
           if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ] && [ -z "$CLOD_API_KEY" ]; then
             echo "::error::Minimal satu Gemini key atau CLOD_API_KEY harus diisi"
             missing=1
@@ -541,6 +642,9 @@ jobs:
           echo "INSTAGRAM_UPLOAD_ENABLED=$INSTAGRAM_UPLOAD_ENABLED"
           echo "INSTAGRAM_REEL_UPLOAD_METHOD=$INSTAGRAM_REEL_UPLOAD_METHOD"
           echo "YOUTUBE_UPLOAD_ENABLED=$YOUTUBE_UPLOAD_ENABLED"
+          echo "TIKTOK_UPLOAD_ENABLED=$TIKTOK_UPLOAD_ENABLED"
+          echo "TIKTOK_PUBLISH_MODE=$TIKTOK_PUBLISH_MODE"
+          echo "TIKTOK_PRIVACY_LEVEL=$TIKTOK_PRIVACY_LEVEL"
           echo "DEEPGRAM_ENABLED=$DEEPGRAM_ENABLED"
           if [ -n "$CLOD_API_KEY" ]; then
             echo "CLOD_API_KEY=configured"

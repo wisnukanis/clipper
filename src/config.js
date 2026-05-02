@@ -104,6 +104,22 @@ function buildConfig() {
       titlePrefix: cleanText(process.env.YOUTUBE_TITLE_PREFIX),
       descriptionFooter: cleanText(process.env.YOUTUBE_DESCRIPTION_FOOTER)
     },
+    tiktok: {
+      enabled: boolEnv("TIKTOK_UPLOAD_ENABLED", false),
+      clientKey: cleanText(process.env.TIKTOK_CLIENT_KEY),
+      clientSecret: process.env.TIKTOK_CLIENT_SECRET || "",
+      accessToken: process.env.TIKTOK_ACCESS_TOKEN || "",
+      refreshToken: process.env.TIKTOK_REFRESH_TOKEN || "",
+      openId: cleanText(process.env.TIKTOK_OPEN_ID),
+      scope: cleanText(process.env.TIKTOK_SCOPE),
+      redirectUri: cleanText(process.env.TIKTOK_REDIRECT_URI),
+      publishMode: cleanText(process.env.TIKTOK_PUBLISH_MODE || "direct").toLowerCase(),
+      privacyLevel: cleanText(process.env.TIKTOK_PRIVACY_LEVEL || "SELF_ONLY"),
+      disableDuet: boolEnv("TIKTOK_DISABLE_DUET", false),
+      disableComment: boolEnv("TIKTOK_DISABLE_COMMENT", false),
+      disableStitch: boolEnv("TIKTOK_DISABLE_STITCH", false),
+      coverTimestampMs: numberEnv("TIKTOK_COVER_TIMESTAMP_MS", 1000)
+    },
     instagramIgUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
     instagramAccessToken: cleanText(process.env.INSTAGRAM_ACCESS_TOKEN),
     gemini: {

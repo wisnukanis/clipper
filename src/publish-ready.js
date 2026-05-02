@@ -4,6 +4,7 @@ import { publishReel } from "./instagram.js";
 import { appendLog } from "./logger.js";
 import { patchItem, readJson, writeJson } from "./storage.js";
 import { buildYoutubeMetadata, publishToYoutube } from "./youtube-publisher.js";
+import { publishToTikTok } from "./tiktok.js";
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -36,8 +37,8 @@ if (!job) {
   process.exit(1);
 }
 
-if (!config.youtube.enabled && !config.instagram.enabled) {
-  console.error("Tidak ada platform aktif. Aktifkan YOUTUBE_UPLOAD_ENABLED atau INSTAGRAM_UPLOAD_ENABLED.");
+if (!config.youtube.enabled && !config.instagram.enabled && !config.tiktok.enabled) {
+  console.error("Tidak ada platform aktif. Aktifkan YOUTUBE_UPLOAD_ENABLED, INSTAGRAM_UPLOAD_ENABLED, atau TIKTOK_UPLOAD_ENABLED.");
   process.exit(1);
 }
 
@@ -49,6 +50,7 @@ if (!job.final_video_path) {
 await patchItem("jobs", job.job_id, {
   youtube_status: config.youtube.enabled && (!job.youtube_url || forceYoutube) ? "processing" : job.youtube_status,
   instagram_status: config.instagram.enabled && !job.instagram_media_id ? "processing" : job.instagram_status,
+  tiktok_status: config.tiktok.enabled && !job.tiktok_publish_id ? "processing" : job.tiktok_status,
   publish_status: "publishing",
   status: "publishing"
 });
@@ -60,6 +62,11 @@ let youtube = job.youtube_url ? {
 } : null;
 let instagram = job.instagram_media_id ? {
   mediaId: job.instagram_media_id,
+  skipped: true
+} : null;
+let tiktok = job.tiktok_publish_id ? {
+  publishId: job.tiktok_publish_id,
+  mode: job.tiktok_mode || "",
   skipped: true
 } : null;
 
@@ -90,7 +97,16 @@ try {
     });
   }
 
-  if (!youtube && !instagram) {
+  if (config.tiktok.enabled && !tiktok) {
+    if (!job.public_video_url) throw new Error("public_video_url kosong, TikTok butuh URL video publik dari FTP.");
+    tiktok = await publishToTikTok({
+      videoUrl: job.public_video_url,
+      videoPath: job.final_video_path,
+      caption: job.caption || ""
+    });
+  }
+
+  if (!youtube && !instagram && !tiktok) {
     throw new Error("Tidak ada publish yang dijalankan.");
   }
 
@@ -104,13 +120,17 @@ try {
     youtube_published_at: youtube?.skipped ? job.youtube_published_at : youtube ? now : "",
     instagram_status: instagram ? "published" : "disabled",
     instagram_media_id: instagram?.mediaId || "",
+    tiktok_status: tiktok ? "submitted" : "disabled",
+    tiktok_publish_id: tiktok?.publishId || "",
+    tiktok_mode: tiktok?.mode || "",
     published_at: now
   });
   await patchVideo(job.video_id, {
     status: "published",
     youtube_video_id: youtube?.videoId || job.youtube_video_id,
     youtube_url: youtube?.url || job.youtube_url,
-    instagram_media_id: instagram?.mediaId || job.instagram_media_id
+    instagram_media_id: instagram?.mediaId || job.instagram_media_id,
+    tiktok_publish_id: tiktok?.publishId || job.tiktok_publish_id
   });
   await appendHistory({
     job_id: job.job_id,
@@ -124,6 +144,8 @@ try {
     public_thumbnail_url: job.public_thumbnail_url || "",
     caption: job.caption || "",
     instagram_media_id: instagram?.mediaId || "",
+    tiktok_publish_id: tiktok?.publishId || "",
+    tiktok_mode: tiktok?.mode || "",
     youtube_video_id: youtube?.videoId || "",
     youtube_url: youtube?.url || "",
     published_at: now
@@ -131,6 +153,7 @@ try {
   await appendLog("platform_published", {
     job_id: job.job_id,
     instagram_media_id: instagram?.mediaId || "",
+    tiktok_publish_id: tiktok?.publishId || "",
     youtube_video_id: youtube?.videoId || "",
     youtube_url: youtube?.url || ""
   });
@@ -138,10 +161,12 @@ try {
     status: "published",
     job_id: job.job_id,
     instagram,
+    tiktok,
     youtube
   }, null, 2));
 } catch (error) {
   const hasYoutube = Boolean(youtube?.url || youtube?.videoId || job.youtube_url || job.youtube_video_id);
+  const hasTikTok = Boolean(tiktok?.publishId || job.tiktok_publish_id);
   await patchItem("jobs", job.job_id, {
     status: "failed_publish",
     publish_status: "failed_publish",
@@ -149,6 +174,8 @@ try {
     youtube_video_id: youtube?.videoId || job.youtube_video_id || "",
     youtube_url: youtube?.url || job.youtube_url || "",
     instagram_status: config.instagram.enabled ? "failed" : job.instagram_status,
+    tiktok_status: hasTikTok ? "submitted" : config.tiktok.enabled ? "failed" : job.tiktok_status,
+    tiktok_publish_id: tiktok?.publishId || job.tiktok_publish_id || "",
     error_message: error.message
   });
   await appendLog("platform_publish_failed", {
