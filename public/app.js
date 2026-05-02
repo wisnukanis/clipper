@@ -186,7 +186,8 @@ function renderHero(state) {
   }
 
   const status = run.status || "running";
-  els.runBadge.textContent = status;
+  const isLive = status === "running";
+  els.runBadge.textContent = isLive ? "RUNNING" : `LAST · ${status.toUpperCase()}`;
   els.runBadge.className = `runBadge ${status}`;
   els.workflowTitle.textContent = run.title || run.name || "Workflow";
   els.workflowMeta.textContent = run.branch

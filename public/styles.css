@@ -1027,21 +1027,25 @@ td a:hover {
   }
 
   .topbar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
   }
 
+  .brand {
+    flex: 0 0 auto;
+  }
+
   .configLine {
+    flex: 1 1 100%;
+    order: 3;
     text-align: left;
+    font-size: 11px;
+    white-space: normal;
   }
 
   .toolbar {
-    justify-content: stretch;
-  }
-
-  .toolbar .btn {
-    flex: 1;
+    margin-left: auto;
   }
 
   .metrics {
@@ -1068,5 +1072,271 @@ td a:hover {
 
   .span2 {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    width: calc(100% - 14px);
+    padding: 8px 0 18px;
+    gap: 8px;
+  }
+
+  .topbar {
+    padding: 9px 12px;
+    border-radius: 10px;
+  }
+
+  .brandMark {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+    border-radius: 10px;
+  }
+
+  .brandText h1 {
+    font-size: 15px;
+  }
+
+  .brandText .eyebrow {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+  }
+
+  .configLine {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  .toolbar {
+    gap: 6px;
+  }
+
+  .toolbar .btn {
+    padding: 0 10px;
+    height: 28px;
+    font-size: 10px;
+  }
+
+  .metrics {
+    gap: 6px;
+  }
+
+  .metric {
+    padding: 8px 12px;
+    border-radius: 10px;
+  }
+
+  .metric span {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+  }
+
+  .metric strong {
+    font-size: 18px;
+  }
+
+  .panel {
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .heroPanel {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .heroLeft {
+    gap: 10px;
+  }
+
+  .heroTitle h2 {
+    font-size: 15px;
+  }
+
+  .heroTitle p {
+    font-size: 10px;
+  }
+
+  .runBadge {
+    height: 22px;
+    padding: 0 10px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+
+  .runMetric strong {
+    font-size: 18px;
+  }
+
+  .runDetailRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .runDetailRow strong {
+    font-size: 10px;
+  }
+
+  .runDetailRow .muted {
+    font-size: 11px;
+  }
+
+  .progressTrack {
+    height: 7px;
+  }
+
+  .flowNode {
+    min-width: 100px;
+    min-height: 60px;
+    padding: 8px;
+    gap: 3px;
+  }
+
+  .flowNode strong {
+    font-size: 11px;
+  }
+
+  .flowNode small {
+    font-size: 9px;
+    min-height: 22px;
+  }
+
+  .flowIndex {
+    width: 16px;
+    height: 16px;
+    font-size: 9px;
+  }
+
+  .flowEdge {
+    flex-basis: 14px;
+  }
+
+  .consolePanel {
+    padding: 10px 12px;
+  }
+
+  .consoleOutput {
+    min-height: 140px;
+    max-height: 200px;
+    padding: 10px;
+    font-size: 10px;
+    line-height: 1.55;
+  }
+
+  .formCard {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .denseFields {
+    gap: 6px;
+  }
+
+  .field {
+    font-size: 10px;
+  }
+
+  .field input,
+  .field select,
+  input,
+  select {
+    height: 30px;
+    font-size: 11px;
+    padding: 0 9px;
+  }
+
+  .field.check {
+    height: 30px;
+    padding: 0 9px;
+  }
+
+  .btn {
+    height: 32px;
+    font-size: 11px;
+    padding: 0 14px;
+  }
+
+  .btn.small {
+    height: 26px;
+    font-size: 10px;
+    padding: 0 10px;
+  }
+
+  .tableWrap {
+    max-height: 200px;
+  }
+
+  table {
+    min-width: 480px;
+  }
+
+  th,
+  td {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  th {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  .pill {
+    height: 18px;
+    padding: 0 6px;
+    font-size: 9px;
+  }
+
+  .badge {
+    height: 20px;
+    padding: 0 8px;
+    font-size: 9px;
+  }
+
+  .eyebrow {
+    font-size: 9px;
+  }
+
+  h2 {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 460px) {
+  .topbar {
+    padding: 8px 10px;
+  }
+
+  .brand {
+    gap: 9px;
+  }
+
+  .brandText h1 {
+    font-size: 14px;
+  }
+
+  .toolbar .btn {
+    padding: 0 8px;
+    font-size: 9px;
+    height: 26px;
+  }
+
+  .heroLeft {
+    flex-wrap: wrap;
+  }
+
+  .heroRight {
+    flex-direction: row-reverse;
+  }
+
+  .runMetric {
+    text-align: left;
+  }
+
+  .flowNode {
+    min-width: 88px;
+    min-height: 56px;
   }
 }
