@@ -157,7 +157,7 @@ jobs:
       SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '400' }}
       SUBTITLE_MARGIN_H: ${{ secrets.SUBTITLE_MARGIN_H || '120' }}
       SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '3' }}
-      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H006BD4F3' }}
+      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H0030A8D6' }}
       SUBTITLE_OUTLINE_COLOUR: ${{ secrets.SUBTITLE_OUTLINE_COLOUR || '&H66000000' }}
       SUBTITLE_SHADOW_COLOUR: ${{ secrets.SUBTITLE_SHADOW_COLOUR || '&H99000000' }}
       SUBTITLE_OUTLINE: ${{ secrets.SUBTITLE_OUTLINE || '1' }}

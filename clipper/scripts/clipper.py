@@ -1140,6 +1140,7 @@ Aturan:
 - Caption harus natural, singkat, dan relevan.
 - CTA harus ringan dan memancing komentar.
 - Hashtag harus relevan dengan niche.
+- Setiap hashtag wajib diawali tanda #.
 - Thumbnail text harus 3 sampai 7 kata.
 - Pilih angle yang paling kuat secara emosi, konflik, curiosity, relate, atau pelajaran hidup.
 - Output wajib JSON valid saja, tanpa markdown.
@@ -1190,10 +1191,8 @@ def strategy_result_to_clips(data, candidates, config):
     except (TypeError, ValueError):
         viral_score = 0
 
-    hashtags = data.get("hashtags") or []
-    if isinstance(hashtags, str):
-        hashtags = [item.strip() for item in re.split(r"[\s,]+", hashtags) if item.strip()]
-    hashtags_text = " ".join(str(item).strip() for item in hashtags if str(item).strip())
+    hashtags = normalize_hashtags(data.get("hashtags") or [])
+    hashtags_text = " ".join(hashtags)
     hook = str(data.get("hook") or "").strip() or candidate["text"]
 
     caption_parts = [
@@ -1218,6 +1217,7 @@ def strategy_result_to_clips(data, candidates, config):
         "end": float(candidate["end"]),
         "hook": hook,
         "caption": caption or candidate["text"],
+        "hashtags": hashtags,
         "thumbnail_text": thumbnail_text,
         "viral_score": viral_score,
         "selected_angle": str(data.get("selected_angle") or "").strip(),
@@ -1225,6 +1225,34 @@ def strategy_result_to_clips(data, candidates, config):
         "candidate_id": candidate["candidate_id"],
         "clip_transcript": candidate["text"],
     }]
+
+
+def normalize_hashtags(value):
+    if isinstance(value, str):
+        items = [item.strip() for item in re.split(r"[\s,]+", value) if item.strip()]
+    elif isinstance(value, list):
+        items = value
+    else:
+        items = []
+
+    if not items:
+        items = ["PodcastIndonesia", "PodcastArtis", "ReelsIndonesia"]
+
+    tags = []
+    seen = set()
+    for item in items:
+        cleaned = re.sub(r"[^\w]", "", str(item).strip().lstrip("#"), flags=re.UNICODE)
+        if not cleaned:
+            continue
+        tag = f"#{cleaned}"
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        tags.append(tag)
+        if len(tags) >= 8:
+            break
+    return tags
 
 
 def find_important_clips(segments, config):
@@ -1642,7 +1670,7 @@ def build_ass(events, config):
     font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46)
     margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 400)
     margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 120)
-    primary_colour = os.environ.get("SUBTITLE_PRIMARY_COLOUR", "&H006BD4F3").strip() or "&H006BD4F3"
+    primary_colour = os.environ.get("SUBTITLE_PRIMARY_COLOUR", "&H0030A8D6").strip() or "&H0030A8D6"
     outline_colour = os.environ.get("SUBTITLE_OUTLINE_COLOUR", "&H66000000").strip() or "&H66000000"
     back_colour = os.environ.get("SUBTITLE_SHADOW_COLOUR", "&H99000000").strip() or "&H99000000"
     outline = min(1.0, max(0.0, parse_float(os.environ.get("SUBTITLE_OUTLINE"), 1.0)))

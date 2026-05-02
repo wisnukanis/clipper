@@ -42,7 +42,7 @@ function collectText(value, texts) {
 
 export async function generateCaption({ job, output, promptTemplate, clipperRoot }) {
   if (hasStrategyCaption(output)) {
-    return output.caption.trim();
+    return ensureCaptionHashtags(output.caption, output, promptTemplate);
   }
 
   const context = await readClipContext(clipperRoot, output);
@@ -68,7 +68,7 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
   ].join("\n");
 
   const text = await generateGeminiText(prompt, { maxOutputTokens: 700 });
-  return (text || fallback).trim();
+  return ensureCaptionHashtags(text || fallback, output, promptTemplate);
 }
 
 export async function generateThumbnailText({ job, output, promptTemplate }) {
@@ -107,8 +107,39 @@ function fallbackCaption(output, promptTemplate) {
   const hook = output.hook || output.title || "Ada bagian menarik dari obrolan ini.";
   const body = output.caption || output.reason || "Potongan ini diambil dari momen yang paling kuat di podcast.";
   const cta = promptTemplate?.cta || "Menurut kamu, bagian paling relate yang mana?";
-  const tags = promptTemplate?.hashtag_template || "#PodcastIndonesia #ReelsIndonesia";
+  const tags = normalizeHashtags(promptTemplate?.hashtag_template || "#PodcastIndonesia #ReelsIndonesia").join(" ");
   return `${hook}\n\n${body}\n\n${cta}\n\n${tags}`;
+}
+
+function ensureCaptionHashtags(caption, output, promptTemplate) {
+  const cleaned = String(caption || "").trim();
+  const hashtags = normalizeHashtags(output?.hashtags?.length ? output.hashtags : promptTemplate?.hashtag_template);
+  if (/#([\p{L}\p{N}_]+)/u.test(cleaned)) return cleaned;
+  if (!hashtags.length) return cleaned;
+  return `${cleaned}\n\n${hashtags.join(" ")}`.trim();
+}
+
+function normalizeHashtags(value) {
+  const rawItems = Array.isArray(value)
+    ? value
+    : String(value || "#PodcastIndonesia #ReelsIndonesia")
+      .split(/[\s,]+/);
+
+  const seen = new Set();
+  const tags = [];
+  for (const item of rawItems) {
+    const cleaned = String(item || "")
+      .trim()
+      .replace(/^#+/, "")
+      .replace(/[^\p{L}\p{N}_]/gu, "");
+    if (!cleaned) continue;
+    const tag = `#${cleaned}`;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(tag);
+  }
+  return tags.slice(0, 8);
 }
 
 function normalizeThumbnailText(value) {
