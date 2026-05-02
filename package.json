@@ -17,6 +17,7 @@
     "instagram:check": "node src/instagram-check.js",
     "instagram:token": "node src/instagram-token-fastcheck.js --persist-local",
     "facebook:token": "node src/facebook-token-fastcheck.js --persist-local",
+    "videos:discover": "node src/video-discovery.js",
     "tiktok:auth-url": "node src/tiktok-auth-url.js",
     "tiktok:token": "node src/tiktok-token-fastcheck.js --persist-local",
     "clipper:setup": "python -m pip install -r clipper/requirements.txt"

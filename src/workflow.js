@@ -17,6 +17,7 @@ import { publishToTikTok } from "./tiktok.js";
 import { todayDate } from "./job-id.js";
 import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflight.js";
+import { discoverAndQueueVideos } from "./video-discovery.js";
 
 export async function runWorkflow(options = {}) {
   await ensureProjectDirs();
@@ -45,9 +46,17 @@ export async function runWorkflow(options = {}) {
     return { status: "scheduled_skip", reason: "already_published_today" };
   }
 
-  const selection = options.url
+  let selection = options.url
     ? await createManualSelection(options)
     : await selectNextVideo({ theme: options.theme || config.defaultTheme });
+
+  if (!selection && !options.url) {
+    await discoverAndQueueVideos({
+      theme: options.theme || config.defaultTheme,
+      targetDate: todayDate()
+    });
+    selection = await selectNextVideo({ theme: options.theme || config.defaultTheme });
+  }
 
   if (!selection) {
     await appendLog("no_video_selected");

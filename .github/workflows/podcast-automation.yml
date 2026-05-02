@@ -143,6 +143,12 @@ jobs:
       META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
       AUTO_REFRESH_INSTAGRAM_TOKEN: ${{ secrets.AUTO_REFRESH_INSTAGRAM_TOKEN || 'true' }}
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
+      AUTO_DISCOVER_VIDEOS: ${{ secrets.AUTO_DISCOVER_VIDEOS || 'true' }}
+      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'podcast artis indonesia viral|podcast artis indonesia terbaru|podcast deddy corbuzier artis terbaru|podcast raditya dika artis|podcast vindes artis terbaru' }}
+      AUTO_DISCOVER_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_MAX_RESULTS || '8' }}
+      AUTO_DISCOVER_ADD_COUNT: ${{ secrets.AUTO_DISCOVER_ADD_COUNT || '3' }}
+      AUTO_DISCOVER_MIN_DURATION_SECONDS: ${{ secrets.AUTO_DISCOVER_MIN_DURATION_SECONDS || '900' }}
+      AUTO_DISCOVER_MAX_DURATION_SECONDS: ${{ secrets.AUTO_DISCOVER_MAX_DURATION_SECONDS || '10800' }}
 
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
       YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
@@ -347,7 +353,7 @@ jobs:
             exit 0
           fi
 
-          if ! node src/instagram-token-fastcheck.js --github-env --force; then
+          if ! node src/instagram-token-fastcheck.js --github-env; then
             echo "::warning::Instagram token check/refresh gagal. Upload Instagram tetap aktif dan akan dicoba saat publish."
             echo "INSTAGRAM_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
           fi
@@ -383,7 +389,7 @@ jobs:
             exit 0
           fi
 
-          if ! node src/facebook-token-fastcheck.js --github-env --force; then
+          if ! node src/facebook-token-fastcheck.js --github-env; then
             echo "::warning::Facebook token check/refresh gagal. Upload Facebook tetap aktif dan akan dicoba saat publish."
             echo "FACEBOOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
           fi

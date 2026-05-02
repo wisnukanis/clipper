@@ -6,12 +6,11 @@ on:
       force_refresh:
         description: "Force refresh token now: true/false"
         required: false
-        default: "true"
+        default: "false"
 
   schedule:
-    # UTC. Hourly health check, plus one daily force refresh around 01:47 WIB.
+    # UTC. Hourly health check. Token exchange only runs near expiry by default.
     - cron: "17 * * * *"
-    - cron: "47 18 * * *"
 
 concurrency:
   group: meta-token-maintenance
@@ -63,13 +62,9 @@ jobs:
           force_refresh="false"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            case "${{ inputs.force_refresh || 'true' }}" in
+            case "${{ inputs.force_refresh || 'false' }}" in
               1|true|TRUE|yes|YES|on|ON) force_refresh="true" ;;
             esac
-          fi
-
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            force_refresh="true"
           fi
 
           echo "FORCE_REFRESH=$force_refresh" >> "$GITHUB_ENV"
