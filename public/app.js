@@ -425,15 +425,15 @@ function renderVideos(videos) {
     .map(
       (video) => `
     <tr>
-      <td>${pill(video.status)}</td>
-      <td>${escapeHtml(video.theme || "")}</td>
-      <td>${escapeHtml(video.target_date || "-")}</td>
-      <td>${escapeHtml(video.quality_profile || "standard")}</td>
-      <td><a href="${escapeAttr(video.url)}" target="_blank" rel="noreferrer">${escapeHtml(short(video.url, 60))}</a></td>
+      <td data-label="Status">${pill(video.status)}</td>
+      <td data-label="Theme">${escapeHtml(video.theme || "")}</td>
+      <td data-label="Target">${escapeHtml(video.target_date || "-")}</td>
+      <td data-label="Kualitas">${escapeHtml(video.quality_profile || "standard")}</td>
+      <td data-label="URL"><a href="${escapeAttr(video.url)}" target="_blank" rel="noreferrer">${escapeHtml(short(video.url, 60))}</a></td>
     </tr>
   `
     );
-  els.videoRows.innerHTML = rows.join("") || `<tr><td colspan="5">Belum ada link.</td></tr>`;
+  els.videoRows.innerHTML = rows.join("") || `<tr><td colspan="5" class="emptyRow">Belum ada link.</td></tr>`;
 }
 
 function renderJobs(jobs) {
@@ -444,17 +444,17 @@ function renderJobs(jobs) {
     .map(
       (job) => `
     <tr>
-      <td>${pill(job.status)}</td>
-      <td>${escapeHtml(short(job.job_id || "", 24))}</td>
-      <td>${job.instagram_media_id ? link(`https://www.instagram.com/p/${job.instagram_media_id}`, job.instagram_status || "published") : escapeHtml(job.instagram_status || "-")}</td>
-      <td>${job.facebook_url ? link(job.facebook_url, job.facebook_status || "published") : escapeHtml(job.facebook_status || "-")}</td>
-      <td>${job.youtube_url ? link(job.youtube_url, job.youtube_status || "published") : escapeHtml(job.youtube_status || "-")}</td>
-      <td>${job.tiktok_publish_id ? escapeHtml(short(job.tiktok_status || "submitted", 18)) : escapeHtml(job.tiktok_status || "-")}</td>
-      <td>${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || "", 50))}</td>
+      <td data-label="Status">${pill(job.status)}</td>
+      <td data-label="Job">${escapeHtml(short(job.job_id || "", 24))}</td>
+      <td data-label="IG">${job.instagram_media_id ? link(`https://www.instagram.com/p/${job.instagram_media_id}`, job.instagram_status || "published") : escapeHtml(job.instagram_status || "-")}</td>
+      <td data-label="FB">${job.facebook_url ? link(job.facebook_url, job.facebook_status || "published") : escapeHtml(job.facebook_status || "-")}</td>
+      <td data-label="YT">${job.youtube_url ? link(job.youtube_url, job.youtube_status || "published") : escapeHtml(job.youtube_status || "-")}</td>
+      <td data-label="TT">${job.tiktok_publish_id ? escapeHtml(short(job.tiktok_status || "submitted", 18)) : escapeHtml(job.tiktok_status || "-")}</td>
+      <td data-label="Error">${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || "", 50))}</td>
     </tr>
   `
     );
-  els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="7">Belum ada job.</td></tr>`;
+  els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="7" class="emptyRow">Belum ada job.</td></tr>`;
 }
 
 function showAuth(message = "") {
