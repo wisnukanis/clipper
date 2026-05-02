@@ -23,7 +23,7 @@ export async function runWorkflow(options = {}) {
   const publishRequired = Boolean(options.publish && canPublish());
   const preflight = await runPreflight({
     publishRequired,
-    socialPublishRequired: publishRequired,
+    socialPublishRequired: false,
     socialOnline: publishRequired,
     deepgramOnline: false
   });
