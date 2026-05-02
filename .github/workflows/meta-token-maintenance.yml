@@ -68,7 +68,7 @@ jobs:
             esac
           fi
 
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "47 18 * * *" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ]; then
             force_refresh="true"
           fi
 
@@ -98,7 +98,10 @@ jobs:
             args+=(--force)
           fi
 
-          node src/facebook-token-fastcheck.js "${args[@]}"
+          if ! node src/facebook-token-fastcheck.js "${args[@]}"; then
+            echo "::error::Facebook token maintenance gagal. Token baru perlu dicek/dibuat ulang dari Meta."
+            echo "META_TOKEN_MAINTENANCE_FAILED=true" >> "$GITHUB_ENV"
+          fi
 
       - name: Persist Facebook token secrets
         shell: bash
@@ -148,7 +151,10 @@ jobs:
             args+=(--force)
           fi
 
-          node src/instagram-token-fastcheck.js "${args[@]}"
+          if ! node src/instagram-token-fastcheck.js "${args[@]}"; then
+            echo "::error::Instagram token maintenance gagal. Token baru perlu dicek/dibuat ulang dari Meta."
+            echo "META_TOKEN_MAINTENANCE_FAILED=true" >> "$GITHUB_ENV"
+          fi
 
       - name: Persist Instagram token secret
         shell: bash
@@ -167,3 +173,13 @@ jobs:
 
           printf '%s' "$INSTAGRAM_ACCESS_TOKEN" | gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
           echo "Instagram token GitHub Secret updated."
+
+      - name: Fail if token maintenance failed
+        shell: bash
+        run: |
+          if [ "${META_TOKEN_MAINTENANCE_FAILED:-false}" = "true" ]; then
+            echo "::error::Satu atau lebih token Meta gagal divalidasi/refresh."
+            exit 1
+          fi
+
+          echo "Meta token maintenance selesai."

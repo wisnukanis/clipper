@@ -238,19 +238,27 @@ async function main() {
   const shouldFetchPageToken = Boolean(userAccessToken && (autoRefresh || !pageValid || args.has("--force")));
 
   if (shouldFetchPageToken) {
+    let shouldExchangeUserToken = args.has("--force");
+
     if (autoRefresh) {
       try {
         const debug = await debugToken(userAccessToken);
         userExpiresAt = debug?.expiresAt || null;
         const daysLeft = daysUntil(userExpiresAt);
-        if (args.has("--force") || (userExpiresAt && daysLeft <= refreshBeforeDays)) {
-          const exchanged = await exchangeUserToken(userAccessToken);
-          userAccessToken = exchanged.accessToken;
-          userRefreshed = true;
-          mask(userAccessToken);
-        }
+        shouldExchangeUserToken = shouldExchangeUserToken || Boolean(userExpiresAt && daysLeft <= refreshBeforeDays);
       } catch (error) {
         console.warn(`Facebook user token refresh dilewati: ${error.message}`);
+      }
+    }
+
+    if (autoRefresh && shouldExchangeUserToken) {
+      try {
+        const exchanged = await exchangeUserToken(userAccessToken);
+        userAccessToken = exchanged.accessToken;
+        userRefreshed = true;
+        mask(userAccessToken);
+      } catch (error) {
+        console.warn(`Facebook user token exchange gagal, coba pakai token yang ada: ${error.message}`);
       }
     }
 

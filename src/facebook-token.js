@@ -183,12 +183,19 @@ export async function ensureFreshFacebookToken({ refreshValid = false } = {}) {
 
   if (
     config.facebook.autoRefreshToken
-    && debug?.expiresAt
-    && daysLeft <= config.meta.tokenRefreshBeforeDays
+    && refreshValid
+    && (
+      !debug?.expiresAt
+      || daysLeft <= config.meta.tokenRefreshBeforeDays
+    )
   ) {
-    const exchanged = await exchangeUserToken(userToken);
-    userToken = exchanged.accessToken;
-    userTokenRefreshed = true;
+    try {
+      const exchanged = await exchangeUserToken(userToken);
+      userToken = exchanged.accessToken;
+      userTokenRefreshed = true;
+    } catch (error) {
+      console.warn(`Facebook user token exchange gagal, coba pakai token yang ada: ${error.message}`);
+    }
   }
 
   const previousPageToken = config.facebook.accessToken;

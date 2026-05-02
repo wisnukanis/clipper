@@ -326,7 +326,12 @@ jobs:
           fi
 
           if normalize_bool "$TIKTOK_UPLOAD_ENABLED"; then
-            echo "TIKTOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            if [ -n "$TIKTOK_ACCESS_TOKEN" ] || [ -n "$TIKTOK_REFRESH_TOKEN" ]; then
+              echo "TIKTOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            else
+              echo "::notice::TikTok credential token belum ada; TIKTOK_UPLOAD_ENABLED dimatikan untuk run ini."
+              echo "TIKTOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
+            fi
           else
             if [ -n "$TIKTOK_CLIENT_KEY" ] && [ -n "$TIKTOK_CLIENT_SECRET" ] && { [ -n "$TIKTOK_ACCESS_TOKEN" ] || [ -n "$TIKTOK_REFRESH_TOKEN" ]; }; then
               echo "::notice::TikTok credential tersedia; TIKTOK_UPLOAD_ENABLED diaktifkan untuk run ini."
@@ -342,7 +347,7 @@ jobs:
             exit 0
           fi
 
-          if ! node src/instagram-token-fastcheck.js --github-env; then
+          if ! node src/instagram-token-fastcheck.js --github-env --force; then
             echo "::warning::Instagram token check/refresh gagal. Upload Instagram tetap aktif dan akan dicoba saat publish."
             echo "INSTAGRAM_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
           fi
@@ -378,7 +383,7 @@ jobs:
             exit 0
           fi
 
-          if ! node src/facebook-token-fastcheck.js --github-env; then
+          if ! node src/facebook-token-fastcheck.js --github-env --force; then
             echo "::warning::Facebook token check/refresh gagal. Upload Facebook tetap aktif dan akan dicoba saat publish."
             echo "FACEBOOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
           fi
