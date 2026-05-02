@@ -32,7 +32,7 @@ function applyUserToken(accessToken) {
 }
 
 function isExpiredTokenError(error) {
-  return error?.apiSubcode === 463 || /expired/i.test(String(error?.message || ""));
+  return error?.apiSubcode === 463 || error?.apiCode === 190 || /expired/i.test(String(error?.message || ""));
 }
 
 async function validatePageToken(accessToken = config.facebook.accessToken) {

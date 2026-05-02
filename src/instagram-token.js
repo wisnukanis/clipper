@@ -27,15 +27,15 @@ function applyToken(accessToken) {
 }
 
 function isExpiredTokenError(error) {
-  return error?.apiSubcode === 463 || /expired/i.test(String(error?.message || ""));
+  return error?.apiSubcode === 463 || error?.apiCode === 190 || /expired/i.test(String(error?.message || ""));
 }
 
-async function validateTokenWithInstagram() {
+async function validateTokenWithInstagram(accessToken = config.instagram.accessToken) {
   try {
     const response = await axios.get(apiUrl(config.instagram.igUserId), {
       params: {
         fields: "id,username",
-        access_token: config.instagram.accessToken
+        access_token: accessToken
       },
       timeout: 30000
     });
@@ -48,6 +48,59 @@ async function validateTokenWithInstagram() {
   } catch (error) {
     throw graphError(error);
   }
+}
+
+async function getFacebookPageTokenFromUser() {
+  if (!config.facebook.pageId || !config.facebook.userAccessToken) return null;
+
+  try {
+    const response = await axios.get(apiUrl("me/accounts"), {
+      params: {
+        fields: "id,name,access_token",
+        access_token: config.facebook.userAccessToken
+      },
+      timeout: 30000
+    });
+
+    const pages = Array.isArray(response.data?.data) ? response.data.data : [];
+    const page = pages.find((item) => String(item.id) === String(config.facebook.pageId));
+    return page?.access_token || null;
+  } catch (error) {
+    console.warn(`IG fallback facebook_page_from_user_token gagal: ${graphError(error).message}`);
+    return null;
+  }
+}
+
+async function fallbackTokenCandidates() {
+  const pageFromUser = await getFacebookPageTokenFromUser();
+  const candidates = [
+    ["facebook_page_from_user_token", pageFromUser],
+    ["facebook_page_token", config.facebook.accessToken],
+    ["facebook_user_token", config.facebook.userAccessToken]
+  ];
+  const seen = new Set();
+  return candidates.filter(([, token]) => {
+    if (!token || seen.has(token)) return false;
+    seen.add(token);
+    return true;
+  });
+}
+
+async function applyValidFallbackToken() {
+  for (const [label, token] of await fallbackTokenCandidates()) {
+    if (token === config.instagram.accessToken) continue;
+
+    try {
+      const validation = await validateTokenWithInstagram(token);
+      applyToken(token);
+      console.warn(`IG token utama tidak valid; memakai fallback ${label} untuk run ini.`);
+      return validation;
+    } catch (error) {
+      console.warn(`IG fallback ${label} tidak valid: ${graphError(error).message}`);
+    }
+  }
+
+  return null;
 }
 
 async function debugToken() {
@@ -103,8 +156,15 @@ async function exchangeToken() {
 }
 
 export async function ensureFreshInstagramToken() {
-  if (!config.instagram.enabled || !config.instagram.accessToken) {
-    return { checked: false, refreshed: false, reason: "instagram_disabled_or_missing_token" };
+  if (!config.instagram.enabled) {
+    return { checked: false, refreshed: false, reason: "instagram_disabled" };
+  }
+
+  if (!config.instagram.accessToken) {
+    const fallbackValidation = await applyValidFallbackToken();
+    if (!fallbackValidation) {
+      return { checked: false, refreshed: false, reason: "instagram_missing_token" };
+    }
   }
 
   let validation;
@@ -112,6 +172,10 @@ export async function ensureFreshInstagramToken() {
     validation = await validateTokenWithInstagram();
   } catch (error) {
     if (isExpiredTokenError(error)) {
+      const fallbackValidation = await applyValidFallbackToken();
+      if (fallbackValidation) {
+        return { checked: true, refreshed: true, reason: "fallback_token_applied", ...fallbackValidation };
+      }
       throw new Error(
         "INSTAGRAM_ACCESS_TOKEN sudah expired. Buat token baru dan update GitHub Secret INSTAGRAM_ACCESS_TOKEN."
       );

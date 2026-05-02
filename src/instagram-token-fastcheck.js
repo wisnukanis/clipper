@@ -12,10 +12,9 @@ loadEnvFile(path.join(rootDir, ".env"));
 const graphApiVersion = clean(process.env.GRAPH_API_VERSION || "v25.0");
 const igUserId = clean(process.env.INSTAGRAM_IG_USER_ID);
 let accessToken = process.env.INSTAGRAM_ACCESS_TOKEN || "";
-const fallbackTokenCandidates = [
-  ["facebook_user_token", process.env.FACEBOOK_USER_ACCESS_TOKEN || ""],
-  ["facebook_page_token", process.env.FACEBOOK_PAGE_ACCESS_TOKEN || ""]
-].filter(([, token]) => clean(token));
+const facebookPageId = clean(process.env.FACEBOOK_PAGE_ID);
+let facebookPageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || "";
+const facebookUserAccessToken = process.env.FACEBOOK_USER_ACCESS_TOKEN || "";
 const appId = clean(process.env.META_APP_ID);
 const appSecret = process.env.META_APP_SECRET || "";
 const autoRefresh = boolEnv("AUTO_REFRESH_INSTAGRAM_TOKEN", true);
@@ -138,6 +137,25 @@ async function exchangeToken(token) {
   };
 }
 
+async function getFacebookPageTokenFromUser() {
+  if (!facebookPageId || !facebookUserAccessToken) return null;
+
+  const data = await fetchJson("me/accounts", {
+    fields: "id,name,access_token",
+    access_token: facebookUserAccessToken
+  });
+
+  const pages = Array.isArray(data?.data) ? data.data : [];
+  const page = pages.find((item) => String(item.id) === String(facebookPageId));
+  if (!page?.access_token) return null;
+
+  facebookPageAccessToken = page.access_token;
+  return {
+    label: "facebook_page_from_user_token",
+    token: page.access_token
+  };
+}
+
 function updateEnvFile(filePath, token) {
   if (!fs.existsSync(filePath)) return false;
 
@@ -180,17 +198,45 @@ function daysUntil(date) {
 }
 
 function isExpiredTokenError(error) {
-  return error?.apiSubcode === 463 || /expired/i.test(String(error?.message || ""));
+  return error?.apiSubcode === 463 || error?.apiCode === 190 || /expired/i.test(String(error?.message || ""));
 }
 
 function isTokenValidationError(error) {
   return error?.apiCode === 190 || isExpiredTokenError(error);
 }
 
-async function chooseFallbackToken(previousError) {
-  if (!isTokenValidationError(previousError)) throw previousError;
+function hasFallbackTokenSource() {
+  return Boolean(clean(facebookUserAccessToken) || clean(facebookPageAccessToken));
+}
 
-  for (const [label, token] of fallbackTokenCandidates) {
+async function fallbackTokenCandidates() {
+  const candidates = [];
+
+  try {
+    const pageFromUser = await getFacebookPageTokenFromUser();
+    if (pageFromUser?.token) candidates.push(pageFromUser);
+  } catch (error) {
+    console.warn(`IG fallback facebook_page_from_user_token gagal: ${error.message}`);
+  }
+
+  candidates.push(
+    { label: "facebook_page_token", token: facebookPageAccessToken },
+    { label: "facebook_user_token", token: facebookUserAccessToken }
+  );
+
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    const token = clean(candidate.token);
+    if (!token || seen.has(token)) return false;
+    seen.add(token);
+    return true;
+  });
+}
+
+async function chooseFallbackToken(previousError = null) {
+  if (previousError && !isTokenValidationError(previousError)) throw previousError;
+
+  for (const { label, token } of await fallbackTokenCandidates()) {
     if (!token || token === accessToken) continue;
 
     try {
@@ -203,7 +249,8 @@ async function chooseFallbackToken(previousError) {
     }
   }
 
-  throw previousError;
+  if (previousError) throw previousError;
+  throw new Error("Tidak ada fallback Facebook token yang valid untuk Instagram.");
 }
 
 function printStatus(status) {
@@ -211,15 +258,18 @@ function printStatus(status) {
 }
 
 async function main() {
-  if (!igUserId || (!accessToken && !fallbackTokenCandidates.length)) {
+  if (!igUserId || (!accessToken && !hasFallbackTokenSource())) {
     throw new Error("INSTAGRAM_IG_USER_ID dan INSTAGRAM_ACCESS_TOKEN wajib diisi.");
   }
 
   if (accessToken) mask(accessToken);
 
   let replacedFromFallback = false;
-  if (!accessToken && fallbackTokenCandidates.length) {
-    accessToken = fallbackTokenCandidates[0][1];
+  let fallbackLabel = "";
+  if (!accessToken && hasFallbackTokenSource()) {
+    const fallback = await chooseFallbackToken();
+    accessToken = fallback.token;
+    fallbackLabel = fallback.label;
     replacedFromFallback = true;
     mask(accessToken);
   }
@@ -229,6 +279,7 @@ async function main() {
   } catch (error) {
     const fallback = await chooseFallbackToken(error);
     accessToken = fallback.token;
+    fallbackLabel = fallback.label;
     replacedFromFallback = true;
   }
 
@@ -249,7 +300,9 @@ async function main() {
   let localFilesUpdated = 0;
   let expiresAt = debug?.expiresAt || null;
 
-  if (shouldRefresh) {
+  const canExchangeToken = !replacedFromFallback || fallbackLabel === "facebook_user_token";
+
+  if (shouldRefresh && canExchangeToken) {
     const exchanged = await exchangeToken(accessToken);
     accessToken = exchanged.accessToken;
     refreshed = true;
@@ -266,6 +319,8 @@ async function main() {
     if (args.has("--persist-local")) {
       localFilesUpdated = persistLocalToken(accessToken);
     }
+  } else if (shouldRefresh) {
+    console.warn(`IG token exchange dilewati untuk fallback ${fallbackLabel}; token fallback valid dipakai untuk run ini.`);
   }
 
   if (args.has("--github-env")) {
