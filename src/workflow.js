@@ -255,7 +255,7 @@ async function createManualSelection(options) {
     manual_range: options.range || "",
     quality_profile: options.qualityProfile || "standard",
     subtitle_font: options.subtitleFont || "Segoe UI",
-    subtitle_font_size: options.subtitleFontSize || 46,
+    subtitle_font_size: options.subtitleFontSize || 50,
     subtitle_margin_v: options.subtitleMarginV || 400,
     force_reprocess: options.forceReprocess === true,
     notes: "Ditambahkan dari CLI/manual run"

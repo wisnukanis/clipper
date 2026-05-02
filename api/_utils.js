@@ -246,7 +246,7 @@ export function buildVideo(input) {
     manual_range: clean(input.manual_range || ""),
     quality_profile: clean(input.quality_profile || "standard"),
     subtitle_font: clean(input.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI"),
-    subtitle_font_size: Number(input.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || 46),
+    subtitle_font_size: Number(input.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || 50),
     subtitle_margin_v: Number(input.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || 400),
     force_reprocess: input.force_reprocess === true,
     created_at: input.created_at || now,

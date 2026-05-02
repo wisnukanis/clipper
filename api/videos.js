@@ -34,7 +34,7 @@ export default async function handler(req, res) {
         quality_profile: video.quality_profile || "standard",
         deepgram_enabled: "1",
         subtitle_font: video.subtitle_font || "Segoe UI",
-        subtitle_font_size: String(video.subtitle_font_size || 46),
+        subtitle_font_size: String(video.subtitle_font_size || 50),
         subtitle_margin_v: String(video.subtitle_margin_v || 400)
       });
     }

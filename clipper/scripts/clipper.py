@@ -1598,7 +1598,7 @@ def wrap_caption(text, config):
         return ""
 
     width = int(config.get("width", 1080))
-    base_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46)
+    base_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 50)
     min_size = min(base_size, parse_int(os.environ.get("SUBTITLE_MIN_FONT_SIZE"), 34))
     max_lines = max(2, min(3, parse_int(os.environ.get("SUBTITLE_MAX_LINES"), 3)))
     margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 120)
@@ -1667,7 +1667,7 @@ def build_ass(events, config):
     width = config["width"]
     height = config["height"]
     font_family = subtitle_font_family()
-    font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46)
+    font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 50)
     margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 400)
     margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 120)
     primary_colour = os.environ.get("SUBTITLE_PRIMARY_COLOUR", "&H0030A8D6").strip() or "&H0030A8D6"

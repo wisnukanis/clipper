@@ -368,7 +368,7 @@ app.post("/api/run", async (req, res) => {
     range: body.range || "",
     qualityProfile: body.quality_profile || "standard",
     subtitleFont: body.subtitle_font || "Segoe UI",
-    subtitleFontSize: Number(body.subtitle_font_size || 46),
+    subtitleFontSize: Number(body.subtitle_font_size || 50),
     subtitleMarginV: Number(body.subtitle_margin_v || 400)
   }))
     .then((result) => {

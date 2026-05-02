@@ -19,7 +19,7 @@ const options = {
   range: argValue("--range", ""),
   qualityProfile: argValue("--quality", process.env.VIDEO_QUALITY_PROFILE || "standard"),
   subtitleFont: argValue("--subtitle-font", process.env.SUBTITLE_FONT_FAMILY || "Segoe UI"),
-  subtitleFontSize: Number(argValue("--subtitle-font-size", process.env.SUBTITLE_FONT_SIZE || "46")),
+  subtitleFontSize: Number(argValue("--subtitle-font-size", process.env.SUBTITLE_FONT_SIZE || "50")),
   subtitleMarginV: Number(argValue("--subtitle-margin-v", process.env.SUBTITLE_MARGIN_V || "400")),
   forceReprocess: hasArg("--force-reprocess")
 };

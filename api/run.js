@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       quality_profile: clean(body.quality_profile || "standard"),
       deepgram_enabled: "1",
       subtitle_font: clean(body.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI"),
-      subtitle_font_size: clean(body.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || "46"),
+      subtitle_font_size: clean(body.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || "50"),
       subtitle_margin_v: clean(body.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || "400")
     };
 
