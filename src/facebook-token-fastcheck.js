@@ -250,7 +250,6 @@ async function main() {
           mask(userAccessToken);
         }
       } catch (error) {
-        if (!pageValid) throw error;
         console.warn(`Facebook user token refresh dilewati: ${error.message}`);
       }
     }

@@ -72,6 +72,36 @@ body {
   gap: 10px;
 }
 
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: -4px 0 14px;
+}
+
+.tabBtn {
+  min-height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  padding: 0 14px;
+  color: var(--muted);
+  background: #111914;
+  font-weight: 800;
+}
+
+.tabBtn.active {
+  border-color: rgba(243, 212, 107, 0.58);
+  color: var(--gold);
+  background: #1b2118;
+}
+
+.tabPage {
+  display: none;
+}
+
+.tabPage.active {
+  display: block;
+}
+
 h1,
 h2,
 p,
@@ -108,14 +138,14 @@ h2 {
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .metric {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px;
+  padding: 10px 12px;
   background: var(--panel);
   box-shadow: 0 12px 28px var(--shadow);
 }
@@ -129,8 +159,8 @@ h2 {
 
 .metric strong {
   display: block;
-  margin-top: 5px;
-  font-size: 28px;
+  margin-top: 3px;
+  font-size: 24px;
 }
 
 .metric.green strong {
@@ -154,11 +184,30 @@ h2 {
   box-shadow: 0 14px 34px var(--shadow);
 }
 
-.progressPanel,
-.workGrid,
-.settingsPanel,
-.consolePanel {
-  margin-bottom: 16px;
+.monitorGrid,
+.actionGrid,
+.dataGrid,
+.settingsPanel {
+  margin-bottom: 12px;
+}
+
+.monitorGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.16fr) minmax(360px, 0.84fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.actionGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.dataGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 12px;
 }
 
 .sectionHead {
@@ -176,19 +225,23 @@ h2 {
   grid-template-columns: 76px minmax(0, 1fr);
   gap: 14px;
   align-items: center;
-  min-height: 92px;
-  margin-bottom: 16px;
+  min-height: 82px;
+  margin-bottom: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px;
   background: var(--panel-soft);
 }
 
+.compactHero {
+  grid-template-columns: 62px minmax(0, 1fr);
+}
+
 .hourglassWrap {
   display: grid;
   place-items: center;
-  width: 62px;
-  height: 62px;
+  width: 54px;
+  height: 54px;
   border-radius: 8px;
   border: 1px solid rgba(243, 212, 107, 0.32);
   background: #1c241d;
@@ -258,7 +311,7 @@ h2 {
 .workflowGraph {
   display: flex;
   align-items: stretch;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
   padding: 2px 2px 6px;
 }
@@ -267,11 +320,11 @@ h2 {
   position: relative;
   display: grid;
   gap: 6px;
-  min-width: 136px;
-  min-height: 94px;
+  min-width: 118px;
+  min-height: 82px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   background: #111914;
 }
 
@@ -280,7 +333,7 @@ h2 {
 }
 
 .flowNode small {
-  min-height: 30px;
+  min-height: 24px;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
@@ -371,15 +424,9 @@ h2 {
   background: rgba(224, 104, 95, 0.72);
 }
 
-.workGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(330px, 0.75fr);
-  gap: 16px;
-}
-
 form {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 label {
@@ -398,7 +445,7 @@ button {
 input,
 select {
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
   padding: 9px 11px;
@@ -427,6 +474,25 @@ input::placeholder {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.denseFields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.addFields {
+  grid-template-columns: minmax(220px, 1.8fr) repeat(3, minmax(0, 1fr));
+}
+
+.compactForm {
+  padding: 14px;
+}
+
+.inlineCheck {
+  align-content: end;
+  min-height: 58px;
 }
 
 .check {
@@ -503,8 +569,8 @@ button {
 
 .consoleOutput {
   width: 100%;
-  min-height: 240px;
-  max-height: 420px;
+  min-height: 256px;
+  max-height: 320px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -524,17 +590,26 @@ button {
 
 table {
   width: 100%;
-  min-width: 980px;
+  min-width: 760px;
   border-collapse: collapse;
+}
+
+.compactTable {
+  max-height: 288px;
+  overflow: auto;
+}
+
+.compactTable table {
+  min-width: 620px;
 }
 
 th,
 td {
   border-bottom: 1px solid var(--line);
-  padding: 10px 8px;
+  padding: 8px 7px;
   text-align: left;
   vertical-align: top;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 th {
@@ -614,9 +689,12 @@ td a {
   }
 
   .topbar,
-  .workGrid,
+  .monitorGrid,
+  .actionGrid,
+  .dataGrid,
   .metrics,
   .settingsGrid,
+  .denseFields,
   .two,
   .three {
     grid-template-columns: 1fr;

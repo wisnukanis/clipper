@@ -36,6 +36,11 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function numberEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 async function fetchJson(url, options = {}, timeoutMs = config.apiCheckTimeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -230,15 +235,30 @@ async function checkFtp(online) {
     return checkResult("FTP", true, "env lengkap");
   }
 
-  try {
-    await withFtpClient(async (client) => {
-      await client.ensureDir(config.ftp.remoteDir);
-      await client.list();
-    }, { timeoutMs: Math.min(config.ftp.stateTimeoutMs, config.apiCheckTimeoutMs) });
-    return checkResult("FTP", true, `remote siap: ${config.ftp.remoteDir}`);
-  } catch (error) {
-    return checkResult("FTP", false, error.message, true);
+  const attempts = Math.max(1, numberEnv("FTP_PRECHECK_RETRIES", 3));
+  const timeoutMs = Math.max(config.ftp.stateTimeoutMs, config.apiCheckTimeoutMs);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await withFtpClient(async (client) => {
+        await client.ensureDir(config.ftp.remoteDir);
+        await client.list();
+      }, { timeoutMs });
+      const detail = attempt > 1
+        ? `remote siap: ${config.ftp.remoteDir} (attempt ${attempt}/${attempts})`
+        : `remote siap: ${config.ftp.remoteDir}`;
+      return checkResult("FTP", true, detail);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        console.warn(`FTP precheck attempt ${attempt}/${attempts} gagal: ${error.message}`);
+        await sleep(1500 * attempt);
+      }
+    }
   }
+
+  return checkResult("FTP", false, lastError?.message || "FTP precheck gagal", true);
 }
 
 async function checkInstagram(online, required = canPublish()) {

@@ -23,222 +23,210 @@
         </div>
       </header>
 
-      <section class="metrics" id="metrics"></section>
+      <nav class="tabs" aria-label="Dashboard tabs">
+        <button class="tabBtn active" type="button" data-tab="monitor">Monitor</button>
+        <button class="tabBtn" type="button" data-tab="environment">Environment</button>
+      </nav>
 
-      <section class="panel progressPanel">
-        <div class="sectionHead">
-          <div>
-            <p class="eyebrow">Live workflow</p>
-            <h2 id="workflowTitle">Menunggu proses</h2>
-          </div>
-          <span id="workflowMeta">Belum ada proses</span>
-        </div>
-        <div class="runHero">
-          <div class="hourglassWrap" aria-hidden="true">
-            <span class="hourglass"></span>
-          </div>
-          <div class="runCopy">
-            <strong id="runStatus">Idle</strong>
-            <span id="runDetail">Siap menerima link YouTube atau menjalankan queue.</span>
-            <div class="progressTrack"><span id="progressBar"></span></div>
-          </div>
-        </div>
-        <div class="workflowGraph" id="workflowGraph"></div>
+      <section id="tab-monitor" class="tabPage active">
+        <section class="metrics" id="metrics"></section>
+
+        <section class="monitorGrid">
+          <section class="panel progressPanel">
+            <div class="sectionHead">
+              <div>
+                <p class="eyebrow">Live workflow</p>
+                <h2 id="workflowTitle">Menunggu proses</h2>
+              </div>
+              <span id="workflowMeta">Belum ada proses</span>
+            </div>
+            <div class="runHero compactHero">
+              <div class="hourglassWrap" aria-hidden="true">
+                <span class="hourglass"></span>
+              </div>
+              <div class="runCopy">
+                <strong id="runStatus">Idle</strong>
+                <span id="runDetail">Siap menerima link YouTube atau menjalankan queue.</span>
+                <div class="progressTrack"><span id="progressBar"></span></div>
+              </div>
+            </div>
+            <div class="workflowGraph" id="workflowGraph"></div>
+          </section>
+
+          <section class="panel consolePanel">
+            <div class="sectionHead compact">
+              <div>
+                <p class="eyebrow">Console</p>
+                <h2>Run Output</h2>
+              </div>
+              <span id="consoleMeta">0 log</span>
+            </div>
+            <pre id="consoleOutput" class="consoleOutput">Belum ada output.</pre>
+          </section>
+        </section>
+
+        <section class="actionGrid">
+          <form id="runForm" class="panel compactForm">
+            <div class="sectionHead compact">
+              <h2>Run Manual</h2>
+              <span>Local node</span>
+            </div>
+            <div class="denseFields">
+              <label>
+                <span>Theme</span>
+                <input name="theme" value="auto">
+              </label>
+              <label>
+                <span>URL manual opsional</span>
+                <input name="url" placeholder="Kosongkan untuk ambil dari queue">
+              </label>
+              <label>
+                <span>Range</span>
+                <input name="range" placeholder="00:01:20-00:02:05">
+              </label>
+              <label>
+                <span>Kualitas</span>
+                <select name="quality_profile">
+                  <option value="standard">Standard</option>
+                  <option value="fast">Fast</option>
+                  <option value="high">High</option>
+                  <option value="ultra">Ultra</option>
+                </select>
+              </label>
+              <label>
+                <span>Font</span>
+                <select name="subtitle_font">
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="DejaVu Serif">DejaVu Serif</option>
+                </select>
+              </label>
+              <label>
+                <span>Size</span>
+                <input name="subtitle_font_size" type="number" min="32" max="88" value="46">
+              </label>
+              <label>
+                <span>Margin</span>
+                <input name="subtitle_margin_v" type="number" min="160" max="520" value="400">
+              </label>
+              <label class="check inlineCheck">
+                <input name="publish" type="checkbox">
+                <span>Publish</span>
+              </label>
+            </div>
+            <button class="primary" type="submit">Mulai Workflow</button>
+          </form>
+
+          <form id="videoForm" class="panel compactForm">
+            <div class="sectionHead compact">
+              <h2>Tambah Link</h2>
+              <span>Queue lokal</span>
+            </div>
+            <div class="denseFields addFields">
+              <label>
+                <span>YouTube URL</span>
+                <input name="url" placeholder="https://www.youtube.com/watch?v=..." required>
+              </label>
+              <label>
+                <span>Theme</span>
+                <input name="theme" value="podcast artis">
+              </label>
+              <label>
+                <span>Target</span>
+                <input name="target_date" type="date">
+              </label>
+              <label>
+                <span>Priority</span>
+                <input name="priority" type="number" min="1" value="1">
+              </label>
+              <label>
+                <span>Range</span>
+                <input name="manual_range" placeholder="00:01:20-00:02:05">
+              </label>
+              <label>
+                <span>Kualitas</span>
+                <select name="quality_profile">
+                  <option value="standard">Standard</option>
+                  <option value="fast">Fast</option>
+                  <option value="high">High</option>
+                  <option value="ultra">Ultra</option>
+                </select>
+              </label>
+              <label>
+                <span>Notes</span>
+                <input name="notes" placeholder="Catatan internal">
+              </label>
+              <input name="subtitle_font" type="hidden" value="Georgia">
+              <input name="subtitle_font_size" type="hidden" value="46">
+              <input name="subtitle_margin_v" type="hidden" value="400">
+            </div>
+            <button class="primary" type="submit">Tambah Queue</button>
+          </form>
+        </section>
+
+        <section class="dataGrid">
+          <section class="panel">
+            <div class="sectionHead compact">
+              <h2>Queue Video</h2>
+              <span id="videoCount">0 item</span>
+            </div>
+            <div class="tableWrap compactTable">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Theme</th>
+                    <th>Target</th>
+                    <th>Kualitas</th>
+                    <th>URL</th>
+                  </tr>
+                </thead>
+                <tbody id="videoRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="sectionHead compact">
+              <h2>Jobs</h2>
+              <span id="jobCount">0 item</span>
+            </div>
+            <div class="tableWrap compactTable">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Job</th>
+                    <th>IG</th>
+                    <th>FB</th>
+                    <th>YT</th>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody id="jobRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
       </section>
 
-      <section class="workGrid">
-        <form id="videoForm" class="panel">
-          <div class="sectionHead compact">
-            <h2>Tambah Link</h2>
-            <span>Queue lokal</span>
+      <section id="tab-environment" class="tabPage">
+        <section class="panel settingsPanel">
+          <div class="sectionHead">
+            <div>
+              <p class="eyebrow">Environment</p>
+              <h2>API Key & Platform Settings</h2>
+            </div>
+            <span id="settingsMeta">Memuat .env</span>
           </div>
-          <label>
-            <span>YouTube URL</span>
-            <input name="url" placeholder="https://www.youtube.com/watch?v=..." required>
-          </label>
-          <div class="two">
-            <label>
-              <span>Theme</span>
-              <input name="theme" value="podcast artis">
-            </label>
-            <label>
-              <span>Target date</span>
-              <input name="target_date" type="date">
-            </label>
-          </div>
-          <div class="two">
-            <label>
-              <span>Priority</span>
-              <input name="priority" type="number" min="1" value="1">
-            </label>
-            <label>
-              <span>Manual range</span>
-              <input name="manual_range" placeholder="00:01:20-00:02:05">
-            </label>
-          </div>
-          <div class="three">
-            <label>
-              <span>Kualitas</span>
-              <select name="quality_profile">
-                <option value="standard">Standard 720p</option>
-                <option value="fast">Fast 480p</option>
-                <option value="high">High 1080p</option>
-                <option value="ultra">Ultra 1080p+</option>
-              </select>
-            </label>
-            <label>
-              <span>Font subtitle</span>
-              <select name="subtitle_font">
-                <option value="Georgia">Georgia Regular</option>
-                <option value="Times New Roman">Times New Roman</option>
-                <option value="DejaVu Serif">DejaVu Serif</option>
-              </select>
-            </label>
-            <label>
-              <span>Ukuran subtitle</span>
-              <input name="subtitle_font_size" type="number" min="32" max="88" value="46">
-            </label>
-          </div>
-          <label>
-            <span>Jarak subtitle dari bawah</span>
-            <input name="subtitle_margin_v" type="range" min="160" max="520" value="400">
-          </label>
-          <label>
-            <span>Notes</span>
-            <input name="notes" placeholder="Catatan internal">
-          </label>
-          <button class="primary" type="submit">Tambah ke Queue</button>
-        </form>
-
-        <form id="runForm" class="panel">
-          <div class="sectionHead compact">
-            <h2>Run Manual</h2>
-            <span>Local node</span>
-          </div>
-          <label>
-            <span>Theme</span>
-            <input name="theme" value="auto">
-          </label>
-          <label>
-            <span>URL manual opsional</span>
-            <input name="url" placeholder="Kosongkan untuk ambil dari queue">
-          </label>
-          <label>
-            <span>Range manual opsional</span>
-            <input name="range" placeholder="00:01:20-00:02:05">
-          </label>
-          <div class="two">
-            <label>
-              <span>Kualitas</span>
-              <select name="quality_profile">
-                <option value="standard">Standard</option>
-                <option value="fast">Fast</option>
-                <option value="high">High</option>
-                <option value="ultra">Ultra</option>
-              </select>
-            </label>
-            <label>
-              <span>Font subtitle</span>
-              <select name="subtitle_font">
-                <option value="Georgia">Georgia Regular</option>
-                <option value="Times New Roman">Times New Roman</option>
-                <option value="DejaVu Serif">DejaVu Serif</option>
-              </select>
-            </label>
-          </div>
-          <div class="two">
-            <label>
-              <span>Ukuran subtitle</span>
-              <input name="subtitle_font_size" type="number" min="32" max="88" value="46">
-            </label>
-            <label>
-              <span>Margin subtitle</span>
-              <input name="subtitle_margin_v" type="number" min="160" max="520" value="400">
-            </label>
-          </div>
-          <label class="check">
-            <input name="publish" type="checkbox">
-            <span>Publish jika env mengizinkan</span>
-          </label>
-          <button class="primary" type="submit">Mulai Workflow</button>
-        </form>
-      </section>
-
-      <section class="panel settingsPanel">
-        <div class="sectionHead">
-          <div>
-            <p class="eyebrow">Environment</p>
-            <h2>API Key & Platform Settings</h2>
-          </div>
-          <span id="settingsMeta">Memuat .env</span>
-        </div>
-        <form id="settingsForm">
-          <div id="settingsGrid" class="settingsGrid"></div>
-          <div class="settingsActions">
-            <button class="primary" type="submit">Simpan .env Lokal</button>
-            <span id="settingsStatus" class="statusText">Secret kosong tidak akan menimpa nilai lama.</span>
-          </div>
-        </form>
-      </section>
-
-      <section class="panel consolePanel">
-        <div class="sectionHead">
-          <div>
-            <p class="eyebrow">Console</p>
-            <h2>Run Output</h2>
-          </div>
-          <span id="consoleMeta">0 log</span>
-        </div>
-        <pre id="consoleOutput" class="consoleOutput">Belum ada output.</pre>
-      </section>
-
-      <section class="panel">
-        <div class="sectionHead">
-          <h2>Queue Video</h2>
-          <span id="videoCount">0 item</span>
-        </div>
-        <div class="tableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Theme</th>
-                <th>Target</th>
-                <th>Priority</th>
-                <th>Kualitas</th>
-                <th>Subtitle</th>
-                <th>Video ID</th>
-                <th>URL</th>
-              </tr>
-            </thead>
-            <tbody id="videoRows"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="sectionHead">
-          <h2>Jobs</h2>
-          <span id="jobCount">0 item</span>
-        </div>
-        <div class="tableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Job ID</th>
-                <th>Theme</th>
-                <th>Video</th>
-                <th>Instagram</th>
-                <th>Facebook</th>
-                <th>YouTube</th>
-                <th>FTP</th>
-                <th>Error</th>
-              </tr>
-            </thead>
-            <tbody id="jobRows"></tbody>
-          </table>
-        </div>
+          <form id="settingsForm">
+            <div id="settingsGrid" class="settingsGrid"></div>
+            <div class="settingsActions">
+              <button class="primary" type="submit">Simpan .env Lokal</button>
+              <span id="settingsStatus" class="statusText">Secret kosong tidak akan menimpa nilai lama.</span>
+            </div>
+          </form>
+        </section>
       </section>
     </main>
     <script src="/app.js" type="module"></script>

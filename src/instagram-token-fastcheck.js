@@ -12,6 +12,10 @@ loadEnvFile(path.join(rootDir, ".env"));
 const graphApiVersion = clean(process.env.GRAPH_API_VERSION || "v25.0");
 const igUserId = clean(process.env.INSTAGRAM_IG_USER_ID);
 let accessToken = process.env.INSTAGRAM_ACCESS_TOKEN || "";
+const fallbackTokenCandidates = [
+  ["facebook_user_token", process.env.FACEBOOK_USER_ACCESS_TOKEN || ""],
+  ["facebook_page_token", process.env.FACEBOOK_PAGE_ACCESS_TOKEN || ""]
+].filter(([, token]) => clean(token));
 const appId = clean(process.env.META_APP_ID);
 const appSecret = process.env.META_APP_SECRET || "";
 const autoRefresh = boolEnv("AUTO_REFRESH_INSTAGRAM_TOKEN", true);
@@ -179,17 +183,54 @@ function isExpiredTokenError(error) {
   return error?.apiSubcode === 463 || /expired/i.test(String(error?.message || ""));
 }
 
+function isTokenValidationError(error) {
+  return error?.apiCode === 190 || isExpiredTokenError(error);
+}
+
+async function chooseFallbackToken(previousError) {
+  if (!isTokenValidationError(previousError)) throw previousError;
+
+  for (const [label, token] of fallbackTokenCandidates) {
+    if (!token || token === accessToken) continue;
+
+    try {
+      mask(token);
+      await validateToken(token);
+      console.warn(`IG token utama gagal; memakai fallback ${label} untuk run ini.`);
+      return { token, label };
+    } catch (error) {
+      console.warn(`IG fallback ${label} tidak valid: ${error.message}`);
+    }
+  }
+
+  throw previousError;
+}
+
 function printStatus(status) {
   console.log(JSON.stringify(status, null, 2));
 }
 
 async function main() {
-  if (!igUserId || !accessToken) {
+  if (!igUserId || (!accessToken && !fallbackTokenCandidates.length)) {
     throw new Error("INSTAGRAM_IG_USER_ID dan INSTAGRAM_ACCESS_TOKEN wajib diisi.");
   }
 
-  mask(accessToken);
-  await validateToken(accessToken);
+  if (accessToken) mask(accessToken);
+
+  let replacedFromFallback = false;
+  if (!accessToken && fallbackTokenCandidates.length) {
+    accessToken = fallbackTokenCandidates[0][1];
+    replacedFromFallback = true;
+    mask(accessToken);
+  }
+
+  try {
+    await validateToken(accessToken);
+  } catch (error) {
+    const fallback = await chooseFallbackToken(error);
+    accessToken = fallback.token;
+    replacedFromFallback = true;
+  }
 
   let debug = null;
   try {
@@ -204,7 +245,7 @@ async function main() {
     (debug?.expiresAt && daysLeft <= refreshBeforeDays)
   );
 
-  let refreshed = false;
+  let refreshed = replacedFromFallback;
   let localFilesUpdated = 0;
   let expiresAt = debug?.expiresAt || null;
 

@@ -79,6 +79,7 @@ jobs:
       DEFAULT_THEME: auto
 
       GRAPH_API_VERSION: v25.0
+      API_CHECK_TIMEOUT_SECONDS: ${{ secrets.API_CHECK_TIMEOUT_SECONDS || '90' }}
 
       INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
       INSTAGRAM_REEL_UPLOAD_METHOD: ${{ secrets.INSTAGRAM_REEL_UPLOAD_METHOD || 'resumable' }}
@@ -100,7 +101,8 @@ jobs:
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
       FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
       FTP_TIMEOUT_SECONDS: ${{ secrets.FTP_TIMEOUT_SECONDS || '300' }}
-      FTP_STATE_TIMEOUT_SECONDS: ${{ secrets.FTP_STATE_TIMEOUT_SECONDS || '45' }}
+      FTP_STATE_TIMEOUT_SECONDS: ${{ secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
+      FTP_PRECHECK_RETRIES: ${{ secrets.FTP_PRECHECK_RETRIES || '3' }}
 
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
