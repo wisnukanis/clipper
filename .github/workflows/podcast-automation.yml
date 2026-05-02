@@ -30,7 +30,7 @@ on:
       subtitle_font:
         description: Subtitle font family
         required: false
-        default: "Georgia"
+        default: "Segoe UI"
       subtitle_font_size:
         description: Subtitle font size
         required: false
@@ -165,7 +165,7 @@ jobs:
       DOWNLOAD_COMPRESS_CRF: "30"
       FINAL_RENDER_CRF: "27"
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
-      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Georgia' }}
+      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Segoe UI' }}
       SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Times New Roman,DejaVu Serif' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}

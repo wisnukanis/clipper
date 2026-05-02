@@ -245,7 +245,7 @@ async function createManualSelection(options) {
     priority: 0,
     manual_range: options.range || "",
     quality_profile: options.qualityProfile || "standard",
-    subtitle_font: options.subtitleFont || "Georgia",
+    subtitle_font: options.subtitleFont || "Segoe UI",
     subtitle_font_size: options.subtitleFontSize || 46,
     subtitle_margin_v: options.subtitleMarginV || 400,
     force_reprocess: options.forceReprocess === true,

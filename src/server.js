@@ -207,7 +207,7 @@ app.get("/api/state", async (_req, res) => {
       facebookEnabled: config.facebook.enabled,
       youtubeEnabled: config.youtube.enabled,
       tiktokEnabled: config.tiktok.enabled,
-      subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Georgia",
+      subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI",
       subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "400"
     },
     activeRun,
@@ -348,7 +348,7 @@ app.post("/api/run", async (req, res) => {
     url: body.url || "",
     range: body.range || "",
     qualityProfile: body.quality_profile || "standard",
-    subtitleFont: body.subtitle_font || "Georgia",
+    subtitleFont: body.subtitle_font || "Segoe UI",
     subtitleFontSize: Number(body.subtitle_font_size || 46),
     subtitleMarginV: Number(body.subtitle_margin_v || 400)
   }))

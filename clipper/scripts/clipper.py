@@ -1701,7 +1701,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 def subtitle_font_family():
-    font_family = os.environ.get("SUBTITLE_FONT_FAMILY", "Georgia").strip() or "Georgia"
+    font_family = os.environ.get("SUBTITLE_FONT_FAMILY", "Segoe UI").strip() or "Segoe UI"
     requested = [
         font_family.split(",")[0].strip(),
         *parse_keys(os.environ.get("SUBTITLE_FALLBACK_FONTS", "Times New Roman,DejaVu Serif")),
@@ -1724,7 +1724,7 @@ def subtitle_font_family():
     except (OSError, subprocess.SubprocessError):
         pass
 
-    return requested[0] if requested else "Georgia"
+    return requested[0] if requested else "Segoe UI"
 
 
 def download_clip_source(url, job_id, clip, index, config):
