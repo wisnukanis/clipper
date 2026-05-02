@@ -63,7 +63,7 @@ export async function addVideo(input) {
     quality_profile: input.quality_profile || "standard",
     subtitle_font: input.subtitle_font || "Georgia",
     subtitle_font_size: Number(input.subtitle_font_size || 46),
-    subtitle_margin_v: Number(input.subtitle_margin_v || 300),
+    subtitle_margin_v: Number(input.subtitle_margin_v || 400),
     force_reprocess: input.force_reprocess === true,
     created_at: input.created_at || now,
     updated_at: now
@@ -140,7 +140,7 @@ export function normalizeVideo(video) {
     quality_profile: video.quality_profile || "standard",
     subtitle_font: video.subtitle_font || "Georgia",
     subtitle_font_size: Number(video.subtitle_font_size || 46),
-    subtitle_margin_v: Number(video.subtitle_margin_v || 300),
+    subtitle_margin_v: Number(video.subtitle_margin_v || 400),
     force_reprocess: video.force_reprocess === true,
     active: video.active !== false,
     status: video.status || "queued"

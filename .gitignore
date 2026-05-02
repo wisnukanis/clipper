@@ -4,6 +4,7 @@ yarn-debug.log*
 yarn-error.log*
 dashboard.log
 dashboard.err.log
+dashboard*.log
 
 data/videos.json
 data/jobs.json

@@ -43,105 +43,119 @@ function encodePathSegment(value) {
     .join("/");
 }
 
-const geminiApiKeys = listEnv("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS");
-const deepgramApiKeys = cleanText(process.env.DEEPGRAM_API_KEYS)
-  ? listEnv("DEEPGRAM_API_KEYS")
-  : listEnv("DEEPGRAM_API_KEY");
+function buildConfig() {
+  const geminiApiKeys = listEnv("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS");
+  const deepgramApiKeys = cleanText(process.env.DEEPGRAM_API_KEYS)
+    ? listEnv("DEEPGRAM_API_KEYS")
+    : listEnv("DEEPGRAM_API_KEY");
 
-export const config = {
-  rootDir,
-  srcDir: path.join(rootDir, "src"),
-  publicDir: path.join(rootDir, "public"),
-  dataDir: path.join(rootDir, "data"),
-  generatedDir: path.join(rootDir, "generated"),
-  thumbnailDir: path.join(rootDir, "generated", "thumbnails"),
-  metadataDir: path.join(rootDir, "generated", "metadata"),
-  logDir: path.join(rootDir, "generated", "logs"),
-  localPort: numberEnv("LOCAL_PORT", 8788),
-  timezone: cleanText(process.env.APP_TIMEZONE || "Asia/Jakarta"),
-  publicBaseUrl: cleanBaseUrl(process.env.PUBLIC_BASE_URL),
-  uploadDriver: cleanText(process.env.UPLOAD_DRIVER || "local").toLowerCase(),
-  dryRun: boolEnv("DRY_RUN", true),
-  autoPublish: boolEnv("AUTO_PUBLISH", false),
-  cleanupLocalAfterPublish: boolEnv("CLEANUP_LOCAL_AFTER_PUBLISH", false),
-  defaultTheme: cleanText(process.env.DEFAULT_THEME || "auto"),
-  postCron: cleanText(process.env.POST_CRON || "7 5 * * *"),
-  dashboardPin: cleanText(process.env.AUTO_DASHBOARD_PIN),
-  dashboardAllowRemote: boolEnv("AUTO_DASHBOARD_ALLOW_REMOTE", false),
-  graphApiVersion: cleanText(process.env.GRAPH_API_VERSION || "v25.0"),
-  apiCheckTimeoutMs: numberEnv("API_CHECK_TIMEOUT_SECONDS", 30) * 1000,
-  instagram: {
-    enabled: boolEnv("INSTAGRAM_UPLOAD_ENABLED", true),
-    igUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
-    accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || "",
-    maxUploadBytes: numberEnv("INSTAGRAM_MAX_UPLOAD_BYTES", 7800000)
-  },
-  facebook: {
-    enabled: boolEnv("FACEBOOK_UPLOAD_ENABLED", false),
-    pageId: cleanText(process.env.FACEBOOK_PAGE_ID),
-    accessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN || "",
-    userAccessToken: process.env.FACEBOOK_USER_ACCESS_TOKEN || "",
-    autoRefreshToken: boolEnv("AUTO_REFRESH_FACEBOOK_TOKEN", true),
-    mediaType: cleanText(process.env.FACEBOOK_MEDIA_TYPE || "reel").toLowerCase(),
-    videoState: cleanText(process.env.FACEBOOK_VIDEO_STATE || "PUBLISHED"),
-    titlePrefix: cleanText(process.env.FACEBOOK_TITLE_PREFIX)
-  },
-  meta: {
-    appId: cleanText(process.env.META_APP_ID),
-    appSecret: process.env.META_APP_SECRET || "",
-    autoRefreshInstagramToken: boolEnv("AUTO_REFRESH_INSTAGRAM_TOKEN", true),
-    tokenRefreshBeforeDays: numberEnv("TOKEN_REFRESH_BEFORE_DAYS", 10)
-  },
-  youtube: {
-    enabled: boolEnv("YOUTUBE_UPLOAD_ENABLED", false),
-    clientId: cleanText(process.env.YOUTUBE_CLIENT_ID),
-    clientSecret: process.env.YOUTUBE_CLIENT_SECRET || "",
-    refreshToken: process.env.YOUTUBE_REFRESH_TOKEN || "",
-    privacyStatus: cleanText(process.env.YOUTUBE_PRIVACY_STATUS || "public"),
-    categoryId: cleanText(process.env.YOUTUBE_CATEGORY_ID || "22"),
-    tags: listEnv("YOUTUBE_TAGS"),
-    titlePrefix: cleanText(process.env.YOUTUBE_TITLE_PREFIX),
-    descriptionFooter: cleanText(process.env.YOUTUBE_DESCRIPTION_FOOTER)
-  },
-  instagramIgUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
-  instagramAccessToken: cleanText(process.env.INSTAGRAM_ACCESS_TOKEN),
-  gemini: {
-    apiKey: geminiApiKeys[0] || "",
-    apiKeys: geminiApiKeys,
-    model: cleanText(process.env.GEMINI_MODEL || "gemini-flash-latest"),
-    temperature: numberEnv("GEMINI_TEMPERATURE", 0.75)
-  },
-  clod: {
-    apiKey: process.env.CLOD_API_KEY || "",
-    baseUrl: cleanBaseUrl(process.env.CLOD_BASE_URL || "https://api.clod.io/v1"),
-    model: cleanText(process.env.CLOD_MODEL || "DeepSeek V3"),
-    temperature: numberEnv("CLOD_TEMPERATURE", 0.45)
-  },
-  deepgram: {
-    enabled: boolEnv("DEEPGRAM_ENABLED", true),
-    apiKey: deepgramApiKeys[0] || "",
-    apiKeys: deepgramApiKeys,
-    model: cleanText(process.env.DEEPGRAM_MODEL || "nova-3"),
-    language: cleanText(process.env.DEEPGRAM_LANGUAGE || process.env.VIDEO_LANGUAGE || "id"),
-    timeoutSeconds: numberEnv("DEEPGRAM_TIMEOUT_SECONDS", 900)
-  },
-  ftp: {
-    host: cleanText(process.env.FTP_HOST),
-    port: numberEnv("FTP_PORT", 21),
-    user: cleanText(process.env.FTP_USER),
-    password: process.env.FTP_PASSWORD || "",
-    remoteDir: cleanText(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated"),
-    timeoutMs: numberEnv("FTP_TIMEOUT_SECONDS", 300) * 1000,
-    stateTimeoutMs: numberEnv("FTP_STATE_TIMEOUT_SECONDS", 45) * 1000
-  },
-  clipper: {
-    rootDir: path.resolve(rootDir, cleanText(process.env.CLIPPER_ROOT || "clipper")),
-    pythonCommand: cleanText(process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3")),
-    clipCount: numberEnv("CLIP_COUNT", 1),
-    minClipSeconds: numberEnv("MIN_CLIP_SECONDS", 40),
-    maxClipSeconds: numberEnv("MAX_CLIP_SECONDS", 60)
+  return {
+    rootDir,
+    srcDir: path.join(rootDir, "src"),
+    publicDir: path.join(rootDir, "public"),
+    dataDir: path.join(rootDir, "data"),
+    generatedDir: path.join(rootDir, "generated"),
+    thumbnailDir: path.join(rootDir, "generated", "thumbnails"),
+    metadataDir: path.join(rootDir, "generated", "metadata"),
+    logDir: path.join(rootDir, "generated", "logs"),
+    localPort: numberEnv("LOCAL_PORT", 8788),
+    timezone: cleanText(process.env.APP_TIMEZONE || "Asia/Jakarta"),
+    publicBaseUrl: cleanBaseUrl(process.env.PUBLIC_BASE_URL),
+    uploadDriver: cleanText(process.env.UPLOAD_DRIVER || "local").toLowerCase(),
+    dryRun: boolEnv("DRY_RUN", true),
+    autoPublish: boolEnv("AUTO_PUBLISH", false),
+    cleanupLocalAfterPublish: boolEnv("CLEANUP_LOCAL_AFTER_PUBLISH", false),
+    defaultTheme: cleanText(process.env.DEFAULT_THEME || "auto"),
+    postCron: cleanText(process.env.POST_CRON || "7 5 * * *"),
+    dashboardPin: cleanText(process.env.AUTO_DASHBOARD_PIN),
+    dashboardAllowRemote: boolEnv("AUTO_DASHBOARD_ALLOW_REMOTE", false),
+    graphApiVersion: cleanText(process.env.GRAPH_API_VERSION || "v25.0"),
+    apiCheckTimeoutMs: numberEnv("API_CHECK_TIMEOUT_SECONDS", 30) * 1000,
+    instagram: {
+      enabled: boolEnv("INSTAGRAM_UPLOAD_ENABLED", true),
+      igUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
+      accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || "",
+      maxUploadBytes: numberEnv("INSTAGRAM_MAX_UPLOAD_BYTES", 7800000)
+    },
+    facebook: {
+      enabled: boolEnv("FACEBOOK_UPLOAD_ENABLED", true),
+      pageId: cleanText(process.env.FACEBOOK_PAGE_ID),
+      accessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN || "",
+      userAccessToken: process.env.FACEBOOK_USER_ACCESS_TOKEN || "",
+      autoRefreshToken: boolEnv("AUTO_REFRESH_FACEBOOK_TOKEN", true),
+      mediaType: cleanText(process.env.FACEBOOK_MEDIA_TYPE || "reel").toLowerCase(),
+      videoState: cleanText(process.env.FACEBOOK_VIDEO_STATE || "PUBLISHED"),
+      titlePrefix: cleanText(process.env.FACEBOOK_TITLE_PREFIX)
+    },
+    meta: {
+      appId: cleanText(process.env.META_APP_ID),
+      appSecret: process.env.META_APP_SECRET || "",
+      autoRefreshInstagramToken: boolEnv("AUTO_REFRESH_INSTAGRAM_TOKEN", true),
+      tokenRefreshBeforeDays: numberEnv("TOKEN_REFRESH_BEFORE_DAYS", 10)
+    },
+    youtube: {
+      enabled: boolEnv("YOUTUBE_UPLOAD_ENABLED", false),
+      clientId: cleanText(process.env.YOUTUBE_CLIENT_ID),
+      clientSecret: process.env.YOUTUBE_CLIENT_SECRET || "",
+      refreshToken: process.env.YOUTUBE_REFRESH_TOKEN || "",
+      privacyStatus: cleanText(process.env.YOUTUBE_PRIVACY_STATUS || "public"),
+      categoryId: cleanText(process.env.YOUTUBE_CATEGORY_ID || "22"),
+      tags: listEnv("YOUTUBE_TAGS"),
+      titlePrefix: cleanText(process.env.YOUTUBE_TITLE_PREFIX),
+      descriptionFooter: cleanText(process.env.YOUTUBE_DESCRIPTION_FOOTER)
+    },
+    instagramIgUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
+    instagramAccessToken: cleanText(process.env.INSTAGRAM_ACCESS_TOKEN),
+    gemini: {
+      apiKey: geminiApiKeys[0] || "",
+      apiKeys: geminiApiKeys,
+      model: cleanText(process.env.GEMINI_MODEL || "gemini-flash-latest"),
+      temperature: numberEnv("GEMINI_TEMPERATURE", 0.75)
+    },
+    clod: {
+      apiKey: process.env.CLOD_API_KEY || "",
+      baseUrl: cleanBaseUrl(process.env.CLOD_BASE_URL || "https://api.clod.io/v1"),
+      model: cleanText(process.env.CLOD_MODEL || "DeepSeek V3"),
+      temperature: numberEnv("CLOD_TEMPERATURE", 0.45)
+    },
+    deepgram: {
+      enabled: boolEnv("DEEPGRAM_ENABLED", true),
+      apiKey: deepgramApiKeys[0] || "",
+      apiKeys: deepgramApiKeys,
+      model: cleanText(process.env.DEEPGRAM_MODEL || "nova-3"),
+      language: cleanText(process.env.DEEPGRAM_LANGUAGE || process.env.VIDEO_LANGUAGE || "id"),
+      timeoutSeconds: numberEnv("DEEPGRAM_TIMEOUT_SECONDS", 900)
+    },
+    ftp: {
+      host: cleanText(process.env.FTP_HOST),
+      port: numberEnv("FTP_PORT", 21),
+      user: cleanText(process.env.FTP_USER),
+      password: process.env.FTP_PASSWORD || "",
+      remoteDir: cleanText(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated"),
+      timeoutMs: numberEnv("FTP_TIMEOUT_SECONDS", 300) * 1000,
+      stateTimeoutMs: numberEnv("FTP_STATE_TIMEOUT_SECONDS", 45) * 1000
+    },
+    clipper: {
+      rootDir: path.resolve(rootDir, cleanText(process.env.CLIPPER_ROOT || "clipper")),
+      pythonCommand: cleanText(process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3")),
+      clipCount: numberEnv("CLIP_COUNT", 1),
+      minClipSeconds: numberEnv("MIN_CLIP_SECONDS", 40),
+      maxClipSeconds: numberEnv("MAX_CLIP_SECONDS", 60)
+    }
+  };
+}
+
+export const config = buildConfig();
+
+export function reloadConfigFromEnv() {
+  dotenv.config({ override: true });
+  const next = buildConfig();
+  for (const key of Object.keys(config)) {
+    delete config[key];
   }
-};
+  Object.assign(config, next);
+  return config;
+}
 
 export function shouldUploadToFtp() {
   return config.uploadDriver === "ftp";

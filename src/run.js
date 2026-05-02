@@ -20,7 +20,7 @@ const options = {
   qualityProfile: argValue("--quality", process.env.VIDEO_QUALITY_PROFILE || "standard"),
   subtitleFont: argValue("--subtitle-font", process.env.SUBTITLE_FONT_FAMILY || "Georgia"),
   subtitleFontSize: Number(argValue("--subtitle-font-size", process.env.SUBTITLE_FONT_SIZE || "46")),
-  subtitleMarginV: Number(argValue("--subtitle-margin-v", process.env.SUBTITLE_MARGIN_V || "300")),
+  subtitleMarginV: Number(argValue("--subtitle-margin-v", process.env.SUBTITLE_MARGIN_V || "400")),
   forceReprocess: hasArg("--force-reprocess")
 };
 

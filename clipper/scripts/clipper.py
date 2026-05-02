@@ -1640,9 +1640,9 @@ def build_ass(events, config):
     height = config["height"]
     font_family = subtitle_font_family()
     font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46)
-    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 300)
+    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 400)
     margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 120)
-    primary_colour = os.environ.get("SUBTITLE_PRIMARY_COLOUR", "&H00E8F1F5").strip() or "&H00E8F1F5"
+    primary_colour = os.environ.get("SUBTITLE_PRIMARY_COLOUR", "&H006BD4F3").strip() or "&H006BD4F3"
     outline_colour = os.environ.get("SUBTITLE_OUTLINE_COLOUR", "&H66000000").strip() or "&H66000000"
     back_colour = os.environ.get("SUBTITLE_SHADOW_COLOUR", "&H99000000").strip() or "&H99000000"
     outline = min(1.0, max(0.0, parse_float(os.environ.get("SUBTITLE_OUTLINE"), 1.0)))

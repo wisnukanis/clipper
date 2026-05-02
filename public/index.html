@@ -3,34 +3,55 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Podcast Clipper Automation</title>
+    <title>Clipper Emsa Pro Dashboard</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
-        <div>
-          <h1>Podcast Clipper Automation</h1>
-          <p id="configLine">Loading...</p>
+        <div class="brand">
+          <span class="brandMark">CE</span>
+          <div>
+            <p class="eyebrow">Clipper Emsa Pro</p>
+            <h1>Automation Control</h1>
+            <p id="configLine" class="muted">Loading...</p>
+          </div>
         </div>
         <div class="toolbar">
-          <button id="refreshBtn" class="iconBtn" type="button" title="Refresh">Refresh</button>
+          <button id="preflightBtn" class="ghostBtn" type="button">Preflight</button>
+          <button id="refreshBtn" class="ghostBtn" type="button">Refresh</button>
         </div>
       </header>
 
       <section class="metrics" id="metrics"></section>
 
-      <section class="panel workflowPanel">
+      <section class="panel progressPanel">
         <div class="sectionHead">
-          <h2>Workflow</h2>
+          <div>
+            <p class="eyebrow">Live workflow</p>
+            <h2 id="workflowTitle">Menunggu proses</h2>
+          </div>
           <span id="workflowMeta">Belum ada proses</span>
+        </div>
+        <div class="runHero">
+          <div class="hourglassWrap" aria-hidden="true">
+            <span class="hourglass"></span>
+          </div>
+          <div class="runCopy">
+            <strong id="runStatus">Idle</strong>
+            <span id="runDetail">Siap menerima link YouTube atau menjalankan queue.</span>
+            <div class="progressTrack"><span id="progressBar"></span></div>
+          </div>
         </div>
         <div class="workflowGraph" id="workflowGraph"></div>
       </section>
 
-      <section class="grid">
+      <section class="workGrid">
         <form id="videoForm" class="panel">
-          <h2>Tambah Link</h2>
+          <div class="sectionHead compact">
+            <h2>Tambah Link</h2>
+            <span>Queue lokal</span>
+          </div>
           <label>
             <span>YouTube URL</span>
             <input name="url" placeholder="https://www.youtube.com/watch?v=..." required>
@@ -68,21 +89,19 @@
             <label>
               <span>Font subtitle</span>
               <select name="subtitle_font">
-                <option value="Segoe UI Semibold">Segoe UI Semibold</option>
-                <option value="Arial">Arial</option>
-                <option value="Montserrat SemiBold">Montserrat SemiBold</option>
-                <option value="Poppins SemiBold">Poppins SemiBold</option>
-                <option value="Roboto Condensed Bold">Roboto Condensed Bold</option>
+                <option value="Georgia">Georgia Regular</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="DejaVu Serif">DejaVu Serif</option>
               </select>
             </label>
             <label>
               <span>Ukuran subtitle</span>
-              <input name="subtitle_font_size" type="number" min="32" max="88" value="48">
+              <input name="subtitle_font_size" type="number" min="32" max="88" value="46">
             </label>
           </div>
           <label>
             <span>Jarak subtitle dari bawah</span>
-            <input name="subtitle_margin_v" type="range" min="120" max="420" value="240">
+            <input name="subtitle_margin_v" type="range" min="160" max="520" value="400">
           </label>
           <label>
             <span>Notes</span>
@@ -92,7 +111,10 @@
         </form>
 
         <form id="runForm" class="panel">
-          <h2>Run Workflow</h2>
+          <div class="sectionHead compact">
+            <h2>Run Manual</h2>
+            <span>Local node</span>
+          </div>
           <label>
             <span>Theme</span>
             <input name="theme" value="auto">
@@ -118,30 +140,56 @@
             <label>
               <span>Font subtitle</span>
               <select name="subtitle_font">
-                <option value="Segoe UI Semibold">Segoe UI Semibold</option>
-                <option value="Arial">Arial</option>
-                <option value="Montserrat SemiBold">Montserrat</option>
-                <option value="Poppins SemiBold">Poppins</option>
+                <option value="Georgia">Georgia Regular</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="DejaVu Serif">DejaVu Serif</option>
               </select>
             </label>
           </div>
           <div class="two">
             <label>
               <span>Ukuran subtitle</span>
-              <input name="subtitle_font_size" type="number" min="32" max="88" value="48">
+              <input name="subtitle_font_size" type="number" min="32" max="88" value="46">
             </label>
             <label>
               <span>Margin subtitle</span>
-              <input name="subtitle_margin_v" type="number" min="120" max="420" value="240">
+              <input name="subtitle_margin_v" type="number" min="160" max="520" value="400">
             </label>
           </div>
           <label class="check">
             <input name="publish" type="checkbox">
             <span>Publish jika env mengizinkan</span>
           </label>
-          <button class="primary" type="submit">Mulai</button>
-          <div id="runStatus" class="status">Idle</div>
+          <button class="primary" type="submit">Mulai Workflow</button>
         </form>
+      </section>
+
+      <section class="panel settingsPanel">
+        <div class="sectionHead">
+          <div>
+            <p class="eyebrow">Environment</p>
+            <h2>API Key & Platform Settings</h2>
+          </div>
+          <span id="settingsMeta">Memuat .env</span>
+        </div>
+        <form id="settingsForm">
+          <div id="settingsGrid" class="settingsGrid"></div>
+          <div class="settingsActions">
+            <button class="primary" type="submit">Simpan .env Lokal</button>
+            <span id="settingsStatus" class="statusText">Secret kosong tidak akan menimpa nilai lama.</span>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel consolePanel">
+        <div class="sectionHead">
+          <div>
+            <p class="eyebrow">Console</p>
+            <h2>Run Output</h2>
+          </div>
+          <span id="consoleMeta">0 log</span>
+        </div>
+        <pre id="consoleOutput" class="consoleOutput">Belum ada output.</pre>
       </section>
 
       <section class="panel">
@@ -182,6 +230,7 @@
                 <th>Theme</th>
                 <th>Video</th>
                 <th>Instagram</th>
+                <th>Facebook</th>
                 <th>YouTube</th>
                 <th>FTP</th>
                 <th>Error</th>

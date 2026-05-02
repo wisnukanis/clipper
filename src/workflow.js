@@ -240,7 +240,7 @@ async function createManualSelection(options) {
     quality_profile: options.qualityProfile || "standard",
     subtitle_font: options.subtitleFont || "Georgia",
     subtitle_font_size: options.subtitleFontSize || 46,
-    subtitle_margin_v: options.subtitleMarginV || 300,
+    subtitle_margin_v: options.subtitleMarginV || 400,
     force_reprocess: options.forceReprocess === true,
     notes: "Ditambahkan dari CLI/manual run"
   });

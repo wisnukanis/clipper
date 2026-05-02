@@ -38,7 +38,7 @@ on:
       subtitle_margin_v:
         description: Subtitle bottom margin
         required: false
-        default: "300"
+        default: "400"
 
   schedule:
     # GitHub schedule uses UTC.
@@ -83,7 +83,7 @@ jobs:
       INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
       INSTAGRAM_REEL_UPLOAD_METHOD: ${{ secrets.INSTAGRAM_REEL_UPLOAD_METHOD || 'resumable' }}
       INSTAGRAM_MAX_UPLOAD_BYTES: ${{ secrets.INSTAGRAM_MAX_UPLOAD_BYTES || '7800000' }}
-      FACEBOOK_UPLOAD_ENABLED: ${{ secrets.FACEBOOK_UPLOAD_ENABLED || 'false' }}
+      FACEBOOK_UPLOAD_ENABLED: ${{ secrets.FACEBOOK_UPLOAD_ENABLED || 'true' }}
       FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
       FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
       FACEBOOK_USER_ACCESS_TOKEN: ${{ secrets.FACEBOOK_USER_ACCESS_TOKEN }}
@@ -152,10 +152,10 @@ jobs:
       SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Times New Roman,DejaVu Serif' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
-      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '300' }}
+      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '400' }}
       SUBTITLE_MARGIN_H: ${{ secrets.SUBTITLE_MARGIN_H || '120' }}
       SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '3' }}
-      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H00E8F1F5' }}
+      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H006BD4F3' }}
       SUBTITLE_OUTLINE_COLOUR: ${{ secrets.SUBTITLE_OUTLINE_COLOUR || '&H66000000' }}
       SUBTITLE_SHADOW_COLOUR: ${{ secrets.SUBTITLE_SHADOW_COLOUR || '&H99000000' }}
       SUBTITLE_OUTLINE: ${{ secrets.SUBTITLE_OUTLINE || '1' }}
@@ -267,21 +267,57 @@ jobs:
 
           exit "$missing"
 
-      - name: Refresh Instagram token if possible
-        if: ${{ env.INSTAGRAM_UPLOAD_ENABLED == 'true' }}
+      - name: Enable social uploads when credentials exist
         shell: bash
         run: |
+          normalize_bool() {
+            case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+              1|true|yes|on) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          if normalize_bool "$INSTAGRAM_UPLOAD_ENABLED"; then
+            echo "INSTAGRAM_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+          else
+            if [ -n "$INSTAGRAM_IG_USER_ID" ] && [ -n "$INSTAGRAM_ACCESS_TOKEN" ]; then
+              echo "::notice::Instagram credential tersedia; INSTAGRAM_UPLOAD_ENABLED diaktifkan untuk run ini."
+              echo "INSTAGRAM_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            fi
+          fi
+
+          if normalize_bool "$FACEBOOK_UPLOAD_ENABLED"; then
+            echo "FACEBOOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+          else
+            if [ -n "$FACEBOOK_PAGE_ID" ] && { [ -n "$FACEBOOK_PAGE_ACCESS_TOKEN" ] || [ -n "$FACEBOOK_USER_ACCESS_TOKEN" ]; }; then
+              echo "::notice::Facebook credential tersedia; FACEBOOK_UPLOAD_ENABLED diaktifkan untuk run ini."
+              echo "FACEBOOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            fi
+          fi
+
+      - name: Refresh Instagram token if possible
+        shell: bash
+        run: |
+          if [ "$INSTAGRAM_UPLOAD_ENABLED" != "true" ]; then
+            echo "Instagram upload disabled."
+            exit 0
+          fi
+
           if ! node src/instagram-token-fastcheck.js --github-env; then
             echo "::warning::Instagram token check/refresh gagal. Instagram dinonaktifkan untuk run ini; workflow tetap fokus platform valid."
             echo "INSTAGRAM_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
           fi
 
       - name: Persist refreshed Instagram token secret
-        if: ${{ env.INSTAGRAM_UPLOAD_ENABLED == 'true' }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
         run: |
+          if [ "$INSTAGRAM_UPLOAD_ENABLED" != "true" ]; then
+            echo "Instagram upload disabled; skip secret persist."
+            exit 0
+          fi
+
           if [ "${INSTAGRAM_TOKEN_REFRESHED:-false}" != "true" ]; then
             echo "Instagram token secret unchanged."
             exit 0
@@ -296,20 +332,28 @@ jobs:
           echo "Instagram token GitHub Secret updated."
 
       - name: Refresh Facebook token if possible
-        if: ${{ env.FACEBOOK_UPLOAD_ENABLED == 'true' }}
         shell: bash
         run: |
+          if [ "$FACEBOOK_UPLOAD_ENABLED" != "true" ]; then
+            echo "Facebook upload disabled."
+            exit 0
+          fi
+
           if ! node src/facebook-token-fastcheck.js --github-env; then
             echo "::warning::Facebook token check/refresh gagal. Facebook dinonaktifkan untuk run ini; workflow tetap fokus platform valid."
             echo "FACEBOOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
           fi
 
       - name: Persist refreshed Facebook token secret
-        if: ${{ env.FACEBOOK_UPLOAD_ENABLED == 'true' }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
         run: |
+          if [ "$FACEBOOK_UPLOAD_ENABLED" != "true" ]; then
+            echo "Facebook upload disabled; skip secret persist."
+            exit 0
+          fi
+
           if [ "${FACEBOOK_TOKEN_REFRESHED:-false}" != "true" ] && [ "${FACEBOOK_USER_TOKEN_REFRESHED:-false}" != "true" ]; then
             echo "Facebook token secrets unchanged."
             exit 0
