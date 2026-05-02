@@ -172,7 +172,7 @@ jobs:
       FINAL_RENDER_CRF: "27"
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Segoe UI' }}
-      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Times New Roman,DejaVu Serif' }}
+      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik,DejaVu Sans' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '50' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
       SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '400' }}
@@ -436,6 +436,24 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
+
+      - name: Install Selawik (Segoe UI metric clone)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.local/share/fonts/selawik
+          base="https://github.com/microsoft/Selawik/raw/master/fonts/ttf"
+          for face in selawk selawkb selawkl selawksb selawksl
+          do
+            url="${base}/${face}.ttf"
+            if curl -fsSL "$url" -o "$HOME/.local/share/fonts/selawik/${face}.ttf"; then
+              echo "Downloaded $face"
+            else
+              echo "::warning::Selawik face $face download failed; continuing"
+            fi
+          done
+          fc-cache -f
+          fc-list | grep -i selawik || echo "::warning::Selawik not registered, will fall back"
 
       - name: Restore automation state
         uses: actions/cache@v4

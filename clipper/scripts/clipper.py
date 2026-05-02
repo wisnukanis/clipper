@@ -1704,7 +1704,7 @@ def subtitle_font_family():
     font_family = os.environ.get("SUBTITLE_FONT_FAMILY", "Segoe UI").strip() or "Segoe UI"
     requested = [
         font_family.split(",")[0].strip(),
-        *parse_keys(os.environ.get("SUBTITLE_FALLBACK_FONTS", "Times New Roman,DejaVu Serif")),
+        *parse_keys(os.environ.get("SUBTITLE_FALLBACK_FONTS", "Selawik,DejaVu Sans")),
     ]
     requested = [font.replace(",", " ").strip() for font in requested if font.strip()]
 
