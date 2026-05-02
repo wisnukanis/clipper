@@ -43,7 +43,7 @@ export default async function handler(req, res) {
         {
           at: new Date().toISOString(),
           level: "system",
-          text: "GitHub Actions workflow berhasil dipicu. Refresh beberapa detik lagi untuk melihat status run."
+          text: "Workflow berhasil dipicu. Refresh beberapa detik lagi untuk melihat status run."
         }
       ]
     };

@@ -1,6 +1,8 @@
 const STATE_URL = "/api/state";
 const POLL_ACTIVE_MS = 3000;
 const POLL_IDLE_MS = 30000;
+const ROW_LIMIT_DEFAULT = 5;
+const ROW_LIMIT_EXPANDED = 18;
 const FALLBACK_PIPELINE = [
   { label: "Queue" },
   { label: "Clipper" },
@@ -21,6 +23,10 @@ let dashboardPin =
 let authVisible = true;
 let pollTimer = null;
 let lastRunStatus = "idle";
+let videoLimit = ROW_LIMIT_DEFAULT;
+let jobLimit = ROW_LIMIT_DEFAULT;
+let cachedVideos = [];
+let cachedJobs = [];
 
 if (dashboardPin) {
   window.sessionStorage.setItem("dashboardPin", dashboardPin);
@@ -51,8 +57,10 @@ const els = {
   consoleMeta: document.querySelector("#consoleMeta"),
   videoRows: document.querySelector("#videoRows"),
   videoCount: document.querySelector("#videoCount"),
+  videosMore: document.querySelector("#videosMore"),
   jobRows: document.querySelector("#jobRows"),
   jobCount: document.querySelector("#jobCount"),
+  jobsMore: document.querySelector("#jobsMore"),
   authOverlay: document.querySelector("#authOverlay"),
   authForm: document.querySelector("#authForm"),
   authPin: document.querySelector("#authPin"),
@@ -418,10 +426,12 @@ function renderConsole(run) {
 }
 
 function renderVideos(videos) {
-  els.videoCount.textContent = `${videos.length} item`;
+  cachedVideos = videos;
+  const total = videos.length;
+  els.videoCount.textContent = `${total} item`;
   const rows = [...videos]
     .reverse()
-    .slice(0, 18)
+    .slice(0, videoLimit)
     .map(
       (video) => `
     <tr>
@@ -434,13 +444,16 @@ function renderVideos(videos) {
   `
     );
   els.videoRows.innerHTML = rows.join("") || `<tr><td colspan="5" class="emptyRow">Belum ada link.</td></tr>`;
+  toggleMoreButton(els.videosMore, total, videoLimit);
 }
 
 function renderJobs(jobs) {
-  els.jobCount.textContent = `${jobs.length} item`;
+  cachedJobs = jobs;
+  const total = jobs.length;
+  els.jobCount.textContent = `${total} item`;
   const rows = [...jobs]
     .reverse()
-    .slice(0, 18)
+    .slice(0, jobLimit)
     .map(
       (job) => `
     <tr>
@@ -455,10 +468,23 @@ function renderJobs(jobs) {
   `
     );
   els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="7" class="emptyRow">Belum ada job.</td></tr>`;
+  toggleMoreButton(els.jobsMore, total, jobLimit);
+}
+
+function toggleMoreButton(button, total, limit) {
+  if (!button) return;
+  if (total <= ROW_LIMIT_DEFAULT) {
+    button.hidden = true;
+    return;
+  }
+  button.hidden = false;
+  const expanded = limit > ROW_LIMIT_DEFAULT;
+  button.textContent = expanded ? "Show less" : `Show more (${total - ROW_LIMIT_DEFAULT})`;
 }
 
 function showAuth(message = "") {
   authVisible = true;
+  document.body.classList.add("authLocked");
   if (!els.authOverlay) return;
   els.authOverlay.classList.add("active");
   els.authOverlay.setAttribute("aria-hidden", "false");
@@ -470,6 +496,7 @@ function showAuth(message = "") {
 function hideAuth() {
   if (!authVisible) return;
   authVisible = false;
+  document.body.classList.remove("authLocked");
   if (!els.authOverlay) return;
   els.authOverlay.classList.remove("active");
   els.authOverlay.setAttribute("aria-hidden", "true");
@@ -518,19 +545,30 @@ function stopPolling() {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     stopPolling();
-  } else {
-    refresh().catch((error) => handleApiError(error));
-    schedulePoll();
+    return;
   }
+  if (authVisible) return;
+  refresh().catch((error) => handleApiError(error));
+  schedulePoll();
 });
 
 els.refreshBtn.addEventListener("click", () => {
   refresh().catch((error) => handleApiError(error));
 });
 
+els.videosMore?.addEventListener("click", () => {
+  videoLimit = videoLimit > ROW_LIMIT_DEFAULT ? ROW_LIMIT_DEFAULT : ROW_LIMIT_EXPANDED;
+  renderVideos(cachedVideos);
+});
+
+els.jobsMore?.addEventListener("click", () => {
+  jobLimit = jobLimit > ROW_LIMIT_DEFAULT ? ROW_LIMIT_DEFAULT : ROW_LIMIT_EXPANDED;
+  renderJobs(cachedJobs);
+});
+
 els.preflightBtn.addEventListener("click", async () => {
   els.runStatus.textContent = "preflight";
-  els.runDetail.textContent = "Cek FTP, token platform, dan workflow GitHub.";
+  els.runDetail.textContent = "Cek FTP, token platform, dan workflow engine.";
   try {
     const report = await api("/api/preflight", { method: "POST", body: "{}" });
     const failed = (report.checks || []).filter((item) => !item.ok && item.required);

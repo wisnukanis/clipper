@@ -20,10 +20,10 @@ export default async function handler(req, res) {
       check("Dashboard PIN", Boolean(clean(process.env.AUTO_DASHBOARD_PIN)), "PIN aktif"),
       check("PUBLIC_BASE_URL", Boolean(clean(process.env.PUBLIC_BASE_URL)), clean(process.env.PUBLIC_BASE_URL)),
       check("FTP credential", Boolean(clean(process.env.FTP_HOST) && clean(process.env.FTP_USER) && process.env.FTP_PASSWORD), "dibutuhkan untuk update queue"),
-      check("GitHub workflow token", Boolean(clean(process.env.GH_REPO_SECRET_TOKEN || process.env.GITHUB_TOKEN)), "dibutuhkan untuk tombol run"),
+      check("Workflow token", Boolean(clean(process.env.GH_REPO_SECRET_TOKEN || process.env.GITHUB_TOKEN)), "dibutuhkan untuk tombol run"),
       check("data/videos.json", Array.isArray(state.videos), `${(state.videos || []).length} item`),
       check("data/jobs.json", Array.isArray(state.jobs), `${(state.jobs || []).length} item`),
-      check("GitHub Actions API", runs.length > 0, runs[0]?.html_url || "belum ada run terbaca", false),
+      check("Workflow API", runs.length > 0, runs[0]?.html_url || "belum ada run terbaca", false),
       check("Config", true, JSON.stringify(configSummary()))
     ];
 

@@ -9,8 +9,9 @@ on:
         default: "false"
 
   schedule:
-    # UTC. Hourly health check. Token exchange only runs near expiry by default.
-    - cron: "17 * * * *"
+    # UTC. Run on the 1st of every other month (~60 days, the closest cron pattern
+    # to a 50-day cadence). Token exchange only runs near expiry by default.
+    - cron: "17 6 1 */2 *"
 
 concurrency:
   group: meta-token-maintenance

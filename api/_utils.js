@@ -223,7 +223,7 @@ export async function dispatchWorkflow(inputs) {
   } catch {
     detail = await response.text();
   }
-  throw new Error(`Gagal trigger GitHub Actions (${response.status}): ${detail.slice(0, 500)}`);
+  throw new Error(`Gagal trigger workflow (${response.status}): ${detail.slice(0, 500)}`);
 }
 
 export function buildVideo(input) {

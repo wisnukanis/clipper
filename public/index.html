@@ -2,9 +2,10 @@
 <html lang="id">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#070b18">
     <title>Clipper Emsa Pro Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%2322d3ee'/%3E%3Cstop offset='1' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='50%25' y='56%25' text-anchor='middle' font-family='Inter,Segoe UI,sans-serif' font-weight='800' font-size='30' fill='%23050813'%3ECE%3C/text%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -18,12 +19,11 @@
     </div>
 
     <section id="authOverlay" class="authOverlay active" aria-hidden="false">
-      <form id="authForm" class="authCard glass">
+      <form id="authForm" class="authCard">
         <span class="brandMark">CE</span>
-        <div>
+        <div class="authIntro">
           <p class="eyebrow">Secure dashboard</p>
           <h2>Masuk dengan PIN</h2>
-          <p class="muted">Gunakan PIN dashboard yang diset di Vercel Environment.</p>
         </div>
         <label class="field">
           <span>Dashboard PIN</span>
@@ -63,7 +63,7 @@
             </div>
           </div>
           <div class="heroRight">
-            <a id="runLink" class="btn ghost small" href="#" target="_blank" rel="noreferrer" hidden>Lihat di GitHub</a>
+            <a id="runLink" class="btn ghost small" href="#" target="_blank" rel="noreferrer" hidden>Source Console</a>
             <div class="runMetric">
               <span class="metricLabel">Progress</span>
               <strong id="runProgressLabel">0%</strong>
@@ -102,7 +102,7 @@
                 <p class="eyebrow">Run manual</p>
                 <h2>Trigger Workflow</h2>
               </div>
-              <span class="badge">GitHub Actions</span>
+              <span class="badge">Workflow Engine</span>
             </div>
             <div class="denseFields">
               <label class="field">
@@ -205,6 +205,9 @@
               <tbody id="videoRows"></tbody>
             </table>
           </div>
+          <div class="panelFooter">
+            <button id="videosMore" class="btn ghost small" type="button" hidden>Show more</button>
+          </div>
         </section>
 
         <section class="panel glass">
@@ -230,6 +233,9 @@
               </thead>
               <tbody id="jobRows"></tbody>
             </table>
+          </div>
+          <div class="panelFooter">
+            <button id="jobsMore" class="btn ghost small" type="button" hidden>Show more</button>
           </div>
         </section>
       </section>
