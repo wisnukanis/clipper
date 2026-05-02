@@ -48,6 +48,122 @@ function getReelUploadMethod() {
     .toLowerCase();
 }
 
+function positiveIntEnv(name, fallback, max = 30) {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value) || value < 1) return fallback;
+  return Math.min(Math.floor(value), max);
+}
+
+function describeRequestError(error) {
+  if (error?.response) {
+    return `status=${error.response.status}, data=${JSON.stringify(error.response.data || {})}`;
+  }
+
+  return error?.message || error?.code || error?.name || "unknown_error";
+}
+
+function isVideoStatus(status) {
+  return (status >= 200 && status < 300) || status === 206;
+}
+
+function urlLooksLikeMp4(videoUrl) {
+  return String(videoUrl || "").split("?")[0].toLowerCase().endsWith(".mp4");
+}
+
+function isAcceptableVideoContentType(contentType, videoUrl) {
+  const normalized = String(contentType || "").toLowerCase();
+  return (
+    normalized.includes("video/mp4") ||
+    normalized.includes("application/octet-stream") ||
+    (!normalized && urlLooksLikeMp4(videoUrl))
+  );
+}
+
+function assertVideoProbe({ method, status, contentType, contentLength, bytes }, videoUrl) {
+  if (!isVideoStatus(status)) {
+    throw new Error(`${method} status=${status}`);
+  }
+
+  if (!isAcceptableVideoContentType(contentType, videoUrl)) {
+    throw new Error(`${method} content-type bukan MP4: ${contentType || "kosong"}`);
+  }
+
+  if (method === "GET" && !bytes) {
+    throw new Error("GET tidak mengembalikan byte video.");
+  }
+
+  return {
+    contentType,
+    contentLength: contentLength ? Number(contentLength) : 0,
+    bytes: bytes || 0
+  };
+}
+
+async function probeVideoHead(videoUrl, attempt) {
+  const response = await axios.head(videoUrl, {
+    headers: {
+      "User-Agent": "facebookexternalhit/1.1",
+      Accept: "video/mp4,*/*"
+    },
+    timeout: 30000,
+    maxRedirects: 5,
+    validateStatus: () => true
+  });
+
+  const contentType = response.headers?.["content-type"] || "";
+  const contentLength = response.headers?.["content-length"] || "";
+
+  console.log("IG VIDEO URL HEAD:", {
+    attempt,
+    status: response.status,
+    contentType,
+    contentLength
+  });
+
+  return {
+    method: "HEAD",
+    status: response.status,
+    contentType,
+    contentLength,
+    bytes: 0
+  };
+}
+
+async function probeVideoRange(videoUrl, attempt) {
+  const response = await axios.get(videoUrl, {
+    responseType: "arraybuffer",
+    headers: {
+      "User-Agent": "facebookexternalhit/1.1",
+      Accept: "video/mp4,*/*",
+      Range: "bytes=0-2047"
+    },
+    timeout: 45000,
+    maxRedirects: 5,
+    maxContentLength: 12 * 1024 * 1024,
+    validateStatus: () => true
+  });
+
+  const contentType = response.headers?.["content-type"] || "";
+  const contentLength = response.headers?.["content-length"] || "";
+  const bytes = Buffer.from(response.data || []).length;
+
+  console.log("IG VIDEO URL GET:", {
+    attempt,
+    status: response.status,
+    contentType,
+    contentLength,
+    bytes
+  });
+
+  return {
+    method: "GET",
+    status: response.status,
+    contentType,
+    contentLength,
+    bytes
+  };
+}
+
 async function postForm(apiPath, fields) {
   const body = new URLSearchParams({
     ...fields,
@@ -126,39 +242,42 @@ async function assertPublicVideoUrl(videoUrl) {
 
   console.log("IG REEL VIDEO URL:", videoUrl);
 
-  try {
-    const response = await axios.head(videoUrl, {
-      headers: { "User-Agent": "facebookexternalhit/1.1" },
-      timeout: 30000,
-      maxRedirects: 5,
-      validateStatus: () => true
-    });
+  const maxAttempts = positiveIntEnv("INSTAGRAM_VIDEO_URL_CHECK_ATTEMPTS", 8, 20);
+  const delayMs = positiveIntEnv("INSTAGRAM_VIDEO_URL_CHECK_DELAY_SECONDS", 8, 60) * 1000;
+  let lastError = null;
 
-    const contentType = response.headers?.["content-type"] || "";
-    const contentLength = response.headers?.["content-length"] || "";
-
-    console.log("IG VIDEO URL HEAD:", {
-      status: response.status,
-      contentType,
-      contentLength
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Video URL tidak bisa diakses publik. status=${response.status}, url=${videoUrl}`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const headProbe = await probeVideoHead(videoUrl, attempt);
+      return assertVideoProbe(headProbe, videoUrl);
+    } catch (error) {
+      lastError = new Error(`HEAD gagal: ${describeRequestError(error)}`);
+      console.log("IG VIDEO URL HEAD belum siap:", {
+        attempt,
+        message: lastError.message
+      });
     }
 
-    if (!contentType.toLowerCase().includes("video/mp4")) {
-      throw new Error(`Content-Type video salah: ${contentType || "kosong"}. url=${videoUrl}`);
+    try {
+      const getProbe = await probeVideoRange(videoUrl, attempt);
+      return assertVideoProbe(getProbe, videoUrl);
+    } catch (error) {
+      lastError = new Error(`GET gagal: ${describeRequestError(error)}`);
+      console.log("IG VIDEO URL GET belum siap:", {
+        attempt,
+        message: lastError.message
+      });
     }
 
-    return {
-      contentType,
-      contentLength: contentLength ? Number(contentLength) : 0
-    };
-  } catch (error) {
-    if (error.response) throw error;
-    throw new Error(`Gagal validasi video URL sebelum publish: ${error.message}`);
+    if (attempt < maxAttempts) {
+      await sleep(delayMs);
+    }
   }
+
+  throw new Error(
+    `Gagal validasi video URL sebelum publish setelah ${maxAttempts} percobaan: ` +
+      `${lastError?.message || "unknown_error"}`
+  );
 }
 
 async function publishContainer(containerId) {
