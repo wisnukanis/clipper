@@ -4,40 +4,49 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Clipper Emsa Pro Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
+    <div class="bgFx" aria-hidden="true">
+      <span class="bgGlow bgGlow--purple"></span>
+      <span class="bgGlow bgGlow--cyan"></span>
+      <span class="bgGrid"></span>
+    </div>
+
     <section id="authOverlay" class="authOverlay active" aria-hidden="false">
-      <form id="authForm" class="authCard">
+      <form id="authForm" class="authCard glass">
         <span class="brandMark">CE</span>
         <div>
           <p class="eyebrow">Secure dashboard</p>
           <h2>Masuk dengan PIN</h2>
           <p class="muted">Gunakan PIN dashboard yang diset di Vercel Environment.</p>
         </div>
-        <label>
+        <label class="field">
           <span>Dashboard PIN</span>
           <input id="authPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required>
         </label>
-        <button class="primary" type="submit">Masuk</button>
-        <p id="authError" class="authError"></p>
+        <button class="btn primary" type="submit">Masuk</button>
+        <p id="authError" class="authError" role="alert"></p>
       </form>
     </section>
 
     <main class="shell">
-      <header class="topbar">
+      <header class="topbar glass">
         <div class="brand">
           <span class="brandMark">CE</span>
-          <div>
+          <div class="brandText">
             <p class="eyebrow">Clipper Emsa Pro</p>
             <h1>Automation Control</h1>
-            <p id="configLine" class="muted">Loading...</p>
+            <p id="configLine" class="muted">Memuat konfigurasi...</p>
           </div>
         </div>
         <div class="toolbar">
-          <button id="preflightBtn" class="ghostBtn" type="button">Preflight</button>
-          <button id="refreshBtn" class="ghostBtn" type="button">Refresh</button>
-          <button id="logoutBtn" class="ghostBtn" type="button">Logout</button>
+          <button id="preflightBtn" class="btn ghost" type="button">Preflight</button>
+          <button id="refreshBtn" class="btn ghost" type="button">Refresh</button>
+          <button id="logoutBtn" class="btn ghost" type="button">Logout</button>
         </div>
       </header>
 
@@ -49,60 +58,71 @@
       <section id="tab-monitor" class="tabPage active">
         <section class="metrics" id="metrics"></section>
 
-        <section class="monitorGrid">
-          <section class="panel progressPanel">
-            <div class="sectionHead">
+        <section class="panel glass heroPanel">
+          <div class="heroHead">
+            <div class="heroLeft">
+              <span id="runBadge" class="runBadge idle">Idle</span>
               <div>
                 <p class="eyebrow">Live workflow</p>
                 <h2 id="workflowTitle">Menunggu proses</h2>
-              </div>
-              <span id="workflowMeta">Belum ada proses</span>
-            </div>
-            <div class="runHero compactHero">
-              <div class="hourglassWrap" aria-hidden="true">
-                <span class="hourglass"></span>
-              </div>
-              <div class="runCopy">
-                <strong id="runStatus">Idle</strong>
-                <span id="runDetail">Siap menerima link YouTube atau menjalankan queue.</span>
-                <div class="progressTrack"><span id="progressBar"></span></div>
+                <p id="workflowMeta" class="muted">Belum ada proses berjalan.</p>
               </div>
             </div>
-            <div class="workflowGraph" id="workflowGraph"></div>
-          </section>
+            <div class="heroRight">
+              <a id="runLink" class="btn ghost small" href="#" target="_blank" rel="noreferrer" hidden>Lihat di GitHub</a>
+              <div class="runMetric">
+                <span class="metricLabel">Progress</span>
+                <strong id="runProgressLabel">0%</strong>
+              </div>
+            </div>
+          </div>
 
-          <section class="panel consolePanel">
-            <div class="sectionHead compact">
-              <div>
-                <p class="eyebrow">Console</p>
-                <h2>Run Output</h2>
-              </div>
-              <span id="consoleMeta">0 log</span>
+          <div class="progressTrack" aria-hidden="true">
+            <span id="progressBar" class="progressFill"></span>
+          </div>
+
+          <div class="runDetailRow">
+            <strong id="runStatus">Idle</strong>
+            <span id="runDetail" class="muted">Siap menerima link YouTube atau menjalankan queue.</span>
+          </div>
+
+          <div class="workflowGraph" id="workflowGraph"></div>
+        </section>
+
+        <section class="panel glass consolePanel">
+          <div class="sectionHead compact">
+            <div>
+              <p class="eyebrow">Console</p>
+              <h2>Run Output</h2>
             </div>
-            <pre id="consoleOutput" class="consoleOutput">Belum ada output.</pre>
-          </section>
+            <span id="consoleMeta" class="badge">0 log</span>
+          </div>
+          <pre id="consoleOutput" class="consoleOutput">Belum ada output.</pre>
         </section>
 
         <section class="actionGrid">
-          <form id="runForm" class="panel compactForm">
+          <form id="runForm" class="panel glass formCard">
             <div class="sectionHead compact">
-              <h2>Run Manual</h2>
-              <span>GitHub Actions</span>
+              <div>
+                <p class="eyebrow">Run manual</p>
+                <h2>Trigger Workflow</h2>
+              </div>
+              <span class="badge">GitHub Actions</span>
             </div>
             <div class="denseFields">
-              <label>
+              <label class="field">
                 <span>Theme</span>
                 <input name="theme" value="auto">
               </label>
-              <label>
-                <span>URL manual opsional</span>
+              <label class="field span2">
+                <span>URL manual (opsional)</span>
                 <input name="url" placeholder="Kosongkan untuk ambil dari queue">
               </label>
-              <label>
+              <label class="field">
                 <span>Range</span>
                 <input name="range" placeholder="00:01:20-00:02:05">
               </label>
-              <label>
+              <label class="field">
                 <span>Kualitas</span>
                 <select name="quality_profile">
                   <option value="standard">Standard</option>
@@ -111,7 +131,7 @@
                   <option value="ultra">Ultra</option>
                 </select>
               </label>
-              <label>
+              <label class="field">
                 <span>Font</span>
                 <select name="subtitle_font">
                   <option value="Segoe UI" selected>Segoe UI</option>
@@ -120,49 +140,52 @@
                   <option value="DejaVu Serif">DejaVu Serif</option>
                 </select>
               </label>
-              <label>
+              <label class="field">
                 <span>Size</span>
                 <input name="subtitle_font_size" type="number" min="32" max="88" value="46">
               </label>
-              <label>
+              <label class="field">
                 <span>Margin</span>
                 <input name="subtitle_margin_v" type="number" min="160" max="520" value="400">
               </label>
-              <label class="check inlineCheck">
+              <label class="field check">
                 <input name="publish" type="checkbox">
                 <span>Publish</span>
               </label>
             </div>
-            <button class="primary" type="submit">Mulai Workflow</button>
+            <button class="btn primary" type="submit">Mulai Workflow</button>
           </form>
 
-          <form id="videoForm" class="panel compactForm">
+          <form id="videoForm" class="panel glass formCard">
             <div class="sectionHead compact">
-              <h2>Tambah Link</h2>
-              <span>Queue FTP state</span>
+              <div>
+                <p class="eyebrow">Tambah link</p>
+                <h2>Queue Video</h2>
+              </div>
+              <span class="badge">FTP state</span>
             </div>
             <div class="denseFields addFields">
-              <label>
+              <label class="field span2">
                 <span>YouTube URL</span>
                 <input name="url" placeholder="https://www.youtube.com/watch?v=..." required>
               </label>
-              <label>
+              <label class="field">
                 <span>Theme</span>
                 <input name="theme" value="podcast artis">
               </label>
-              <label>
+              <label class="field">
                 <span>Target</span>
                 <input name="target_date" type="date">
               </label>
-              <label>
+              <label class="field">
                 <span>Priority</span>
                 <input name="priority" type="number" min="1" value="1">
               </label>
-              <label>
+              <label class="field">
                 <span>Range</span>
                 <input name="manual_range" placeholder="00:01:20-00:02:05">
               </label>
-              <label>
+              <label class="field">
                 <span>Kualitas</span>
                 <select name="quality_profile">
                   <option value="standard">Standard</option>
@@ -171,7 +194,7 @@
                   <option value="ultra">Ultra</option>
                 </select>
               </label>
-              <label>
+              <label class="field span2">
                 <span>Notes</span>
                 <input name="notes" placeholder="Catatan internal">
               </label>
@@ -179,17 +202,20 @@
               <input name="subtitle_font_size" type="hidden" value="46">
               <input name="subtitle_margin_v" type="hidden" value="400">
             </div>
-            <button class="primary" type="submit">Tambah Queue</button>
+            <button class="btn primary" type="submit">Tambah ke Queue</button>
           </form>
         </section>
 
         <section class="dataGrid">
-          <section class="panel">
+          <section class="panel glass">
             <div class="sectionHead compact">
-              <h2>Queue Video</h2>
-              <span id="videoCount">0 item</span>
+              <div>
+                <p class="eyebrow">Queue</p>
+                <h2>Video</h2>
+              </div>
+              <span id="videoCount" class="badge">0 item</span>
             </div>
-            <div class="tableWrap compactTable">
+            <div class="tableWrap">
               <table>
                 <thead>
                   <tr>
@@ -205,12 +231,15 @@
             </div>
           </section>
 
-          <section class="panel">
+          <section class="panel glass">
             <div class="sectionHead compact">
-              <h2>Jobs</h2>
-              <span id="jobCount">0 item</span>
+              <div>
+                <p class="eyebrow">Pipeline</p>
+                <h2>Jobs</h2>
+              </div>
+              <span id="jobCount" class="badge">0 item</span>
             </div>
-            <div class="tableWrap compactTable">
+            <div class="tableWrap">
               <table>
                 <thead>
                   <tr>
@@ -231,23 +260,27 @@
       </section>
 
       <section id="tab-environment" class="tabPage">
-        <section class="panel settingsPanel">
+        <section class="panel glass settingsPanel">
           <div class="sectionHead">
             <div>
               <p class="eyebrow">Environment</p>
               <h2>API Key & Platform Settings</h2>
             </div>
-            <span id="settingsMeta">Memuat .env</span>
+            <span id="settingsMeta" class="badge">Memuat .env</span>
           </div>
           <form id="settingsForm">
             <div id="settingsGrid" class="settingsGrid"></div>
             <div class="settingsActions">
-              <button class="primary" type="submit">Simpan .env Lokal</button>
+              <button class="btn primary" type="submit">Simpan .env Lokal</button>
               <span id="settingsStatus" class="statusText">Secret kosong tidak akan menimpa nilai lama.</span>
             </div>
           </form>
         </section>
       </section>
+
+      <footer class="footer">
+        <span class="muted">Clipper Emsa Pro &middot; powered by Vercel + GitHub Actions</span>
+      </footer>
     </main>
     <script src="/app.js" type="module"></script>
   </body>

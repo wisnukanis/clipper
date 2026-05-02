@@ -1,6 +1,27 @@
-const stateUrl = "/api/state";
-let dashboardPin = new URLSearchParams(window.location.search).get("pin") || window.sessionStorage.getItem("dashboardPin") || "";
+const STATE_URL = "/api/state";
+const POLL_ACTIVE_MS = 3000;
+const POLL_IDLE_MS = 30000;
+const FALLBACK_PIPELINE = [
+  { label: "Queue", key: "queue" },
+  { label: "Clipper", key: "clipper" },
+  { label: "Caption", key: "caption" },
+  { label: "Thumbnail", key: "thumbnail" },
+  { label: "FTP", key: "ftp" },
+  { label: "Instagram", key: "instagram" },
+  { label: "Facebook", key: "facebook" },
+  { label: "YouTube", key: "youtube" },
+  { label: "TikTok", key: "tiktok" },
+  { label: "History", key: "history" }
+];
+
+let dashboardPin =
+  new URLSearchParams(window.location.search).get("pin") ||
+  window.sessionStorage.getItem("dashboardPin") ||
+  "";
 let authVisible = true;
+let settingsLoaded = false;
+let pollTimer = null;
+let lastRunStatus = "idle";
 
 if (dashboardPin) {
   window.sessionStorage.setItem("dashboardPin", dashboardPin);
@@ -20,10 +41,13 @@ const els = {
   workflowMeta: document.querySelector("#workflowMeta"),
   workflowTitle: document.querySelector("#workflowTitle"),
   progressBar: document.querySelector("#progressBar"),
+  runProgressLabel: document.querySelector("#runProgressLabel"),
+  runBadge: document.querySelector("#runBadge"),
+  runLink: document.querySelector("#runLink"),
   runDetail: document.querySelector("#runDetail"),
+  runStatus: document.querySelector("#runStatus"),
   videoForm: document.querySelector("#videoForm"),
   runForm: document.querySelector("#runForm"),
-  runStatus: document.querySelector("#runStatus"),
   settingsForm: document.querySelector("#settingsForm"),
   settingsGrid: document.querySelector("#settingsGrid"),
   settingsMeta: document.querySelector("#settingsMeta"),
@@ -43,7 +67,12 @@ const els = {
   tabPages: document.querySelectorAll(".tabPage")
 };
 
-let settingsLoaded = false;
+class ApiError extends Error {
+  constructor(message, status = 0) {
+    super(message);
+    this.status = status;
+  }
+}
 
 async function api(path, options = {}) {
   const headers = { Accept: "application/json" };
@@ -52,10 +81,7 @@ async function api(path, options = {}) {
 
   const response = await fetch(path, {
     ...options,
-    headers: {
-      ...headers,
-      ...(options.headers || {})
-    }
+    headers: { ...headers, ...(options.headers || {}) }
   });
 
   const contentType = response.headers.get("content-type") || "";
@@ -72,11 +98,23 @@ async function api(path, options = {}) {
   return data;
 }
 
-class ApiError extends Error {
-  constructor(message, status = 0) {
-    super(message);
-    this.status = status;
-  }
+function short(value, length = 54) {
+  const text = String(value || "");
+  if (text.length <= length) return text;
+  return `${text.slice(0, length - 1)}...`;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
 }
 
 function formData(form) {
@@ -90,15 +128,14 @@ function pill(status) {
   return `<span class="pill ${safe}">${escapeHtml(label)}</span>`;
 }
 
-function short(value, length = 54) {
-  const text = String(value || "");
-  if (text.length <= length) return text;
-  return `${text.slice(0, length - 1)}...`;
+function link(url, text) {
+  return `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer">${escapeHtml(short(text, 28))}</a>`;
 }
 
 async function refresh() {
-  const state = await api(stateUrl);
+  const state = await api(STATE_URL);
   hideAuth();
+
   const cfg = state.config || {};
   els.configLine.textContent = [
     cfg.dryRun ? "dry-run" : "live",
@@ -110,14 +147,16 @@ async function refresh() {
     `TT ${cfg.tiktokEnabled ? "on" : "off"}`,
     cfg.vercelDashboard ? "vercel" : "local",
     cfg.timezone
-  ].join(" | ");
+  ].join(" · ");
 
+  renderMetrics(state);
+  renderHero(state);
+  renderWorkflow(state);
+  renderConsole(state.activeRun);
   renderVideos(state.videos || []);
   renderJobs(state.jobs || []);
-  renderMetrics(state);
-  renderWorkflow(state);
-  renderRun(state.activeRun);
-  renderConsole(state.activeRun);
+
+  lastRunStatus = state.activeRun?.status === "running" ? "running" : "idle";
 
   if (!settingsLoaded && document.querySelector("#tab-environment")?.classList.contains("active")) {
     await loadSettings();
@@ -138,69 +177,93 @@ function renderMetrics(state) {
   const failed = jobs.filter((job) => String(job.status || "").includes("failed")).length;
   const queued = videos.filter((video) => video.status === "queued").length;
   els.metrics.innerHTML = [
-    metric("Queued", queued, "amber"),
-    metric("Published", published, "green"),
-    metric("Warnings", warnings, "gold"),
-    metric("Failed", failed, "red")
+    metricCard("Queued", queued, "amber"),
+    metricCard("Published", published, "green"),
+    metricCard("Warnings", warnings, "amber"),
+    metricCard("Failed", failed, "red")
   ].join("");
 }
 
-function metric(label, value, tone) {
+function metricCard(label, value, tone) {
   return `<article class="metric ${tone}"><span>${label}</span><strong>${value}</strong></article>`;
 }
 
-function renderWorkflow(state) {
-  const jobs = state.jobs || [];
-  const activeRun = state.activeRun || null;
-  const job = currentJob(jobs, activeRun);
-  const steps = workflowSteps(job, activeRun);
-  const doneCount = steps.filter((item) => item.state === "done").length;
-  const progress = Math.round((doneCount / steps.length) * 100);
-
-  els.workflowTitle.textContent = job?.job_id || activeRun?.id || "Menunggu proses";
-  els.workflowMeta.textContent = workflowMeta(job, activeRun);
-  els.progressBar.style.width = `${activeRun?.status === "running" ? Math.max(progress, 12) : progress}%`;
-  els.workflowGraph.innerHTML = steps.map((step, index) => {
-    const next = steps[index + 1];
-    const edge = next ? `<div class="flowEdge ${edgeState(step, next)}"><span></span></div>` : "";
-    return `${workflowNode(step, index + 1)}${edge}`;
-  }).join("");
-}
-
-function currentJob(jobs, activeRun) {
-  if (activeRun?.result?.job_id) {
-    const fromRun = jobs.find((job) => job.job_id === activeRun.result.job_id);
-    if (fromRun) return fromRun;
+function renderHero(state) {
+  const run = state.activeRun;
+  if (!run) {
+    els.runBadge.textContent = "Idle";
+    els.runBadge.className = "runBadge idle";
+    els.workflowTitle.textContent = "Menunggu proses";
+    els.workflowMeta.textContent = "Belum ada workflow yang berjalan.";
+    els.runStatus.textContent = "Idle";
+    els.runDetail.textContent = "Siap menerima link YouTube atau menjalankan queue.";
+    els.runProgressLabel.textContent = "0%";
+    els.progressBar.style.width = "0%";
+    els.progressBar.classList.remove("running");
+    els.runLink.hidden = true;
+    return;
   }
 
-  return [...jobs].sort((a, b) => {
-    const left = String(a.updated_at || a.published_at || a.created_at || "");
-    const right = String(b.updated_at || b.published_at || b.created_at || "");
-    return right.localeCompare(left);
-  })[0] || null;
+  const status = run.status || "running";
+  els.runBadge.textContent = status;
+  els.runBadge.className = `runBadge ${status}`;
+  els.workflowTitle.textContent = run.title || run.name || "Workflow";
+  els.workflowMeta.textContent = run.branch
+    ? `${run.name || "Workflow"} · ${run.branch} · ${formatTime(run.startedAt)}`
+    : `${run.name || "Workflow"} · ${formatTime(run.startedAt)}`;
+  els.runStatus.textContent = status;
+  els.runDetail.textContent = run.detail || run.error || "Workflow berjalan";
+
+  const pct = typeof run.progress === "number" ? run.progress : status === "running" ? 8 : 100;
+  els.runProgressLabel.textContent = `${pct}%`;
+  els.progressBar.style.width = `${pct}%`;
+  els.progressBar.classList.toggle("running", status === "running");
+
+  if (run.htmlUrl) {
+    els.runLink.href = run.htmlUrl;
+    els.runLink.hidden = false;
+  } else {
+    els.runLink.hidden = true;
+  }
 }
 
-function workflowMeta(job, activeRun) {
-  if (activeRun?.status === "running") return `Running ${job?.job_id || activeRun.id || ""}`.trim();
-  if (!job) return "Belum ada job";
-  return `${job.job_id || "job"} | ${job.publish_status || job.status || "selected"}`;
+function renderWorkflow(state) {
+  const run = state.activeRun;
+  const jobs = run?.jobs || [];
+  const steps = jobs.length ? buildLiveSteps(jobs) : buildPipelineSteps(state);
+  els.workflowGraph.innerHTML = steps
+    .map((step, index) => {
+      const next = steps[index + 1];
+      const edge = next ? `<div class="flowEdge ${edgeState(step, next)}"><span></span></div>` : "";
+      return `${flowNode(step, index + 1)}${edge}`;
+    })
+    .join("");
 }
 
-function workflowSteps(job, activeRun) {
-  const activeWithoutJob = activeRun?.status === "running" && !job;
+function buildLiveSteps(jobs) {
+  const steps = [];
+  jobs.forEach((job) => {
+    (job.steps || []).forEach((step) => {
+      const state = mapStepState(step);
+      const detail =
+        step.status === "completed" && step.completed_at && step.started_at
+          ? `${step.conclusion || "done"} · ${durationSeconds(step.started_at, step.completed_at)}s`
+          : step.status === "in_progress"
+            ? "Sedang berjalan"
+            : step.status === "queued"
+              ? "Menunggu"
+              : step.conclusion || step.status || "—";
+      steps.push({ label: step.name, detail, state });
+    });
+  });
+  return steps;
+}
+
+function buildPipelineSteps(stateData) {
+  const mkStep = (label, stepState, detail) => ({ label, state: stepState, detail });
+  const job = currentJob(stateData);
   if (!job) {
-    return [
-      step("Queue", activeWithoutJob ? "active" : "pending", activeWithoutJob ? "Memilih video" : "Menunggu link"),
-      step("Clipper", "pending", "Belum mulai"),
-      step("Caption", "pending", "Belum mulai"),
-      step("Thumbnail", "pending", "Belum mulai"),
-      step("FTP", "pending", "Belum mulai"),
-      step("Instagram", "pending", "Belum mulai"),
-      step("Facebook", "pending", "Belum mulai"),
-      step("YouTube", "pending", "Belum mulai"),
-      step("TikTok", "pending", "Belum mulai"),
-      step("History", "pending", "Belum mulai")
-    ];
+    return FALLBACK_PIPELINE.map((entry) => mkStep(entry.label, "pending", "Menunggu"));
   }
 
   const failed = isFailed(job.status) || Boolean(job.error_message);
@@ -208,55 +271,107 @@ function workflowSteps(job, activeRun) {
   const captionDone = job.caption_status === "done" || Boolean(job.caption);
   const thumbnailDone = job.thumbnail_status === "done" || Boolean(job.thumbnail_path);
   const ftpDone = Boolean(job.public_video_url);
-  const published = job.status === "published" || job.publish_status === "published" || job.publish_status === "published_with_warnings";
+  const published =
+    job.status === "published" ||
+    job.publish_status === "published" ||
+    job.publish_status === "published_with_warnings";
 
   return [
-    step("Queue", "done", job.youtube_video_id || "Selected"),
-    step("Clipper", stageState({
-      failed: failed && !clipperDone,
-      active: job.clipper_status === "processing" || job.status === "clipper_processing",
-      done: clipperDone
-    }), stageText(job.clipper_status, clipperDone ? "MP4 siap" : "Render video")),
-    step("Caption", stageState({
-      failed: failed && clipperDone && !captionDone,
-      active: clipperDone && !captionDone && !failed,
-      done: captionDone
-    }), stageText(job.caption_status, captionDone ? "Caption siap" : "Buat caption")),
-    step("Thumbnail", stageState({
-      failed: failed && captionDone && !thumbnailDone,
-      active: captionDone && !thumbnailDone && !failed,
-      done: thumbnailDone
-    }), stageText(job.thumbnail_status, thumbnailDone ? "Thumbnail siap" : "Buat thumbnail")),
-    step("FTP", stageState({
-      failed: failed && thumbnailDone && !ftpDone,
-      active: thumbnailDone && !ftpDone && !failed,
-      done: ftpDone
-    }), ftpDone ? "Public URL valid" : "Upload file"),
+    mkStep("Queue", "done", job.youtube_video_id || "Selected"),
+    mkStep(
+      "Clipper",
+      stageState({
+        failed: failed && !clipperDone,
+        active: job.clipper_status === "processing" || job.status === "clipper_processing",
+        done: clipperDone
+      }),
+      stageText(job.clipper_status, clipperDone ? "MP4 siap" : "Render video")
+    ),
+    mkStep(
+      "Caption",
+      stageState({
+        failed: failed && clipperDone && !captionDone,
+        active: clipperDone && !captionDone && !failed,
+        done: captionDone
+      }),
+      stageText(job.caption_status, captionDone ? "Caption siap" : "Buat caption")
+    ),
+    mkStep(
+      "Thumbnail",
+      stageState({
+        failed: failed && captionDone && !thumbnailDone,
+        active: captionDone && !thumbnailDone && !failed,
+        done: thumbnailDone
+      }),
+      stageText(job.thumbnail_status, thumbnailDone ? "Thumbnail siap" : "Buat thumbnail")
+    ),
+    mkStep(
+      "FTP",
+      stageState({
+        failed: failed && thumbnailDone && !ftpDone,
+        active: thumbnailDone && !ftpDone && !failed,
+        done: ftpDone
+      }),
+      ftpDone ? "Public URL valid" : "Upload file"
+    ),
     platformStep("Instagram", job.instagram_status, Boolean(job.instagram_media_id), ftpDone, failed),
     platformStep("Facebook", job.facebook_status, Boolean(job.facebook_video_id || job.facebook_post_id), ftpDone, failed),
     platformStep("YouTube", job.youtube_status, Boolean(job.youtube_url), ftpDone, failed),
     platformStep("TikTok", job.tiktok_status, Boolean(job.tiktok_publish_id), ftpDone, failed),
-    step("History", stageState({
-      failed,
-      active: !published && (job.status === "publishing" || job.status === "ready_to_publish"),
-      done: published
-    }), published ? "Published" : job.publish_status || job.status || "Menunggu")
+    mkStep(
+      "History",
+      stageState({
+        failed,
+        active: !published && (job.status === "publishing" || job.status === "ready_to_publish"),
+        done: published
+      }),
+      published ? "Published" : job.publish_status || job.status || "Menunggu"
+    )
   ];
 }
 
 function platformStep(label, status, hasResult, ftpDone, failed) {
   const normalized = String(status || "").toLowerCase();
   const disabled = normalized === "disabled";
-  return step(label, stageState({
-    failed: isFailed(status) || (failed && ftpDone && !hasResult && !disabled),
-    active: ftpDone && normalized === "processing" && !failed,
-    done: hasResult || normalized === "published" || normalized === "submitted",
-    muted: disabled || normalized === "skipped"
-  }), hasResult && normalized === "submitted" ? "Submitted" : hasResult ? "Published" : status || "Menunggu");
+  return {
+    label,
+    state: stageState({
+      failed: isFailed(status) || (failed && ftpDone && !hasResult && !disabled),
+      active: ftpDone && normalized === "processing" && !failed,
+      done: hasResult || normalized === "published" || normalized === "submitted",
+      muted: disabled || normalized === "skipped"
+    }),
+    detail:
+      hasResult && normalized === "submitted"
+        ? "Submitted"
+        : hasResult
+          ? "Published"
+          : status || "Menunggu"
+  };
 }
 
-function step(label, state, detail) {
-  return { label, state, detail };
+function currentJob(state) {
+  const jobs = state.jobs || [];
+  const activeRun = state.activeRun || null;
+  if (activeRun?.result?.job_id) {
+    const fromRun = jobs.find((job) => job.job_id === activeRun.result.job_id);
+    if (fromRun) return fromRun;
+  }
+  return [...jobs].sort((a, b) => {
+    const left = String(a.updated_at || a.published_at || a.created_at || "");
+    const right = String(b.updated_at || b.published_at || b.created_at || "");
+    return right.localeCompare(left);
+  })[0] || null;
+}
+
+function mapStepState(step) {
+  if (step.status === "completed") {
+    if (step.conclusion === "failure" || step.conclusion === "cancelled") return "failed";
+    if (step.conclusion === "skipped") return "muted";
+    return "done";
+  }
+  if (step.status === "in_progress") return "active";
+  return "pending";
 }
 
 function stageState({ failed = false, active = false, done = false, muted = false }) {
@@ -282,7 +397,7 @@ function edgeState(step, next) {
   return "pending";
 }
 
-function workflowNode(step, index) {
+function flowNode(step, index) {
   return `
     <article class="flowNode ${step.state}">
       <span class="flowIndex">${index}</span>
@@ -292,9 +407,41 @@ function workflowNode(step, index) {
   `;
 }
 
+function durationSeconds(start, end) {
+  return Math.max(0, Math.round((new Date(end) - new Date(start)) / 1000));
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function renderConsole(run) {
+  const logs = run?.logs || [];
+  els.consoleMeta.textContent = `${logs.length} log`;
+  els.consoleOutput.innerHTML = logs.length
+    ? logs
+        .map((item) => {
+          const ts = formatTime(item.at) || "--:--:--";
+          const lvl = String(item.level || "system").toLowerCase();
+          return `<span class="ts">[${escapeHtml(ts)}]</span> <span class="lvl-${escapeAttr(lvl)}">${escapeHtml(lvl.toUpperCase())}</span> ${escapeHtml(item.text || "")}`;
+        })
+        .join("\n")
+    : "Belum ada output.";
+  els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
+}
+
 function renderVideos(videos) {
   els.videoCount.textContent = `${videos.length} item`;
-  const rows = [...videos].reverse().slice(0, 18).map((video) => `
+  const rows = [...videos]
+    .reverse()
+    .slice(0, 18)
+    .map(
+      (video) => `
     <tr>
       <td>${pill(video.status)}</td>
       <td>${escapeHtml(video.theme || "")}</td>
@@ -302,81 +449,44 @@ function renderVideos(videos) {
       <td>${escapeHtml(video.quality_profile || "standard")}</td>
       <td><a href="${escapeAttr(video.url)}" target="_blank" rel="noreferrer">${escapeHtml(short(video.url, 72))}</a></td>
     </tr>
-  `);
+  `
+    );
   els.videoRows.innerHTML = rows.join("") || `<tr><td colspan="5">Belum ada link.</td></tr>`;
 }
 
 function renderJobs(jobs) {
   els.jobCount.textContent = `${jobs.length} item`;
-  const rows = [...jobs].reverse().slice(0, 18).map((job) => `
+  const rows = [...jobs]
+    .reverse()
+    .slice(0, 18)
+    .map(
+      (job) => `
     <tr>
       <td>${pill(job.status)}</td>
-      <td>${escapeHtml(short(job.job_id || "", 30))}</td>
+      <td>${escapeHtml(short(job.job_id || "", 28))}</td>
       <td>${job.instagram_media_id ? link(`https://www.instagram.com/p/${job.instagram_media_id}`, job.instagram_status || "published") : escapeHtml(job.instagram_status || "-")}</td>
       <td>${job.facebook_url ? link(job.facebook_url, job.facebook_status || "published") : escapeHtml(job.facebook_status || "-")}</td>
       <td>${job.youtube_url ? link(job.youtube_url, job.youtube_status || "published") : escapeHtml(job.youtube_status || "-")}</td>
-      <td>${job.tiktok_publish_id ? escapeHtml(short(job.tiktok_status || "submitted", 28)) : escapeHtml(job.tiktok_status || "-")}</td>
-      <td>${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || "", 64))}</td>
+      <td>${job.tiktok_publish_id ? escapeHtml(short(job.tiktok_status || "submitted", 22)) : escapeHtml(job.tiktok_status || "-")}</td>
+      <td>${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || "", 60))}</td>
     </tr>
-  `);
+  `
+    );
   els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="7">Belum ada job.</td></tr>`;
-}
-
-function renderRun(run) {
-  if (!run) {
-    els.runStatus.textContent = "Idle";
-    els.runDetail.textContent = "Siap menerima link YouTube atau menjalankan queue.";
-    return;
-  }
-  const extra = run.error ? run.error : run.result ? run.result.status : "Workflow berjalan";
-  els.runStatus.textContent = run.status;
-  els.runDetail.textContent = extra;
-}
-
-function showAuth(message = "") {
-  authVisible = true;
-  if (!els.authOverlay) return;
-  els.authOverlay.classList.add("active");
-  els.authOverlay.setAttribute("aria-hidden", "false");
-  els.authError.textContent = message;
-  window.setTimeout(() => els.authPin?.focus(), 30);
-}
-
-function hideAuth() {
-  authVisible = false;
-  if (!els.authOverlay) return;
-  els.authOverlay.classList.remove("active");
-  els.authOverlay.setAttribute("aria-hidden", "true");
-  els.authError.textContent = "";
-}
-
-function handleApiError(error, target = els.runDetail) {
-  if (error.status === 401 || error.status === 403 || /PIN|AUTO_DASHBOARD_PIN/i.test(error.message)) {
-    window.sessionStorage.removeItem("dashboardPin");
-    dashboardPin = "";
-    showAuth(error.message);
-    return;
-  }
-  target.textContent = error.message;
-}
-
-function renderConsole(run) {
-  const logs = run?.logs || [];
-  els.consoleMeta.textContent = `${logs.length} log`;
-  els.consoleOutput.textContent = logs.length
-    ? logs.map((item) => `[${new Date(item.at).toLocaleTimeString()}] ${item.level.toUpperCase()} ${item.text}`).join("\n")
-    : "Belum ada output.";
-  els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
 }
 
 function renderSettings(settings) {
   els.settingsMeta.textContent = settings.envFile || ".env";
-  els.settingsGrid.innerHTML = (settings.groups || []).map((group) => `
+  els.settingsGrid.innerHTML = (settings.groups || [])
+    .map(
+      (group) => `
     <fieldset class="settingGroup">
       <legend>${escapeHtml(group.title)}</legend>
       ${(group.fields || []).map(settingField).join("")}
     </fieldset>
-  `).join("");
+  `
+    )
+    .join("");
 }
 
 function settingField(item) {
@@ -397,32 +507,82 @@ function settingField(item) {
 }
 
 function inferInputType(key) {
-  if (/_PORT$|_SIZE$|_SECONDS$|_COUNT$|_DAYS$|_BYTES$|_MARGIN_|_LINES$|_OUTLINE$|_SHADOW$/.test(key)) return "number";
+  if (/_PORT$|_SIZE$|_SECONDS$|_COUNT$|_DAYS$|_BYTES$|_MARGIN_|_LINES$|_OUTLINE$|_SHADOW$/.test(key)) {
+    return "number";
+  }
   return "text";
 }
 
-function link(url, text) {
-  return `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer">${escapeHtml(short(text, 28))}</a>`;
+function showAuth(message = "") {
+  authVisible = true;
+  if (!els.authOverlay) return;
+  els.authOverlay.classList.add("active");
+  els.authOverlay.setAttribute("aria-hidden", "false");
+  els.authError.textContent = message;
+  window.setTimeout(() => els.authPin?.focus(), 30);
+  stopPolling();
 }
 
-function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function hideAuth() {
+  if (!authVisible) return;
+  authVisible = false;
+  if (!els.authOverlay) return;
+  els.authOverlay.classList.remove("active");
+  els.authOverlay.setAttribute("aria-hidden", "true");
+  els.authError.textContent = "";
+  schedulePoll();
 }
 
-function escapeAttr(value) {
-  return escapeHtml(value).replace(/`/g, "&#96;");
+function handleApiError(error, target = els.runDetail) {
+  if (error.status === 401 || error.status === 403 || /PIN|AUTO_DASHBOARD_PIN/i.test(error.message)) {
+    window.sessionStorage.removeItem("dashboardPin");
+    dashboardPin = "";
+    showAuth(error.message);
+    return;
+  }
+  if (target) target.textContent = error.message;
 }
+
+function pollIntervalMs() {
+  if (document.hidden) return null;
+  if (authVisible) return null;
+  return lastRunStatus === "running" ? POLL_ACTIVE_MS : POLL_IDLE_MS;
+}
+
+function schedulePoll() {
+  stopPolling();
+  const ms = pollIntervalMs();
+  if (ms === null) return;
+  pollTimer = window.setTimeout(async () => {
+    try {
+      await refresh();
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      schedulePoll();
+    }
+  }, ms);
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    window.clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    refresh().catch((error) => handleApiError(error));
+    schedulePoll();
+  }
+});
 
 els.refreshBtn.addEventListener("click", () => {
   settingsLoaded = false;
-  refresh().catch((error) => {
-    handleApiError(error);
-  });
+  refresh().catch((error) => handleApiError(error));
 });
 
 els.tabBtns.forEach((button) => {
@@ -431,23 +591,24 @@ els.tabBtns.forEach((button) => {
     els.tabBtns.forEach((item) => item.classList.toggle("active", item === button));
     els.tabPages.forEach((page) => page.classList.toggle("active", page.id === `tab-${target}`));
     if (target === "environment" && !settingsLoaded) {
-      loadSettings().catch((error) => {
-        handleApiError(error, els.settingsStatus);
-      });
+      loadSettings().catch((error) => handleApiError(error, els.settingsStatus));
     }
   });
 });
 
 els.preflightBtn.addEventListener("click", async () => {
   els.runStatus.textContent = "preflight";
-  els.runDetail.textContent = "Cek FTP, token platform, dan YouTube tanpa memakai Gemini.";
+  els.runDetail.textContent = "Cek FTP, token platform, dan workflow GitHub.";
   try {
     const report = await api("/api/preflight", { method: "POST", body: "{}" });
     const failed = (report.checks || []).filter((item) => !item.ok && item.required);
-    els.runDetail.textContent = failed.length ? `Gagal: ${failed.map((item) => item.name).join(", ")}` : "Preflight OK.";
+    els.runDetail.textContent = failed.length
+      ? `Gagal: ${failed.map((item) => item.name).join(", ")}`
+      : "Preflight OK.";
     els.consoleOutput.textContent = (report.checks || [])
-      .map((item) => `${item.ok ? "OK" : item.required ? "FAIL" : "WARN"} ${item.name}${item.detail ? ` - ${item.detail}` : ""}`)
+      .map((item) => `${item.ok ? "OK  " : item.required ? "FAIL" : "WARN"} ${item.name}${item.detail ? ` — ${item.detail}` : ""}`)
       .join("\n");
+    els.consoleMeta.textContent = `${(report.checks || []).length} check`;
   } catch (error) {
     handleApiError(error);
   }
@@ -455,31 +616,30 @@ els.preflightBtn.addEventListener("click", async () => {
 
 els.videoForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = formData(els.videoForm);
-  payload.priority = Number(payload.priority || 1);
-  await api("/api/videos", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-  els.videoForm.reset();
-  els.videoForm.elements.theme.value = "podcast artis";
-  els.videoForm.elements.priority.value = "1";
-  els.videoForm.elements.quality_profile.value = "standard";
-  els.videoForm.elements.subtitle_font.value = "Segoe UI";
-  els.videoForm.elements.subtitle_font_size.value = "46";
-  els.videoForm.elements.subtitle_margin_v.value = "400";
-  await refresh();
+  try {
+    const payload = formData(els.videoForm);
+    payload.priority = Number(payload.priority || 1);
+    await api("/api/videos", { method: "POST", body: JSON.stringify(payload) });
+    els.videoForm.reset();
+    els.videoForm.elements.theme.value = "podcast artis";
+    els.videoForm.elements.priority.value = "1";
+    els.videoForm.elements.quality_profile.value = "standard";
+    await refresh();
+  } catch (error) {
+    handleApiError(error);
+  }
 });
 
 els.runForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = formData(els.runForm);
-  payload.publish = els.runForm.elements.publish.checked;
-  await api("/api/run", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-  await refresh();
+  try {
+    const payload = formData(els.runForm);
+    payload.publish = els.runForm.elements.publish.checked;
+    await api("/api/run", { method: "POST", body: JSON.stringify(payload) });
+    await refresh();
+  } catch (error) {
+    handleApiError(error);
+  }
 });
 
 els.settingsForm.addEventListener("submit", async (event) => {
@@ -501,14 +661,6 @@ els.settingsForm.addEventListener("submit", async (event) => {
   }
 });
 
-refresh().catch((error) => {
-  handleApiError(error);
-});
-
-window.setInterval(() => {
-  if (!authVisible) refresh().catch(() => {});
-}, 3000);
-
 els.authForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const pin = els.authPin.value.trim();
@@ -516,12 +668,8 @@ els.authForm?.addEventListener("submit", async (event) => {
     els.authError.textContent = "PIN wajib diisi.";
     return;
   }
-
   try {
-    await api("/api/auth", {
-      method: "POST",
-      body: JSON.stringify({ pin })
-    });
+    await api("/api/auth", { method: "POST", body: JSON.stringify({ pin }) });
     dashboardPin = pin;
     window.sessionStorage.setItem("dashboardPin", pin);
     hideAuth();
@@ -537,3 +685,5 @@ els.logoutBtn?.addEventListener("click", async () => {
   await api("/api/auth", { method: "DELETE" }).catch(() => {});
   showAuth("Anda sudah keluar.");
 });
+
+refresh().catch((error) => handleApiError(error));

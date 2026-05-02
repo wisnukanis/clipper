@@ -276,9 +276,42 @@ export async function getRecentRuns(limit = 5) {
     conclusion: run.conclusion,
     event: run.event,
     head_sha: run.head_sha,
+    head_branch: run.head_branch,
+    run_attempt: run.run_attempt,
+    display_title: run.display_title || run.head_commit?.message || "",
     created_at: run.created_at,
     updated_at: run.updated_at,
     html_url: run.html_url
+  }));
+}
+
+export async function getRunJobs(runId) {
+  const token = githubToken();
+  if (!token || !runId) return [];
+
+  const repo = githubRepo();
+  const response = await fetch(
+    `https://api.github.com/repos/${repo}/actions/runs/${runId}/jobs?per_page=30`,
+    { headers: githubHeaders(token), cache: "no-store" }
+  );
+  if (!response.ok) return [];
+  const data = await response.json();
+  return (data.jobs || []).map((job) => ({
+    id: job.id,
+    name: job.name,
+    status: job.status,
+    conclusion: job.conclusion,
+    started_at: job.started_at,
+    completed_at: job.completed_at,
+    html_url: job.html_url,
+    steps: (job.steps || []).map((step) => ({
+      name: step.name,
+      status: step.status,
+      conclusion: step.conclusion,
+      number: step.number,
+      started_at: step.started_at,
+      completed_at: step.completed_at
+    }))
   }));
 }
 
