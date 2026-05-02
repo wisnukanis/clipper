@@ -371,7 +371,7 @@ h2 {
 .heroPanel {
   display: grid;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 14px;
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(6, 182, 212, 0.06)), var(--surface);
   border: 1px solid rgba(167, 139, 250, 0.18);
   overflow: hidden;
@@ -692,7 +692,7 @@ h2 {
 .consolePanel {
   display: grid;
   grid-template-rows: auto 1fr;
-  padding: 12px 14px;
+  padding: 14px;
   min-height: 0;
 }
 
@@ -749,7 +749,7 @@ h2 {
 .formCard {
   display: grid;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 14px;
 }
 
 .field {
@@ -1133,6 +1133,12 @@ td a:hover {
     padding: 10px 12px;
     border-radius: 12px;
     gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  .brand {
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .brandMark {
@@ -1140,14 +1146,22 @@ td a:hover {
     height: 36px;
     font-size: 13px;
     border-radius: 10px;
+    flex: 0 0 auto;
+  }
+
+  .brandText {
+    min-width: 0;
   }
 
   .brandText .eyebrow {
-    font-size: 9px;
+    display: none;
   }
 
   .brandText h1 {
-    font-size: 15px;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .configLine {
@@ -1186,13 +1200,15 @@ td a:hover {
     font-size: 22px;
   }
 
-  .panel {
+  .panel,
+  .heroPanel,
+  .consolePanel,
+  .formCard {
     padding: 14px;
     border-radius: 12px;
   }
 
   .heroPanel {
-    padding: 14px;
     gap: 12px;
   }
 
@@ -1284,10 +1300,6 @@ td a:hover {
     gap: 10px;
   }
 
-  .consolePanel {
-    padding: 12px 14px;
-  }
-
   .consoleOutput {
     min-height: 160px;
     max-height: 220px;
@@ -1297,7 +1309,6 @@ td a:hover {
   }
 
   .formCard {
-    padding: 12px 14px;
     gap: 10px;
   }
 
@@ -1467,16 +1478,17 @@ td a:hover {
     padding: 9px 11px;
   }
 
-  .brandText h1 {
-    font-size: 14px;
+  .brandText {
+    display: none;
   }
 
   .toolbar {
     gap: 4px;
+    margin-left: auto;
   }
 
   .toolbar .btn {
-    padding: 0 9px;
+    padding: 0 10px;
     font-size: 10px;
     height: 28px;
   }
