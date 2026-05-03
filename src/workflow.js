@@ -302,6 +302,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
       const youtubeMetadata = buildYoutubeMetadata({ job, output, caption });
       return publishToYoutube({
         videoPath: output.finalAbsPath,
+        thumbnailPath: thumbnail?.path || "",
         ...youtubeMetadata
       });
     });

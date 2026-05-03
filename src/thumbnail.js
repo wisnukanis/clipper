@@ -9,14 +9,15 @@ const BOX_MARGIN_X = 60;
 const BOX_W = CANVAS_WIDTH - (BOX_MARGIN_X * 2);
 const BOX_PADDING_X = 36;
 const BOX_PADDING_Y = 30;
-const BOX_BOTTOM_OFFSET = 270;
+const BOX_BOTTOM_OFFSET = Number(process.env.THUMBNAIL_BOTTOM_OFFSET || 480);
 const BOX_MAX_HEIGHT = 320;
 const MAX_TITLE_LINES = 3;
-const MAX_TITLE_WORDS = 10;
-const FONT_SIZE_MAX = 78;
-const FONT_SIZE_MIN = 50;
-const TEXT_COLOR = process.env.THUMBNAIL_TEXT_COLOR || "0x25F4EE";
-const BORDER_COLOR = process.env.THUMBNAIL_BORDER_COLOR || "0x25F4EE";
+const MAX_TITLE_WORDS = 8;
+const FONT_SIZE_MAX = 74;
+const FONT_SIZE_MIN = 44;
+const CHAR_WIDTH_RATIO = 0.62;
+const TEXT_COLOR = process.env.THUMBNAIL_TEXT_COLOR || "0xFFD60A";
+const BORDER_COLOR = process.env.THUMBNAIL_BORDER_COLOR || "0xFFD60A";
 const BG_COLOR = process.env.THUMBNAIL_BG_COLOR || "0x000000";
 const BG_OPACITY = clampOpacity(process.env.THUMBNAIL_BG_OPACITY, 0.55);
 const BORDER_OPACITY = clampOpacity(process.env.THUMBNAIL_BORDER_OPACITY, 0.85);
@@ -85,7 +86,7 @@ function buildTitleLayout(value) {
   let lines = [];
 
   while (fontSize >= FONT_SIZE_MIN) {
-    const maxChars = Math.max(10, Math.floor(textAreaW / (fontSize * 0.55)));
+    const maxChars = Math.max(10, Math.floor(textAreaW / (fontSize * CHAR_WIDTH_RATIO)));
     lines = wrapText(title, maxChars, MAX_TITLE_LINES);
     const textBlockH = estimateTextBlockHeight(lines.length, fontSize);
     const widthOk = lines.every((line) => estimateTextWidth(line, fontSize) <= textAreaW);
@@ -167,7 +168,7 @@ function truncateLine(value, maxChars) {
 }
 
 function estimateTextWidth(value, fontSize) {
-  return String(value || "").length * fontSize * 0.55;
+  return String(value || "").length * fontSize * CHAR_WIDTH_RATIO;
 }
 
 function estimateTextBlockHeight(lineCount, fontSize) {

@@ -34,7 +34,37 @@ export async function getYoutubeAccessToken() {
   }
 }
 
-export async function publishToYoutube({ videoPath, title, description, tags = [] }) {
+async function setYoutubeThumbnail({ videoId, thumbnailPath, accessToken }) {
+  if (!videoId || !thumbnailPath) return false;
+  try {
+    const stat = await fsp.stat(thumbnailPath);
+    if (!stat.size) return false;
+    const stream = fs.createReadStream(thumbnailPath);
+    const response = await axios.post(
+      "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
+      stream,
+      {
+        params: { videoId, uploadType: "media" },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "image/jpeg",
+          "Content-Length": stat.size
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        timeout: 60000
+      }
+    );
+    console.log("YT THUMBNAIL SET:", response.data);
+    return true;
+  } catch (error) {
+    const wrapped = wrapGoogleError(error, "YouTube thumbnail upload failed");
+    console.warn(wrapped.message);
+    return false;
+  }
+}
+
+export async function publishToYoutube({ videoPath, title, description, tags = [], thumbnailPath }) {
   const accessToken = await getYoutubeAccessToken();
   const stat = await fsp.stat(videoPath);
   const metadata = {
@@ -85,12 +115,14 @@ export async function publishToYoutube({ videoPath, title, description, tags = [
     });
     const id = upload.data?.id;
     if (!id) throw new Error("YouTube upload selesai tetapi video id kosong.");
+    const customThumbnail = await setYoutubeThumbnail({ videoId: id, thumbnailPath, accessToken });
     return {
       videoId: id,
       url: `https://www.youtube.com/watch?v=${id}`,
       privacyStatus: metadata.status.privacyStatus,
       title: metadata.snippet.title,
-      type: "youtube_video"
+      type: "youtube_video",
+      customThumbnail
     };
   } catch (error) {
     throw wrapGoogleError(error, "YouTube video upload failed");
