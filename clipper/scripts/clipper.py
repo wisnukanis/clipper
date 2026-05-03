@@ -1402,7 +1402,7 @@ def subtitle_style_config(config):
     font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46), 28, 84)
     min_font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_MIN_FONT_SIZE"), 34), 24, font_size)
     margin_h = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_H"), default_margin_h), min_margin_h, max_margin_h)
-    margin_v = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 600), 120, max(120, int(height * 0.48)))
+    margin_v = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 550), 550, max(550, int(height * 0.48)))
     max_lines = clamp_int(parse_int(os.environ.get("SUBTITLE_MAX_LINES"), 2), 1, 3)
 
     return {

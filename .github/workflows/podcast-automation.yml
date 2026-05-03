@@ -38,7 +38,7 @@ on:
       subtitle_margin_v:
         description: Subtitle bottom margin
         required: false
-        default: "600"
+        default: "550"
       subtitle_margin_h:
         description: Subtitle side margin
         required: false
@@ -196,7 +196,7 @@ jobs:
       SMART_CROP_MODE: ${{ github.event.inputs.scene_mode || secrets.SMART_CROP_MODE || 'podcast' }}
       CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '1' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
-      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '600' }}
+      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || '550' }}
       SUBTITLE_MARGIN_H: ${{ github.event.inputs.subtitle_margin_h || secrets.SUBTITLE_MARGIN_H || '180' }}
       SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '2' }}
       SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H0000FFFF' }}
@@ -456,25 +456,19 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg unzip
 
       - name: Install Selawik (Segoe UI metric clone)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.local/share/fonts/selawik
-          base="https://github.com/microsoft/Selawik/raw/master/fonts/ttf"
-          for face in selawk selawkb selawkl selawksb selawksl
-          do
-            url="${base}/${face}.ttf"
-            if curl -fsSL "$url" -o "$HOME/.local/share/fonts/selawik/${face}.ttf"; then
-              echo "Downloaded $face"
-            else
-              echo "::warning::Selawik face $face download failed; continuing"
-            fi
-          done
+          curl -fsSL \
+            https://github.com/microsoft/Selawik/releases/download/1.01/Selawik_Release.zip \
+            -o /tmp/Selawik_Release.zip
+          unzip -o -j /tmp/Selawik_Release.zip '*.ttf' -d ~/.local/share/fonts/selawik
           fc-cache -f
-          fc-list | grep -i selawik || echo "::warning::Selawik not registered, will fall back"
+          fc-list | grep -i selawik
 
       - name: Restore automation state
         uses: actions/cache@v4

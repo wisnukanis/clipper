@@ -228,7 +228,7 @@ app.get("/api/state", async (_req, res) => {
       youtubeEnabled: config.youtube.enabled,
     tiktokEnabled: config.tiktok.enabled,
     subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
-    subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "600"
+    subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "550"
     },
     activeRun,
     themes: await readJson("themes", []),
@@ -370,7 +370,7 @@ app.post("/api/run", async (req, res) => {
     qualityProfile: body.quality_profile || "standard",
     subtitleFont: body.subtitle_font || "Segoe UI Semibold",
     subtitleFontSize: Number(body.subtitle_font_size || 46),
-    subtitleMarginV: Number(body.subtitle_margin_v || 600)
+    subtitleMarginV: Number(body.subtitle_margin_v || 550)
   }))
     .then((result) => {
       activeRun = {

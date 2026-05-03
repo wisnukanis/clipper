@@ -166,7 +166,7 @@ export async function discoverAndQueueVideos(options = {}) {
       quality_profile: process.env.VIDEO_QUALITY_PROFILE || "standard",
       subtitle_font: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
       subtitle_font_size: Number(process.env.SUBTITLE_FONT_SIZE || 46),
-      subtitle_margin_v: Number(process.env.SUBTITLE_MARGIN_V || 600),
+      subtitle_margin_v: Number(process.env.SUBTITLE_MARGIN_V || 550),
       subtitle_margin_h: Number(process.env.SUBTITLE_MARGIN_H || 180),
       notes: [
         `Auto discovery: ${item.discovery_query}`,

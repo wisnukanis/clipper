@@ -17,6 +17,10 @@ export async function runClipper({ video, job, onLog = () => {} }) {
   const quality = qualityPreset(video.quality_profile);
   const sceneMode = String(video.scene_mode || process.env.SCENE_MODE || process.env.SMART_CROP_MODE || "podcast");
   const clipCount = String(video.clip_count || process.env.CLIP_COUNT || config.clipper.clipCount);
+  const subtitleMarginV = Math.max(
+    550,
+    Number(video.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || 550) || 550
+  );
   const env = {
     ...process.env,
     CLIP_COUNT: clipCount,
@@ -27,7 +31,7 @@ export async function runClipper({ video, job, onLog = () => {} }) {
     FINAL_RENDER_CRF: String(quality.finalCrf),
     SUBTITLE_FONT_FAMILY: String(video.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     SUBTITLE_FONT_SIZE: String(video.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || 46),
-    SUBTITLE_MARGIN_V: String(video.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || 600),
+    SUBTITLE_MARGIN_V: String(subtitleMarginV),
     SUBTITLE_MARGIN_H: String(video.subtitle_margin_h || process.env.SUBTITLE_MARGIN_H || 180),
     SCENE_MODE: sceneMode,
     SMART_CROP_MODE: sceneMode
