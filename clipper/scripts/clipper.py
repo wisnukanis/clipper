@@ -1472,7 +1472,8 @@ def build_ass(events, config):
     height = config["height"]
     font_name = (os.environ.get("SUBTITLE_FONT_FAMILY") or "Segoe UI Semibold").strip() or "Segoe UI Semibold"
     font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 52)
-    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 240)
+    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 600)
+    margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 140)
 
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -1483,7 +1484,7 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,{font_name},{font_size},&H0000FFFF,&H0000FFFF,&H00111111,&H66000000,-1,0,0,0,100,100,0,0,1,4,1,2,80,80,{margin_v},1
+Style: Caption,{font_name},{font_size},&H0000FFFF,&H0000FFFF,&H00111111,&H66000000,-1,0,0,0,100,100,0,0,1,4,1,2,{margin_h},{margin_h},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

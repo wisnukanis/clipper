@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       clip_count: clean(body.clip_count || process.env.CLIP_COUNT || "1"),
       subtitle_font: clean(body.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
       subtitle_font_size: clean(body.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || "52"),
-      subtitle_margin_v: clean(body.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || "240")
+      subtitle_margin_v: clean(body.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || "600")
     };
 
     const dispatch = await dispatchWorkflow(inputs);

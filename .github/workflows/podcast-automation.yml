@@ -38,7 +38,7 @@ on:
       subtitle_margin_v:
         description: Subtitle bottom margin
         required: false
-        default: "240"
+        default: "600"
       scene_mode:
         description: "Scene mode: podcast, solo, game, reaction, sport, auto, active_speaker, center"
         required: false
@@ -186,8 +186,8 @@ jobs:
       SMART_CROP_MODE: ${{ github.event.inputs.scene_mode || secrets.SMART_CROP_MODE || 'podcast' }}
       CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '1' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
-      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '240' }}
-      SUBTITLE_MARGIN_H: ${{ secrets.SUBTITLE_MARGIN_H || '120' }}
+      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '600' }}
+      SUBTITLE_MARGIN_H: ${{ secrets.SUBTITLE_MARGIN_H || '140' }}
       SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '3' }}
       SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H0030A8D6' }}
       SUBTITLE_OUTLINE_COLOUR: ${{ secrets.SUBTITLE_OUTLINE_COLOUR || '&H66000000' }}
