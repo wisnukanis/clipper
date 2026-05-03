@@ -7,6 +7,7 @@ import { appendLog } from "./logger.js";
 import { patchItem, readJson, writeJson } from "./storage.js";
 import { buildYoutubeMetadata, publishToYoutube, setYoutubeThumbnail } from "./youtube-publisher.js";
 import { publishToTikTok } from "./tiktok.js";
+import { publishToThreads } from "./threads.js";
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -67,8 +68,8 @@ if (!job) {
   process.exit(1);
 }
 
-if (!config.youtube.enabled && !config.instagram.enabled && !config.tiktok.enabled) {
-  console.error("Tidak ada platform aktif. Aktifkan YOUTUBE_UPLOAD_ENABLED, INSTAGRAM_UPLOAD_ENABLED, atau TIKTOK_UPLOAD_ENABLED.");
+if (!config.youtube.enabled && !config.instagram.enabled && !config.tiktok.enabled && !config.threads.enabled) {
+  console.error("Tidak ada platform aktif. Aktifkan YOUTUBE_UPLOAD_ENABLED, INSTAGRAM_UPLOAD_ENABLED, TIKTOK_UPLOAD_ENABLED, atau THREADS_UPLOAD_ENABLED.");
   process.exit(1);
 }
 
@@ -94,6 +95,7 @@ await patchItem("jobs", job.job_id, onlyYoutubeThumbnail ? {
   youtube_status: config.youtube.enabled && (!job.youtube_url || forceYoutube) ? "processing" : job.youtube_status,
   instagram_status: config.instagram.enabled && !job.instagram_media_id ? "processing" : job.instagram_status,
   tiktok_status: config.tiktok.enabled && !job.tiktok_publish_id ? "processing" : job.tiktok_status,
+  threads_status: config.threads.enabled && !job.threads_media_id ? "processing" : job.threads_status,
   publish_status: "publishing",
   status: "publishing"
 });
@@ -112,6 +114,11 @@ let instagram = job.instagram_media_id ? {
 let tiktok = job.tiktok_publish_id ? {
   publishId: job.tiktok_publish_id,
   mode: job.tiktok_mode || "",
+  skipped: true
+} : null;
+let threads = job.threads_media_id ? {
+  mediaId: job.threads_media_id,
+  url: job.threads_url || "",
   skipped: true
 } : null;
 
@@ -188,7 +195,15 @@ try {
     });
   }
 
-  if (!youtube && !instagram && !tiktok) {
+  if (config.threads.enabled && !threads) {
+    if (!job.public_video_url) throw new Error("public_video_url kosong, Threads butuh URL video publik dari FTP.");
+    threads = await publishToThreads({
+      videoUrl: job.public_video_url,
+      caption: job.caption || ""
+    });
+  }
+
+  if (!youtube && !instagram && !tiktok && !threads) {
     throw new Error("Tidak ada publish yang dijalankan.");
   }
 
@@ -207,6 +222,9 @@ try {
     tiktok_status: tiktok ? "submitted" : "disabled",
     tiktok_publish_id: tiktok?.publishId || "",
     tiktok_mode: tiktok?.mode || "",
+    threads_status: threads ? "published" : "disabled",
+    threads_media_id: threads?.mediaId || "",
+    threads_url: threads?.url || "",
     published_at: now
   });
   await patchVideo(job.video_id, {
@@ -214,7 +232,9 @@ try {
     youtube_video_id: youtube?.videoId || job.youtube_video_id,
     youtube_url: youtube?.url || job.youtube_url,
     instagram_media_id: instagram?.mediaId || job.instagram_media_id,
-    tiktok_publish_id: tiktok?.publishId || job.tiktok_publish_id
+    tiktok_publish_id: tiktok?.publishId || job.tiktok_publish_id,
+    threads_media_id: threads?.mediaId || job.threads_media_id,
+    threads_url: threads?.url || job.threads_url
   });
   await appendHistory({
     job_id: job.job_id,
@@ -232,6 +252,8 @@ try {
     tiktok_mode: tiktok?.mode || "",
     youtube_video_id: youtube?.videoId || "",
     youtube_url: youtube?.url || "",
+    threads_media_id: threads?.mediaId || "",
+    threads_url: threads?.url || "",
     published_at: now
   });
   await appendLog("platform_published", {
@@ -239,18 +261,21 @@ try {
     instagram_media_id: instagram?.mediaId || "",
     tiktok_publish_id: tiktok?.publishId || "",
     youtube_video_id: youtube?.videoId || "",
-    youtube_url: youtube?.url || ""
+    youtube_url: youtube?.url || "",
+    threads_media_id: threads?.mediaId || ""
   });
   console.log(JSON.stringify({
     status: "published",
     job_id: job.job_id,
     instagram,
     tiktok,
-    youtube
+    youtube,
+    threads
   }, null, 2));
 } catch (error) {
   const hasYoutube = Boolean(youtube?.url || youtube?.videoId || job.youtube_url || job.youtube_video_id);
   const hasTikTok = Boolean(tiktok?.publishId || job.tiktok_publish_id);
+  const hasThreads = Boolean(threads?.mediaId || job.threads_media_id);
   await patchItem("jobs", job.job_id, {
     status: "failed_publish",
     publish_status: "failed_publish",
@@ -260,6 +285,9 @@ try {
     instagram_status: config.instagram.enabled ? "failed" : job.instagram_status,
     tiktok_status: hasTikTok ? "submitted" : config.tiktok.enabled ? "failed" : job.tiktok_status,
     tiktok_publish_id: tiktok?.publishId || job.tiktok_publish_id || "",
+    threads_status: hasThreads ? "published" : config.threads.enabled ? "failed" : job.threads_status,
+    threads_media_id: threads?.mediaId || job.threads_media_id || "",
+    threads_url: threads?.url || job.threads_url || "",
     error_message: error.message
   });
   await appendLog("platform_publish_failed", {

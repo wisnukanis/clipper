@@ -120,6 +120,14 @@ function buildConfig() {
       disableStitch: boolEnv("TIKTOK_DISABLE_STITCH", false),
       coverTimestampMs: numberEnv("TIKTOK_COVER_TIMESTAMP_MS", 1000)
     },
+    threads: {
+      enabled: boolEnv("THREADS_UPLOAD_ENABLED", false),
+      accessToken: process.env.THREADS_ACCESS_TOKEN || "",
+      userId: cleanText(process.env.THREADS_USER_ID),
+      apiVersion: cleanText(process.env.THREADS_API_VERSION || "v1.0"),
+      autoRefreshToken: boolEnv("AUTO_REFRESH_THREADS_TOKEN", true),
+      tokenIssuedAt: cleanText(process.env.THREADS_TOKEN_ISSUED_AT)
+    },
     instagramIgUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
     instagramAccessToken: cleanText(process.env.INSTAGRAM_ACCESS_TOKEN),
     gemini: {

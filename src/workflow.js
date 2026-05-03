@@ -14,6 +14,7 @@ import { prepareInstagramVideo } from "./instagram-video.js";
 import { publishToFacebook } from "./facebook.js";
 import { buildYoutubeMetadata, publishToYoutube } from "./youtube-publisher.js";
 import { publishToTikTok } from "./tiktok.js";
+import { publishToThreads } from "./threads.js";
 import { todayDate } from "./job-id.js";
 import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflight.js";
@@ -200,6 +201,10 @@ export async function runWorkflow(options = {}) {
         tiktok_publish_id: platformResults.tiktok?.publishId || "",
         tiktok_mode: platformResults.tiktok?.mode || "",
         tiktok_error: platformResults.errors.tiktok || "",
+        threads_status: platformResults.threads ? "published" : config.threads.enabled ? "failed" : "disabled",
+        threads_media_id: platformResults.threads?.mediaId || "",
+        threads_url: platformResults.threads?.url || "",
+        threads_error: platformResults.errors.threads || "",
         youtube_status: platformResults.youtube ? "published" : config.youtube.enabled ? "failed" : "disabled",
         youtube_video_id: platformResults.youtube?.videoId || "",
         youtube_url: platformResults.youtube?.url || "",
@@ -216,6 +221,8 @@ export async function runWorkflow(options = {}) {
         facebook_video_id: platformResults.facebook?.videoId || "",
         facebook_url: platformResults.facebook?.url || "",
         tiktok_publish_id: platformResults.tiktok?.publishId || "",
+        threads_media_id: platformResults.threads?.mediaId || "",
+        threads_url: platformResults.threads?.url || "",
         error_message: primaryPublished ? "" : platformResults.errors.youtube || "Publish platform gagal; siap retry."
       });
       await appendHistoryEntry({
@@ -234,7 +241,8 @@ export async function runWorkflow(options = {}) {
         instagram_media_id: platformResults.instagram?.mediaId || "",
         facebook_video_id: platformResults.facebook?.videoId || "",
         tiktok_publish_id: platformResults.tiktok?.publishId || "",
-        youtube_video_id: platformResults.youtube?.videoId || ""
+        youtube_video_id: platformResults.youtube?.videoId || "",
+        threads_media_id: platformResults.threads?.mediaId || ""
       });
       return { status: publishStatus, job_id: job.job_id, platformResults };
     }
@@ -293,6 +301,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
     facebook: null,
     tiktok: null,
     youtube: null,
+    threads: null,
     errors: {},
     hasAnySuccess: false,
     hasErrors: false
@@ -348,6 +357,17 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
       return publishToTikTok({
         videoUrl: upload.videoUrl,
         videoPath: output.finalAbsPath,
+        caption
+      });
+    });
+  }
+
+  if (config.threads.enabled) {
+    platformResults.threads = await publishPlatform("threads", platformResults, job.job_id, async () => {
+      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Threads.");
+      await updateJob(job.job_id, { threads_status: "processing", threads_error: "" });
+      return publishToThreads({
+        videoUrl: upload.videoUrl,
         caption
       });
     });
@@ -425,6 +445,8 @@ async function appendHistoryEntry({ job, video, caption, output, upload, platfor
     youtube_url: platformResults.youtube?.url || "",
     tiktok_publish_id: platformResults.tiktok?.publishId || "",
     tiktok_mode: platformResults.tiktok?.mode || "",
+    threads_media_id: platformResults.threads?.mediaId || "",
+    threads_url: platformResults.threads?.url || "",
     published_at: status === "published" ? new Date().toISOString() : ""
   });
 }

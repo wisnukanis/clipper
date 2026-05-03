@@ -724,6 +724,47 @@ FACEBOOK_UPLOAD_ENABLED=true
 INSTAGRAM_UPLOAD_ENABLED=true
 INSTAGRAM_REEL_UPLOAD_METHOD=resumable
 INSTAGRAM_MAX_UPLOAD_BYTES=7800000
+THREADS_UPLOAD_ENABLED=false
+```
+
+### Threads (Meta) Publishing
+
+Threads memakai API resmi Meta di host `graph.threads.net`. Flow-nya 2 langkah seperti Reels: bikin container video lalu publish.
+
+```txt
+1. Token long-lived 60 hari, di-refresh otomatis sebelum sisa <= TOKEN_REFRESH_BEFORE_DAYS.
+2. Workflow hanya menjalankan publish Threads jika THREADS_UPLOAD_ENABLED=true.
+3. Threads butuh public_video_url dari FTP yang sama dengan Instagram/Facebook.
+4. Caption di-truncate ke 500 karakter (limit Threads).
+5. Status job menyimpan threads_status, threads_media_id, threads_url, threads_error.
+```
+
+Variabel env Threads:
+
+```env
+THREADS_UPLOAD_ENABLED=true
+THREADS_ACCESS_TOKEN=
+THREADS_USER_ID=
+THREADS_API_VERSION=v1.0
+AUTO_REFRESH_THREADS_TOKEN=true
+THREADS_TOKEN_ISSUED_AT=
+```
+
+Cara dapatin token:
+
+```txt
+1. Daftarkan app Threads di developers.facebook.com (gunakan app yang sama dengan IG/FB juga boleh).
+2. Tambah produk "Threads API" + permission threads_basic, threads_content_publish.
+3. Ambil short-lived token dari Graph Explorer / OAuth flow Threads.
+4. Tukar ke long-lived token via /access_token?grant_type=th_exchange_token.
+5. Simpan token ke GitHub Secret THREADS_ACCESS_TOKEN.
+6. Optional: simpan tanggal pembuatan token ke THREADS_TOKEN_ISSUED_AT (ISO 8601) supaya auto-refresh tahu kapan refresh dipakai.
+```
+
+Cek token cepat:
+
+```bash
+npm run threads:check
 ```
 
 ---
@@ -794,6 +835,13 @@ META_APP_ID=
 META_APP_SECRET=
 AUTO_REFRESH_INSTAGRAM_TOKEN=true
 TOKEN_REFRESH_BEFORE_DAYS=10
+
+THREADS_UPLOAD_ENABLED=false
+THREADS_ACCESS_TOKEN=
+THREADS_USER_ID=
+THREADS_API_VERSION=v1.0
+AUTO_REFRESH_THREADS_TOKEN=true
+THREADS_TOKEN_ISSUED_AT=
 ```
 
 ### Fungsi Environment Publishing Automation

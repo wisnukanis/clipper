@@ -7,6 +7,7 @@ import { ensureFreshFacebookToken } from "./facebook-token.js";
 import { withFtpClient } from "./uploader.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
 import { queryTikTokCreatorInfo } from "./tiktok.js";
+import { ensureFreshThreadsToken } from "./threads-token.js";
 
 function checkResult(name, ok, detail = "", required = true) {
   return { name, ok, detail, required };
@@ -339,6 +340,31 @@ async function checkYoutube(online, required = canPublish()) {
   }
 }
 
+async function checkThreads(online, required = false) {
+  if (!config.threads.enabled) {
+    return checkResult("Threads API", true, "THREADS_UPLOAD_ENABLED=false", false);
+  }
+
+  const missing = missingEnv(["THREADS_ACCESS_TOKEN"]);
+  if (missing.length) {
+    return checkResult("Threads API", false, `missing env: ${missing.join(", ")}`, required);
+  }
+
+  if (!online) {
+    return checkResult("Threads API", true, "env lengkap", required);
+  }
+
+  try {
+    const status = await ensureFreshThreadsToken();
+    const detail = status.username
+      ? `user valid: @${status.username}`
+      : status.checked ? "token valid" : status.reason || "dilewati";
+    return checkResult("Threads API", true, status.refreshed ? `${detail}, token refreshed` : detail, required);
+  } catch (error) {
+    return checkResult("Threads API", false, error.message, required);
+  }
+}
+
 async function checkTikTok(online, required = false) {
   if (!config.tiktok.enabled) {
     return checkResult("TikTok Content Posting API", true, "TIKTOK_UPLOAD_ENABLED=false", false);
@@ -391,7 +417,8 @@ export async function runPreflight(options = {}) {
     await checkInstagram(socialOnline, socialPublishRequired),
     await checkFacebook(socialOnline, socialPublishRequired),
     await checkYoutube(youtubeOnline, publishRequired),
-    await checkTikTok(socialOnline, socialPublishRequired)
+    await checkTikTok(socialOnline, socialPublishRequired),
+    await checkThreads(socialOnline, socialPublishRequired)
   ];
   const precheckFailed = preChecks.some((check) => check.required && !check.ok);
 

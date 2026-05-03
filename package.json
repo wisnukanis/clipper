@@ -20,6 +20,7 @@
     "videos:discover": "node src/video-discovery.js",
     "tiktok:auth-url": "node src/tiktok-auth-url.js",
     "tiktok:token": "node src/tiktok-token-fastcheck.js --persist-local",
+    "threads:check": "node src/threads-check.js",
     "ftp:cleanup": "node src/cleanup-ftp.js",
     "ftp:cleanup:dry": "node src/cleanup-ftp.js --dry-run",
     "clipper:setup": "python -m pip install -r clipper/requirements.txt"
