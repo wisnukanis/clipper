@@ -1037,8 +1037,19 @@ YTDLP_JS_RUNTIMES=node
 YTDLP_REMOTE_COMPONENTS=ejs:github
 
 SUBTITLE_OFFSET_SECONDS=0
-SUBTITLE_FONT_SIZE=48
-SUBTITLE_MARGIN_V=240
+SUBTITLE_FONT_FAMILY=Segoe UI Semibold
+SUBTITLE_FALLBACK_FONTS=Segoe UI,Arial,DejaVu Sans
+SUBTITLE_FONT_SIZE=46
+SUBTITLE_MIN_FONT_SIZE=34
+SUBTITLE_MARGIN_V=600
+SUBTITLE_MARGIN_H=180
+SUBTITLE_MAX_LINES=2
+SUBTITLE_PRIMARY_COLOUR=&H0000FFFF
+SUBTITLE_OUTLINE_COLOUR=&H00111111
+SUBTITLE_SHADOW_COLOUR=&H66000000
+SUBTITLE_OUTLINE=4
+SUBTITLE_SHADOW=1
+SUBTITLE_BOLD=1
 TRANSCRIPT_REVIEW_ENABLED=1
 TRANSCRIPT_REVIEW_BATCH_SIZE=80
 
@@ -1162,13 +1173,57 @@ Remote component yt-dlp.
 
 Offset timing subtitle.
 
+#### `SUBTITLE_FONT_FAMILY`
+
+Font utama subtitle.
+
+#### `SUBTITLE_FALLBACK_FONTS`
+
+Daftar font cadangan subtitle.
+
 #### `SUBTITLE_FONT_SIZE`
 
-Ukuran font subtitle.
+Ukuran font subtitle. Default diperkecil agar aman di layar HP.
+
+#### `SUBTITLE_MIN_FONT_SIZE`
+
+Ukuran minimum saat subtitle harus diperkecil agar muat pada baris panjang.
 
 #### `SUBTITLE_MARGIN_V`
 
 Margin vertikal subtitle.
+
+#### `SUBTITLE_MARGIN_H`
+
+Margin horizontal subtitle. Default dibuat lebih lebar agar teks tidak keluar sisi kiri/kanan layar HP.
+
+#### `SUBTITLE_MAX_LINES`
+
+Jumlah baris maksimal subtitle. Teks panjang akan dibagi menjadi cue pendek berurutan.
+
+#### `SUBTITLE_PRIMARY_COLOUR`
+
+Warna utama subtitle dalam format ASS.
+
+#### `SUBTITLE_OUTLINE_COLOUR`
+
+Warna outline subtitle dalam format ASS.
+
+#### `SUBTITLE_SHADOW_COLOUR`
+
+Warna shadow subtitle dalam format ASS.
+
+#### `SUBTITLE_OUTLINE`
+
+Ketebalan outline subtitle.
+
+#### `SUBTITLE_SHADOW`
+
+Ukuran shadow subtitle.
+
+#### `SUBTITLE_BOLD`
+
+Mengaktifkan style bold ASS subtitle.
 
 #### `TRANSCRIPT_REVIEW_ENABLED`
 

@@ -165,6 +165,7 @@ const envGroups = [
       field("SUBTITLE_PRIMARY_COLOUR", "Primary colour"),
       field("SUBTITLE_OUTLINE_COLOUR", "Outline colour"),
       field("SUBTITLE_SHADOW_COLOUR", "Shadow colour"),
+      field("SUBTITLE_BOLD", "Bold"),
       field("SUBTITLE_OUTLINE", "Outline"),
       field("SUBTITLE_SHADOW", "Shadow")
     ]
@@ -225,9 +226,9 @@ app.get("/api/state", async (_req, res) => {
       instagramEnabled: config.instagram.enabled,
       facebookEnabled: config.facebook.enabled,
       youtubeEnabled: config.youtube.enabled,
-      tiktokEnabled: config.tiktok.enabled,
-      subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI",
-      subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "400"
+    tiktokEnabled: config.tiktok.enabled,
+    subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
+    subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "600"
     },
     activeRun,
     themes: await readJson("themes", []),
@@ -367,9 +368,9 @@ app.post("/api/run", async (req, res) => {
     url: body.url || "",
     range: body.range || "",
     qualityProfile: body.quality_profile || "standard",
-    subtitleFont: body.subtitle_font || "Segoe UI",
-    subtitleFontSize: Number(body.subtitle_font_size || 50),
-    subtitleMarginV: Number(body.subtitle_margin_v || 400)
+    subtitleFont: body.subtitle_font || "Segoe UI Semibold",
+    subtitleFontSize: Number(body.subtitle_font_size || 46),
+    subtitleMarginV: Number(body.subtitle_margin_v || 600)
   }))
     .then((result) => {
       activeRun = {

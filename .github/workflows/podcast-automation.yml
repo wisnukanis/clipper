@@ -34,11 +34,15 @@ on:
       subtitle_font_size:
         description: Subtitle font size
         required: false
-        default: "52"
+        default: "46"
       subtitle_margin_v:
         description: Subtitle bottom margin
         required: false
         default: "600"
+      subtitle_margin_h:
+        description: Subtitle side margin
+        required: false
+        default: "180"
       scene_mode:
         description: "Scene mode: podcast, solo, game, reaction, sport, auto, active_speaker, center"
         required: false
@@ -187,19 +191,20 @@ jobs:
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
       SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik Semibold,Selawik,DejaVu Sans' }}
-      SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '52' }}
+      SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
       SCENE_MODE: ${{ github.event.inputs.scene_mode || secrets.SCENE_MODE || 'podcast' }}
       SMART_CROP_MODE: ${{ github.event.inputs.scene_mode || secrets.SMART_CROP_MODE || 'podcast' }}
       CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '1' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
       SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '600' }}
-      SUBTITLE_MARGIN_H: ${{ secrets.SUBTITLE_MARGIN_H || '140' }}
-      SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '3' }}
-      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H0030A8D6' }}
-      SUBTITLE_OUTLINE_COLOUR: ${{ secrets.SUBTITLE_OUTLINE_COLOUR || '&H66000000' }}
-      SUBTITLE_SHADOW_COLOUR: ${{ secrets.SUBTITLE_SHADOW_COLOUR || '&H99000000' }}
-      SUBTITLE_OUTLINE: ${{ secrets.SUBTITLE_OUTLINE || '1' }}
-      SUBTITLE_SHADOW: ${{ secrets.SUBTITLE_SHADOW || '2' }}
+      SUBTITLE_MARGIN_H: ${{ github.event.inputs.subtitle_margin_h || secrets.SUBTITLE_MARGIN_H || '180' }}
+      SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '2' }}
+      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H0000FFFF' }}
+      SUBTITLE_OUTLINE_COLOUR: ${{ secrets.SUBTITLE_OUTLINE_COLOUR || '&H00111111' }}
+      SUBTITLE_SHADOW_COLOUR: ${{ secrets.SUBTITLE_SHADOW_COLOUR || '&H66000000' }}
+      SUBTITLE_OUTLINE: ${{ secrets.SUBTITLE_OUTLINE || '4' }}
+      SUBTITLE_SHADOW: ${{ secrets.SUBTITLE_SHADOW || '1' }}
+      SUBTITLE_BOLD: ${{ secrets.SUBTITLE_BOLD || '1' }}
       SMART_CROP_ENABLED: "1"
       TRANSCRIPT_REVIEW_ENABLED: "1"
       TRANSCRIPT_REVIEW_REQUIRED: ${{ secrets.TRANSCRIPT_REVIEW_REQUIRED || '0' }}
@@ -701,6 +706,8 @@ jobs:
           echo "SUBTITLE_FONT_FAMILY=$SUBTITLE_FONT_FAMILY"
           echo "SUBTITLE_FONT_SIZE=$SUBTITLE_FONT_SIZE"
           echo "SUBTITLE_MARGIN_V=$SUBTITLE_MARGIN_V"
+          echo "SUBTITLE_MARGIN_H=$SUBTITLE_MARGIN_H"
+          echo "SUBTITLE_MAX_LINES=$SUBTITLE_MAX_LINES"
           echo "YTDLP_COOKIES_FILE=${YTDLP_COOKIES_FILE:-not_set}"
           echo "YTDLP_JS_RUNTIMES=$YTDLP_JS_RUNTIMES"
           echo "YTDLP_REMOTE_COMPONENTS=$YTDLP_REMOTE_COMPONENTS"

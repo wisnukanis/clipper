@@ -1379,6 +1379,143 @@ def clean_filename(value):
     return value[:80] or "untitled"
 
 
+def clamp_int(value, minimum, maximum):
+    return max(minimum, min(maximum, int(value)))
+
+
+def ass_colour_env(name, default):
+    value = str(os.environ.get(name) or default).strip()
+    if re.fullmatch(r"&H[0-9A-Fa-f]{6,8}", value):
+        return value.upper()
+    return default
+
+
+def subtitle_style_config(config):
+    width = parse_int(config.get("width"), 1080)
+    height = parse_int(config.get("height"), 1920)
+    default_margin_h = max(160, int(width * 0.165))
+    min_margin_h = max(150, int(width * 0.15))
+    max_margin_h = max(min_margin_h, int(width * 0.30))
+
+    font_name = (os.environ.get("SUBTITLE_FONT_FAMILY") or "Segoe UI Semibold").strip() or "Segoe UI Semibold"
+    font_name = re.sub(r"[\r\n,]+", " ", font_name).strip() or "Segoe UI Semibold"
+    font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46), 28, 84)
+    min_font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_MIN_FONT_SIZE"), 34), 24, font_size)
+    margin_h = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_H"), default_margin_h), min_margin_h, max_margin_h)
+    margin_v = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 600), 120, max(120, int(height * 0.48)))
+    max_lines = clamp_int(parse_int(os.environ.get("SUBTITLE_MAX_LINES"), 2), 1, 3)
+
+    return {
+        "width": width,
+        "height": height,
+        "font_name": font_name,
+        "font_size": font_size,
+        "min_font_size": min_font_size,
+        "margin_h": margin_h,
+        "margin_v": margin_v,
+        "max_lines": max_lines,
+        "safe_width": max(240, width - (margin_h * 2)),
+        "primary_colour": ass_colour_env("SUBTITLE_PRIMARY_COLOUR", "&H0000FFFF"),
+        "outline_colour": ass_colour_env("SUBTITLE_OUTLINE_COLOUR", "&H00111111"),
+        "shadow_colour": ass_colour_env("SUBTITLE_SHADOW_COLOUR", "&H66000000"),
+        "outline": clamp_int(parse_int(os.environ.get("SUBTITLE_OUTLINE"), 4), 0, 12),
+        "shadow": clamp_int(parse_int(os.environ.get("SUBTITLE_SHADOW"), 1), 0, 8),
+        "bold": -1 if parse_int(os.environ.get("SUBTITLE_BOLD"), 1) else 0,
+    }
+
+
+def text_width_units(text):
+    total = 0.0
+    for char in str(text or ""):
+        if char.isspace():
+            total += 0.35
+        elif char in ".,;:'!|ilI[]()":
+            total += 0.32
+        elif char in "mwMW@#%&":
+            total += 0.86
+        else:
+            total += 0.58
+    return total
+
+
+def wrap_caption_chunks(text, config):
+    style = subtitle_style_config(config)
+    max_units = style["safe_width"] / max(1, style["font_size"])
+    max_lines = style["max_lines"]
+    words = re.sub(r"\s+", " ", text).strip().split()
+    if not words:
+        return []
+
+    chunks = []
+    lines = []
+    current = ""
+
+    def push_line(line):
+        nonlocal lines
+        cleaned = line.strip()
+        if not cleaned:
+            return
+        lines.append(cleaned)
+        if len(lines) >= max_lines:
+            chunks.append(lines)
+            lines = []
+
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if not current or text_width_units(candidate) <= max_units:
+            current = candidate
+            continue
+
+        push_line(current)
+        current = word
+
+    if current:
+        push_line(current)
+    if lines:
+        chunks.append(lines)
+
+    return chunks
+
+
+def fitted_caption_font_size(lines, config):
+    style = subtitle_style_config(config)
+    widest = max((text_width_units(line) for line in lines), default=0.0)
+    if widest <= 0:
+        return style["font_size"]
+
+    fitted = int(style["safe_width"] / widest)
+    return clamp_int(fitted, style["min_font_size"], style["font_size"])
+
+
+def format_ass_caption(lines, config):
+    font_size = fitted_caption_font_size(lines, config)
+    default_font_size = subtitle_style_config(config)["font_size"]
+    text = ass_escape("\\N".join(lines))
+    if font_size < default_font_size:
+        return f"{{\\fs{font_size}}}{text}"
+    return text
+
+
+def caption_events_for_cue(text, cue_start, cue_end, config):
+    chunks = wrap_caption_chunks(text, config)
+    if not chunks:
+        return []
+
+    duration = max(0.0, cue_end - cue_start)
+    max_chunks = max(1, int(duration / 0.8))
+    chunks = chunks[:max_chunks]
+    chunk_duration = duration / max(1, len(chunks))
+    events = []
+
+    for chunk_index, lines in enumerate(chunks):
+        chunk_start = cue_start + (chunk_duration * chunk_index)
+        chunk_end = cue_end if chunk_index == len(chunks) - 1 else cue_start + (chunk_duration * (chunk_index + 1))
+        if chunk_end > chunk_start:
+            events.append((chunk_start, chunk_end, format_ass_caption(lines, config)))
+
+    return events
+
+
 def create_ass(segments, clip, index, config, job_id):
     ass_path = ROOT / "temp" / f"{job_id}-clip-{index + 1:02d}.ass"
     events = []
@@ -1402,7 +1539,7 @@ def create_ass(segments, clip, index, config, job_id):
 
         text = re.sub(r"\s+", " ", str(segment.get("text", ""))).strip()
         if text and cue_end > cue_start:
-            events.append((cue_start, cue_end, ass_escape(wrap_caption(text))))
+            events.extend(caption_events_for_cue(text, cue_start, cue_end, config))
 
     if not events:
         rounded_duration = max(1, int(round(duration)))
@@ -1416,7 +1553,7 @@ def create_ass(segments, clip, index, config, job_id):
 
             cue_start = float(offset)
             cue_end = min(duration, cue_start + 1.0)
-            events.append((cue_start, cue_end, ass_escape(wrap_caption(text))))
+            events.extend(caption_events_for_cue(text, cue_start, cue_end, config))
 
     ass = build_ass(events, config)
     ass_path.write_text(ass, encoding="utf-8-sig")
@@ -1468,23 +1605,30 @@ def ass_escape(text):
 
 
 def build_ass(events, config):
-    width = config["width"]
-    height = config["height"]
-    font_name = (os.environ.get("SUBTITLE_FONT_FAMILY") or "Segoe UI Semibold").strip() or "Segoe UI Semibold"
-    font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 52)
-    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 600)
-    margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 140)
+    style = subtitle_style_config(config)
+    width = style["width"]
+    height = style["height"]
+    font_name = style["font_name"]
+    font_size = style["font_size"]
+    margin_v = style["margin_v"]
+    margin_h = style["margin_h"]
+    primary_colour = style["primary_colour"]
+    outline_colour = style["outline_colour"]
+    shadow_colour = style["shadow_colour"]
+    bold = style["bold"]
+    outline = style["outline"]
+    shadow = style["shadow"]
 
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
 PlayResY: {height}
 ScaledBorderAndShadow: yes
-WrapStyle: 2
+WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,{font_name},{font_size},&H0000FFFF,&H0000FFFF,&H00111111,&H66000000,-1,0,0,0,100,100,0,0,1,4,1,2,{margin_h},{margin_h},{margin_v},1
+Style: Caption,{font_name},{font_size},{primary_colour},{primary_colour},{outline_colour},{shadow_colour},{bold},0,0,0,100,100,0,0,1,{outline},{shadow},2,{margin_h},{margin_h},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -1493,7 +1637,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     lines = [header]
     for start, end, text in events:
         lines.append(
-            f"Dialogue: 0,{seconds_to_ass(start)},{seconds_to_ass(end)},Caption,,0,0,0,,{text}\n"
+            f"Dialogue: 0,{seconds_to_ass(start)},{seconds_to_ass(end)},Caption,,{margin_h},{margin_h},{margin_v},,{text}\n"
         )
 
     return "".join(lines)

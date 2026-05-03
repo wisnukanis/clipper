@@ -134,8 +134,8 @@ export function configSummary() {
     facebookEnabled: boolEnv("FACEBOOK_UPLOAD_ENABLED", true),
     youtubeEnabled: boolEnv("YOUTUBE_UPLOAD_ENABLED", true),
     tiktokEnabled: boolEnv("TIKTOK_UPLOAD_ENABLED", false),
-    subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI"),
-    subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "400"),
+    subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
+    subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "600"),
     vercelDashboard: true
   };
 }
@@ -248,8 +248,9 @@ export function buildVideo(input) {
     scene_mode: clean(input.scene_mode || process.env.SCENE_MODE || "podcast"),
     clip_count: Number(input.clip_count || process.env.CLIP_COUNT || 1),
     subtitle_font: clean(input.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
-    subtitle_font_size: Number(input.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || 52),
+    subtitle_font_size: Number(input.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || 46),
     subtitle_margin_v: Number(input.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || 600),
+    subtitle_margin_h: Number(input.subtitle_margin_h || process.env.SUBTITLE_MARGIN_H || 180),
     force_reprocess: input.force_reprocess === true,
     created_at: input.created_at || now,
     updated_at: now
