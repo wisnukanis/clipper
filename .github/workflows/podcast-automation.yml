@@ -59,9 +59,14 @@ on:
     # 00:17 UTC = 07:17 WIB
     # 05:17 UTC = 12:17 WIB
     # 12:17 UTC = 19:17 WIB
-    - cron: "17 0 * * *"
-    - cron: "17 5 * * *"
-    - cron: "17 12 * * *"
+    # GitHub cron sering telat 1.5-4 jam (lihat history run sebelumnya).
+    # Cron ini di-set 2 jam lebih awal dari target viral WIB:
+    #   22:23 UTC -> ~00:00-02:00 UTC fire = 07:00-09:00 WIB pagi
+    #    3:37 UTC -> ~05:00-06:00 UTC fire = 12:00-13:00 WIB siang
+    #   10:13 UTC -> ~11:30-12:30 UTC fire = 18:30-19:30 WIB malam
+    - cron: "23 22 * * *"
+    - cron: "37 3 * * *"
+    - cron: "13 10 * * *"
 
 concurrency:
   group: podcast-clipper-automation
