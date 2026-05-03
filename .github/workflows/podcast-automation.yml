@@ -127,6 +127,14 @@ jobs:
       TIKTOK_DISABLE_STITCH: ${{ secrets.TIKTOK_DISABLE_STITCH || 'false' }}
       TIKTOK_COVER_TIMESTAMP_MS: ${{ secrets.TIKTOK_COVER_TIMESTAMP_MS || '1000' }}
 
+      THREADS_UPLOAD_ENABLED: ${{ secrets.THREADS_UPLOAD_ENABLED || 'false' }}
+      THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+      THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+      THREADS_API_VERSION: ${{ secrets.THREADS_API_VERSION || 'v1.0' }}
+      AUTO_REFRESH_THREADS_TOKEN: ${{ secrets.AUTO_REFRESH_THREADS_TOKEN || 'true' }}
+      THREADS_TOKEN_ISSUED_AT: ${{ secrets.THREADS_TOKEN_ISSUED_AT }}
+      THREADS_APP_SECRET: ${{ secrets.THREADS_APP_SECRET }}
+
       FTP_HOST: ${{ secrets.FTP_HOST }}
       FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
       FTP_USER: ${{ secrets.FTP_USER }}
@@ -312,6 +320,10 @@ jobs:
             fi
           fi
 
+          if [ "$THREADS_UPLOAD_ENABLED" = "true" ] && [ -z "$THREADS_ACCESS_TOKEN" ]; then
+            echo "::warning::THREADS_ACCESS_TOKEN belum diisi. Threads akan dilewati; workflow tetap fokus YouTube."
+          fi
+
           if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ] && [ -z "$CLOD_API_KEY" ]; then
             echo "::error::Minimal satu Gemini key atau CLOD_API_KEY harus diisi"
             missing=1
@@ -363,6 +375,20 @@ jobs:
             if [ -n "$TIKTOK_CLIENT_KEY" ] && [ -n "$TIKTOK_CLIENT_SECRET" ] && { [ -n "$TIKTOK_ACCESS_TOKEN" ] || [ -n "$TIKTOK_REFRESH_TOKEN" ]; }; then
               echo "::notice::TikTok credential tersedia; TIKTOK_UPLOAD_ENABLED diaktifkan untuk run ini."
               echo "TIKTOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            fi
+          fi
+
+          if normalize_bool "$THREADS_UPLOAD_ENABLED"; then
+            if [ -n "$THREADS_ACCESS_TOKEN" ]; then
+              echo "THREADS_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            else
+              echo "::notice::Threads access token belum ada; THREADS_UPLOAD_ENABLED dimatikan untuk run ini."
+              echo "THREADS_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
+            fi
+          else
+            if [ -n "$THREADS_ACCESS_TOKEN" ]; then
+              echo "::notice::Threads credential tersedia; THREADS_UPLOAD_ENABLED diaktifkan untuk run ini."
+              echo "THREADS_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
             fi
           fi
 
@@ -537,6 +563,45 @@ jobs:
             printf '%s' "$TIKTOK_SCOPE" | gh secret set TIKTOK_SCOPE --repo "$GITHUB_REPOSITORY"
           fi
 
+      - name: Refresh Threads token if possible
+        shell: bash
+        run: |
+          if [ "$THREADS_UPLOAD_ENABLED" != "true" ]; then
+            echo "Threads upload disabled."
+            exit 0
+          fi
+
+          if ! node src/threads-token-fastcheck.js --github-env; then
+            echo "::warning::Threads token check/refresh gagal. Upload Threads tetap aktif dan akan dicoba saat publish."
+            echo "THREADS_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Persist refreshed Threads token secret
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
+        run: |
+          if [ "$THREADS_UPLOAD_ENABLED" != "true" ]; then
+            echo "Threads upload disabled; skip secret persist."
+            exit 0
+          fi
+
+          if [ "${THREADS_TOKEN_REFRESHED:-false}" != "true" ]; then
+            echo "Threads token secret unchanged."
+            exit 0
+          fi
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::Threads token refreshed for this run, but GH_REPO_SECRET_TOKEN is not set. Update GitHub Secret THREADS_ACCESS_TOKEN manually or add GH_REPO_SECRET_TOKEN."
+            exit 0
+          fi
+
+          printf '%s' "$THREADS_ACCESS_TOKEN" | gh secret set THREADS_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
+          if [ -n "${THREADS_TOKEN_ISSUED_AT:-}" ]; then
+            printf '%s' "$THREADS_TOKEN_ISSUED_AT" | gh secret set THREADS_TOKEN_ISSUED_AT --repo "$GITHUB_REPOSITORY"
+          fi
+          echo "Threads token GitHub Secret updated."
+
       - name: Install Python dependencies
         run: python -m pip install -r clipper/requirements.txt
 
@@ -660,6 +725,10 @@ jobs:
             fi
           fi
 
+          if [ "$THREADS_UPLOAD_ENABLED" = "true" ] && [ -z "$THREADS_ACCESS_TOKEN" ]; then
+            echo "::warning::THREADS_ACCESS_TOKEN belum diisi. Threads akan dilewati; workflow tetap fokus YouTube."
+          fi
+
           if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ] && [ -z "$CLOD_API_KEY" ]; then
             echo "::error::Minimal satu Gemini key atau CLOD_API_KEY harus diisi"
             missing=1
@@ -689,6 +758,9 @@ jobs:
           echo "TIKTOK_UPLOAD_ENABLED=$TIKTOK_UPLOAD_ENABLED"
           echo "TIKTOK_PUBLISH_MODE=$TIKTOK_PUBLISH_MODE"
           echo "TIKTOK_PRIVACY_LEVEL=$TIKTOK_PRIVACY_LEVEL"
+          echo "THREADS_UPLOAD_ENABLED=$THREADS_UPLOAD_ENABLED"
+          echo "THREADS_USER_ID=$THREADS_USER_ID"
+          echo "THREADS_API_VERSION=$THREADS_API_VERSION"
           echo "DEEPGRAM_ENABLED=$DEEPGRAM_ENABLED"
           if [ -n "$CLOD_API_KEY" ]; then
             echo "CLOD_API_KEY=configured"

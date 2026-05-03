@@ -43,6 +43,13 @@ jobs:
       META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
 
+      THREADS_UPLOAD_ENABLED: ${{ secrets.THREADS_UPLOAD_ENABLED || 'false' }}
+      THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+      THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+      THREADS_API_VERSION: ${{ secrets.THREADS_API_VERSION || 'v1.0' }}
+      AUTO_REFRESH_THREADS_TOKEN: ${{ secrets.AUTO_REFRESH_THREADS_TOKEN || 'true' }}
+      THREADS_TOKEN_ISSUED_AT: ${{ secrets.THREADS_TOKEN_ISSUED_AT }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -169,6 +176,50 @@ jobs:
 
           printf '%s' "$INSTAGRAM_ACCESS_TOKEN" | gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
           echo "Instagram token GitHub Secret updated."
+
+      - name: Refresh Threads token
+        shell: bash
+        run: |
+          if [ "$THREADS_UPLOAD_ENABLED" != "true" ]; then
+            echo "Threads upload disabled; token maintenance skipped."
+            exit 0
+          fi
+
+          if [ -z "$THREADS_ACCESS_TOKEN" ]; then
+            echo "::error::THREADS_ACCESS_TOKEN belum diisi di GitHub Secrets."
+            exit 1
+          fi
+
+          args=(--github-env)
+          if [ "$FORCE_REFRESH" = "true" ]; then
+            args+=(--force)
+          fi
+
+          if ! node src/threads-token-fastcheck.js "${args[@]}"; then
+            echo "::error::Threads token maintenance gagal. Token baru perlu dicek/dibuat ulang dari Meta."
+            echo "META_TOKEN_MAINTENANCE_FAILED=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Persist Threads token secret
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
+        run: |
+          if [ "${THREADS_TOKEN_REFRESHED:-false}" != "true" ]; then
+            echo "Threads token secret unchanged."
+            exit 0
+          fi
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GH_REPO_SECRET_TOKEN wajib diisi agar token refresh bisa disimpan ke GitHub Secrets."
+            exit 1
+          fi
+
+          printf '%s' "$THREADS_ACCESS_TOKEN" | gh secret set THREADS_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
+          if [ -n "${THREADS_TOKEN_ISSUED_AT:-}" ]; then
+            printf '%s' "$THREADS_TOKEN_ISSUED_AT" | gh secret set THREADS_TOKEN_ISSUED_AT --repo "$GITHUB_REPOSITORY"
+          fi
+          echo "Threads token GitHub Secret updated."
 
       - name: Fail if token maintenance failed
         shell: bash
