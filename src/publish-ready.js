@@ -57,7 +57,8 @@ async function resolveThumbnailPath(job) {
 
 const jobId = argValue("--job", "");
 const forceYoutube = process.argv.includes("--force-youtube");
-const forceThumbnail = process.argv.includes("--force-thumbnail") || process.argv.includes("--set-youtube-thumbnail");
+const onlyYoutubeThumbnail = process.argv.includes("--only-youtube-thumbnail");
+const forceThumbnail = onlyYoutubeThumbnail || process.argv.includes("--force-thumbnail") || process.argv.includes("--set-youtube-thumbnail");
 const jobs = await readJson("jobs", []);
 const job = jobId ? jobs.find((item) => item.job_id === jobId) : latestReadyJob(jobs);
 
@@ -76,7 +77,20 @@ if (!job.final_video_path) {
   process.exit(1);
 }
 
-await patchItem("jobs", job.job_id, {
+if (onlyYoutubeThumbnail && !config.youtube.enabled) {
+  console.error("YOUTUBE_UPLOAD_ENABLED harus aktif untuk set thumbnail YouTube.");
+  process.exit(1);
+}
+
+if (onlyYoutubeThumbnail && !job.youtube_video_id) {
+  console.error(`Job ${job.job_id} belum punya youtube_video_id.`);
+  process.exit(1);
+}
+
+await patchItem("jobs", job.job_id, onlyYoutubeThumbnail ? {
+  youtube_status: "processing",
+  youtube_thumbnail_error: ""
+} : {
   youtube_status: config.youtube.enabled && (!job.youtube_url || forceYoutube) ? "processing" : job.youtube_status,
   instagram_status: config.instagram.enabled && !job.instagram_media_id ? "processing" : job.instagram_status,
   tiktok_status: config.tiktok.enabled && !job.tiktok_publish_id ? "processing" : job.tiktok_status,
@@ -112,7 +126,7 @@ try {
     selectedAngle: job.selectedAngle || ""
   };
 
-  if (config.youtube.enabled && (!youtube || forceYoutube)) {
+  if (!onlyYoutubeThumbnail && config.youtube.enabled && (!youtube || forceYoutube)) {
     const metadata = buildYoutubeMetadata({
       job,
       output,
@@ -135,6 +149,26 @@ try {
       customThumbnail: thumbnail.ok,
       thumbnailError: thumbnail.ok ? "" : thumbnail.error
     };
+  }
+
+  if (onlyYoutubeThumbnail) {
+    const thumbnailOk = youtube?.customThumbnail === true;
+    await patchItem("jobs", job.job_id, {
+      youtube_status: thumbnailOk ? "published" : "thumbnail_failed",
+      youtube_custom_thumbnail: thumbnailOk,
+      youtube_thumbnail_error: youtube?.thumbnailError || ""
+    });
+    await appendLog(thumbnailOk ? "youtube_thumbnail_set" : "youtube_thumbnail_failed", {
+      job_id: job.job_id,
+      youtube_video_id: youtube?.videoId || "",
+      error: youtube?.thumbnailError || ""
+    });
+    console.log(JSON.stringify({
+      status: thumbnailOk ? "thumbnail_set" : "thumbnail_failed",
+      job_id: job.job_id,
+      youtube
+    }, null, 2));
+    process.exit(thumbnailOk ? 0 : 1);
   }
 
   if (config.instagram.enabled && !instagram) {
