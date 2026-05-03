@@ -1,0 +1,82 @@
+name: FTP Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Retention dalam hari (file lebih lama dari ini akan dihapus)"
+        required: false
+        default: "14"
+      dry_run:
+        description: "Dry run (true = hanya log, tidak menghapus)"
+        required: false
+        default: "false"
+      subdirs:
+        description: "Subfolder yang dibersihkan (CSV). Default: videos,thumbnails,metadata,history"
+        required: false
+        default: ""
+
+  schedule:
+    # 16:30 UTC = 23:30 WIB. Setelah semua slot publish (07/12/19 WIB) selesai.
+    - cron: "30 16 * * *"
+
+concurrency:
+  group: ftp-cleanup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      UPLOAD_DRIVER: ftp
+      PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+      FTP_TIMEOUT_SECONDS: ${{ secrets.FTP_TIMEOUT_SECONDS || '300' }}
+      FTP_STATE_TIMEOUT_SECONDS: ${{ secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
+      FTP_CLEANUP_DAYS: ${{ github.event.inputs.days || '14' }}
+      FTP_CLEANUP_SUBDIRS: ${{ github.event.inputs.subdirs || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node with cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Validate FTP secrets
+        shell: bash
+        run: |
+          missing=0
+          for key in FTP_HOST FTP_USER FTP_PASSWORD FTP_REMOTE_DIR
+          do
+            if [ -z "${!key}" ]; then
+              echo "::error::$key belum diisi di GitHub Secrets"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run FTP cleanup
+        shell: bash
+        run: |
+          args=()
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          node src/cleanup-ftp.js "${args[@]}"

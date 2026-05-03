@@ -368,7 +368,7 @@ def render_dynamic_zoom_clip(
         "-c:v", "libx264",
         "-profile:v", "high",
         "-level:v", "4.1",
-        "-preset", "veryfast",
+        "-preset", "medium",
         "-crf", str(int(crf)),
         "-pix_fmt", "yuv420p",
         "-g", "60",

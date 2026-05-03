@@ -185,9 +185,9 @@ jobs:
       OUTPUT_WIDTH: "1080"
       OUTPUT_HEIGHT: "1920"
       VIDEO_LANGUAGE: id
-      DOWNLOAD_MAX_HEIGHT: "720"
-      DOWNLOAD_COMPRESS_CRF: "30"
-      FINAL_RENDER_CRF: "27"
+      DOWNLOAD_MAX_HEIGHT: "1080"
+      DOWNLOAD_COMPRESS_CRF: "22"
+      FINAL_RENDER_CRF: "20"
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
       SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik Semibold,Selawik,DejaVu Sans' }}

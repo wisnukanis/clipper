@@ -1757,7 +1757,7 @@ def compress_downloaded_clip(source_clip, config):
             "-y",
             "-i",
             str(source_clip),
-            "-vf", "fps=30,scale=1280:720:force_original_aspect_ratio=decrease:force_divisible_by=2",
+            "-vf", f"fps=30,scale=-2:{max_height}:force_original_aspect_ratio=decrease:force_divisible_by=2",
             "-c:v",
             "libx264",
             "-preset",
@@ -3162,6 +3162,7 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
 
 
 def run_render(source_clip, final_clip, vf, config):
+    sharpened_vf = f"{vf},unsharp=lx=3:ly=3:la=0.6:cx=3:cy=3:ca=0.3"
     run(
         [
             "ffmpeg",
@@ -3171,7 +3172,7 @@ def run_render(source_clip, final_clip, vf, config):
             "-map_metadata",
             "-1",
             "-vf",
-            vf,
+            sharpened_vf,
             "-r",
             "30",
             "-c:v",
@@ -3181,7 +3182,7 @@ def run_render(source_clip, final_clip, vf, config):
             "-level:v",
             "4.1",
             "-preset",
-            "veryfast",
+            "medium",
             "-crf",
             str(config["final_crf"]),
             "-pix_fmt",
