@@ -76,22 +76,28 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
 }
 
 export async function generateThumbnailText({ job, output, promptTemplate }) {
-  if (output.thumbnailText) {
-    return normalizeThumbnailText(output.thumbnailText);
+  const existing = output.thumbnailText ? normalizeThumbnailText(output.thumbnailText, "") : "";
+  if (isStrongThumbnailText(existing)) {
+    return existing;
   }
 
-  const fallback = normalizeThumbnailText(output.hook || output.title || "CERITA YANG JARANG DIBUKA");
+  const fallback = fallbackThumbnailText(output);
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
     "Aturan: 3 sampai 10 kata, ideal 4 sampai 6 kata, huruf besar, kuat, mudah dibaca, tidak clickbait menyesatkan.",
+    "- Jangan jawab satu kata.",
+    "- Jangan ambil potongan transkrip mentah yang tidak jelas.",
+    "- Buat seperti judul cover video, bukan subtitle.",
     `Tema: ${job.theme}`,
     `Style: ${promptTemplate?.thumbnail_style || "singkat dan kuat"}`,
     `Judul/hook clip: ${output.hook || output.title || ""}`,
     `Alasan clip: ${output.reason || ""}`,
+    `Transkrip singkat: ${String(output.clipTranscript || output.caption || "").slice(0, 900)}`,
     "Balas hanya teks thumbnail."
   ].join("\n");
   const text = await generateGeminiText(prompt, { maxOutputTokens: 80, temperature: 0.65 });
-  return normalizeThumbnailText(text || fallback);
+  const generated = text ? normalizeThumbnailText(text, "") : "";
+  return isStrongThumbnailText(generated) ? generated : fallback;
 }
 
 function hasStrategyCaption(output) {
@@ -393,11 +399,46 @@ const STOPWORDS = new Set([
   "why"
 ]);
 
-function normalizeThumbnailText(value) {
+function normalizeThumbnailText(value, fallback = "CERITA YANG JARANG DIBUKA") {
   const cleaned = String(value || "")
     .replace(/[`"'*_#]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
-  return cleaned.split(/\s+/).slice(0, 10).join(" ") || "CERITA YANG JARANG DIBUKA";
+  return cleaned.split(/\s+/).slice(0, 10).join(" ") || fallback;
+}
+
+function isStrongThumbnailText(value) {
+  const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 3 || words.length > 10) return false;
+  return words.join("").length >= 10;
+}
+
+function fallbackThumbnailText(output) {
+  const candidates = [
+    output?.hook,
+    output?.title,
+    output?.selectedAngle,
+    output?.reason,
+    output?.caption
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = candidate ? normalizeThumbnailText(candidate, "") : "";
+    if (isStrongThumbnailText(normalized)) return normalized;
+  }
+
+  const transcriptTitle = buildTranscriptThumbnailText(output?.clipTranscript);
+  if (isStrongThumbnailText(transcriptTitle)) return transcriptTitle;
+
+  return "CERITA INI BIKIN PENASARAN";
+}
+
+function buildTranscriptThumbnailText(value) {
+  const words = String(value || "")
+    .replace(/[^\p{L}\p{N}\s?]/gu, " ")
+    .split(/\s+/)
+    .filter((word) => word.length >= 3 && !STOPWORDS.has(word.toLowerCase()))
+    .slice(0, 6);
+  return normalizeThumbnailText(words.join(" "), "");
 }
