@@ -3,7 +3,7 @@ import path from "node:path";
 import { config, canPublish, shouldUploadToFtp } from "./config.js";
 import { ensureProjectDirs, patchItem, saveGeneratedJson } from "./storage.js";
 import { appendLog } from "./logger.js";
-import { appendHistory, hasPublishedToday } from "./history.js";
+import { appendHistory, publishedCountToday } from "./history.js";
 import { addVideo, createJobRecord, selectNextVideo, updateVideoStatus } from "./selector.js";
 import { runClipper } from "./clipper-runner.js";
 import { generateCaption, generateThumbnailText } from "./caption.js";
@@ -41,9 +41,22 @@ export async function runWorkflow(options = {}) {
     console.warn(`State remote dilewati: ${error.message}`);
   });
 
-  if (options.scheduled && options.publish && await hasPublishedToday()) {
-    await appendLog("scheduled_skip", { reason: "already_published_today" });
-    return { status: "scheduled_skip", reason: "already_published_today" };
+  if (options.scheduled && options.publish) {
+    const dailyLimit = Math.max(1, Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY) || 3);
+    const postedToday = await publishedCountToday();
+    if (postedToday >= dailyLimit) {
+      await appendLog("scheduled_skip", {
+        reason: "daily_limit_reached",
+        posted_today: postedToday,
+        daily_limit: dailyLimit
+      });
+      return {
+        status: "scheduled_skip",
+        reason: "daily_limit_reached",
+        posted_today: postedToday,
+        daily_limit: dailyLimit
+      };
+    }
   }
 
   let selection = options.url

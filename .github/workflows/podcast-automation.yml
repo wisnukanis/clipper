@@ -138,6 +138,7 @@ jobs:
       CLOD_TEMPERATURE: ${{ secrets.CLOD_TEMPERATURE || '0.45' }}
 
       TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
+      MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '3' }}
       DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '1' }}
       DEEPGRAM_API_KEYS: ${{ secrets.DEEPGRAM_API_KEYS }}
       DEEPGRAM_MODEL: ${{ secrets.DEEPGRAM_MODEL || 'nova-3' }}

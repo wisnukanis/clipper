@@ -26,6 +26,11 @@ export async function hasPublishedToday(date = todayDate()) {
   return history.some((entry) => entry.status === "published" && entry.publish_date === date);
 }
 
+export async function publishedCountToday(date = todayDate()) {
+  const history = await readJson("history", []);
+  return history.filter((entry) => entry.status === "published" && entry.publish_date === date).length;
+}
+
 export async function appendHistory(entry) {
   const history = await readJson("history", []);
   history.push({
