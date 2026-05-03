@@ -57,7 +57,7 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
     "- Ringkas, natural, emosional, dan sesuai transkrip.",
     "- Jangan mengarang fakta di luar konteks.",
     "- Tambahkan CTA ringan.",
-    "- Akhiri dengan hashtag: pakai #PodcastIndonesia #PodcastArtis #ReelsIndonesia #Viral lalu tambah 2 sampai 4 hashtag spesifik dari isi clip.",
+    "- Akhiri dengan 4 sampai 6 hashtag relevan: pakai #PodcastIndonesia #PodcastArtis #ReelsIndonesia lalu tambah hashtag tokoh/topik dan #Viral jika cocok.",
     "",
     `Tema: ${job.theme}`,
     `Gaya: ${promptTemplate?.hook_style || "natural emotional"}`,
@@ -116,7 +116,7 @@ function fallbackCaption(output, promptTemplate, dynamicHashtags = []) {
   const hook = output.hook || output.title || "Ada bagian menarik dari obrolan ini.";
   const body = output.caption || output.reason || "Potongan ini diambil dari momen yang paling kuat di podcast.";
   const cta = promptTemplate?.cta || "Menurut kamu, bagian paling relate yang mana?";
-  const tags = mergeHashtags(BASE_HASHTAGS, dynamicHashtags).slice(0, 8).join(" ");
+  const tags = mergeHashtags(BASE_HASHTAGS, dynamicHashtags, ["#Viral"]).slice(0, 6).join(" ");
   return `${hook}\n\n${body}\n\n${cta}\n\n${tags}`;
 }
 
@@ -126,8 +126,8 @@ function ensureCaptionHashtags(caption, output, promptTemplate, dynamicHashtags 
   const existingHashtags = normalizeHashtags(extractHashtags(cleaned));
   const contextHashtags = normalizeHashtags(dynamicHashtags);
   const templateHashtags = normalizeHashtags(promptTemplate?.hashtag_template || []);
-  const hashtags = mergeHashtags(BASE_HASHTAGS, contextHashtags, outputHashtags, existingHashtags, templateHashtags)
-    .slice(0, 8);
+  const hashtags = mergeHashtags(BASE_HASHTAGS, contextHashtags, outputHashtags, existingHashtags, templateHashtags, ["#Viral"])
+    .slice(0, 6);
   if (!hashtags.length) return cleaned;
   const body = stripHashtags(cleaned);
   return `${body || cleaned}\n\n${hashtags.join(" ")}`.trim();
@@ -323,8 +323,7 @@ const GENERIC_HASHTAGS = new Set([
 const BASE_HASHTAGS = [
   "#PodcastIndonesia",
   "#PodcastArtis",
-  "#ReelsIndonesia",
-  "#Viral"
+  "#ReelsIndonesia"
 ];
 
 const STOPWORDS = new Set([

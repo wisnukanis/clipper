@@ -171,17 +171,37 @@ export async function getYoutubeChannel() {
 }
 
 export function buildYoutubeMetadata({ job, output, caption }) {
-  const topic = buildHookTitle({ job, output, caption });
-  const rawTitle = [config.youtube.titlePrefix, topic, "#Shorts"].filter(Boolean).join(" ");
+  const context = [
+    output.clipTranscript,
+    output.caption,
+    output.reason,
+    output.title,
+    output.hook,
+    caption
+  ].filter(Boolean).join(" ");
+  const theme = detectTheme(context);
+  const person = detectPerson({ job, output, caption }) || "Podcast Indonesia";
+  const hook = buildHookTitle({ job, output, caption, theme });
+  const rawTitle = normalizeTitleWithPerson(config.youtube.titlePrefix, hook, person);
+  const hashtags = buildYoutubeHashtags({ theme, person, caption, context });
+  const firstLine = firstStrongLine(caption) || cleanText(output.clipTranscript || output.caption || hook).slice(0, 180);
+  const insight = cleanText(output.reason || output.selectedAngle || output.hook || hook);
   const dynamicTags = tagsFromCaption(caption);
 
-  const description = [
-    caption,
+  const descriptionParts = [
+    firstLine,
     "",
-    "Shorts ini dipilih dari bagian paling kuat: hook jelas, konflik terasa, dan konteksnya relevan untuk ditonton sampai akhir.",
-    "Diproses otomatis dari clip podcast.",
+    `Topik: ${theme}`,
+    `Tokoh/Sumber: ${person}`,
+    output.title ? `Sumber: ${cleanText(output.title)}` : "",
+    insight ? `Pelajaran utama: ${insight}` : "",
+    "",
+    "Tonton sampai akhir untuk poin pentingnya.",
+    "",
+    hashtags.join(" "),
     config.youtube.descriptionFooter
-  ].filter(Boolean).join("\n");
+  ];
+  const description = compactDescriptionParts(descriptionParts).join("\n");
 
   return {
     title: rawTitle,
@@ -189,7 +209,9 @@ export function buildYoutubeMetadata({ job, output, caption }) {
     tags: normalizeTags([
       ...config.youtube.tags,
       ...dynamicTags,
-      ...keywordsFromText(`${topic} ${output.title || ""} ${output.hook || ""}`)
+      theme,
+      person,
+      ...keywordsFromText(`${hook} ${person} ${theme} ${output.title || ""} ${output.hook || ""}`)
     ])
   };
 }
@@ -198,12 +220,8 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildHookTitle({ job, output, caption }) {
-  const firstLine = String(caption || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line && !line.startsWith("#"));
-
+function buildHookTitle({ job, output, caption, theme = "inspirasi" }) {
+  const firstLine = firstStrongLine(caption);
   const candidates = [
     firstLine,
     output.hook,
@@ -217,7 +235,127 @@ function buildHookTitle({ job, output, caption }) {
     const topic = shortTopic(candidate);
     if (topic !== "Podcast Clip") return topic;
   }
-  return "Podcast Clip";
+  return defaultHook(theme);
+}
+
+function normalizeTitleWithPerson(prefix, hook, person) {
+  const cleanHook = shortTopic(hook);
+  const cleanPerson = cleanText(person);
+  const withPerson = [prefix, `${cleanHook} - ${cleanPerson}`, "#Shorts"].filter(Boolean).join(" ");
+  if (withPerson.length <= 100) return withPerson;
+  return [prefix, cleanHook, "#Shorts"].filter(Boolean).join(" ").slice(0, 100);
+}
+
+function firstStrongLine(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => cleanText(line))
+    .find((line) => line && !line.startsWith("#") && line.length >= 12) || "";
+}
+
+function cleanText(value = "") {
+  return String(value)
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s#@.,!?|:'"-]/gu, "")
+    .trim();
+}
+
+function toHashtag(value = "") {
+  const cleaned = cleanText(value)
+    .replace(/^#+/, "")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join("");
+  return cleaned ? `#${cleaned}` : "";
+}
+
+function detectTheme(text = "") {
+  const source = String(text || "").toLowerCase();
+  const themes = [
+    { key: "bisnis", words: ["bisnis", "usaha", "jualan", "market", "customer", "profit", "dagang"] },
+    { key: "leadership", words: ["pemimpin", "leader", "kepemimpinan", "tim", "manager"] },
+    { key: "motivasi", words: ["semangat", "sukses", "gagal", "bangkit", "mimpi", "target"] },
+    { key: "karir", words: ["kerja", "karir", "kantor", "profesi", "gaji"] },
+    { key: "keuangan", words: ["uang", "investasi", "modal", "bank", "keuangan", "aset"] },
+    { key: "agama", words: ["allah", "islam", "sedekah", "shalat", "rezeki", "dakwah"] },
+    { key: "keadilan", words: ["hak", "adil", "keadilan", "nuntut", "tuntut", "ancam", "oknum"] },
+    { key: "podcast", words: ["podcast", "ngobrol", "cerita", "obrolan"] }
+  ];
+
+  let best = { key: "inspirasi", score: 0 };
+  for (const item of themes) {
+    const score = item.words.reduce((total, word) => total + (source.includes(word) ? 1 : 0), 0);
+    if (score > best.score) best = { key: item.key, score };
+  }
+  return best.key;
+}
+
+function defaultHook(theme) {
+  const hooks = {
+    bisnis: "Cara mikir ini bisa mengubah bisnis",
+    leadership: "Pemimpin harus paham hal ini",
+    motivasi: "Kalimat ini bisa bikin kamu bergerak",
+    karir: "Nasihat karir yang sering dilupakan",
+    keuangan: "Cara pandang soal uang yang penting",
+    agama: "Pengingat singkat tapi dalam",
+    keadilan: "Nyali besar melawan tekanan",
+    podcast: "Potongan obrolan paling menarik",
+    inspirasi: "Pesan singkat yang kena banget"
+  };
+  return hooks[theme] || hooks.inspirasi;
+}
+
+function detectPerson({ job, output, caption }) {
+  const text = [
+    output.title,
+    output.hook,
+    output.clipTranscript,
+    caption,
+    job.source_title
+  ].filter(Boolean).join(" ");
+  const known = [
+    "Yusuf Hamka",
+    "Ayu Ting Ting",
+    "Ariel NOAH",
+    "Deddy Corbuzier",
+    "Raditya Dika",
+    "Vidi Aldiano",
+    "Vincent",
+    "Desta"
+  ];
+  const foundKnown = known.find((name) => new RegExp(`\\b${name.replace(/\s+/g, "\\s+")}\\b`, "i").test(text));
+  if (foundKnown) return foundKnown;
+
+  const match = text.match(/\b[A-Z][\p{L}\p{N}]+(?:\s+[A-Z][\p{L}\p{N}]+){1,2}/u);
+  return match ? cleanText(match[0]) : "";
+}
+
+function buildYoutubeHashtags({ theme, person, caption, context }) {
+  const fromCaption = extractHashtags(caption);
+  const candidates = [
+    "#Shorts",
+    toHashtag(theme),
+    person ? toHashtag(person) : "",
+    ...topicHashtags(context),
+    "#PodcastIndonesia",
+    "#Motivasi"
+  ];
+  const values = [...candidates, ...fromCaption].filter(Boolean);
+  return uniqueNormalized(values).slice(0, 6);
+}
+
+function compactDescriptionParts(parts) {
+  const result = [];
+  for (const part of parts) {
+    const value = typeof part === "string" ? part.trim() : "";
+    if (!value && !result.length) continue;
+    if (!value && result[result.length - 1] === "") continue;
+    result.push(value);
+  }
+  while (result[result.length - 1] === "") result.pop();
+  return result;
 }
 
 function tagsFromCaption(value) {
@@ -257,6 +395,34 @@ function keywordsFromText(value) {
   return tags;
 }
 
+function extractHashtags(value) {
+  return String(value || "").match(/#[\p{L}\p{N}_]+/gu) || [];
+}
+
+function topicHashtags(value) {
+  const source = String(value || "").toLowerCase();
+  const tags = [];
+  if (/\byusuf\s+hamka\b/i.test(value)) tags.push("#YusufHamka");
+  if (/hak|adil|keadilan|nuntut|tuntut|perjuang/.test(source)) tags.push("#Keadilan");
+  if (/bisnis|usaha|jualan|dagang/.test(source)) tags.push("#Bisnis");
+  if (/motivasi|bangkit|gagal|sukses/.test(source)) tags.push("#Motivasi");
+  return tags;
+}
+
+function uniqueNormalized(values) {
+  const seen = new Set();
+  const result = [];
+  for (const value of values) {
+    const cleaned = String(value || "").trim();
+    if (!cleaned) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(cleaned);
+  }
+  return result;
+}
+
 function shortTopic(value) {
   const cleaned = String(value || "")
     .replace(/[#"`*_]/g, "")
@@ -282,7 +448,7 @@ function normalizeDescription(value) {
 function normalizeTags(tags) {
   const values = Array.isArray(tags) ? tags : [];
   const normalized = values.map((tag) => String(tag).trim()).filter(Boolean);
-  return [...new Set(normalized)].slice(0, 25);
+  return [...new Set(normalized)].slice(0, 15);
 }
 
 function normalizePrivacyStatus(value) {
