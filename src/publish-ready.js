@@ -1,9 +1,11 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { config } from "./config.js";
 import { appendHistory } from "./history.js";
 import { publishReel } from "./instagram.js";
 import { appendLog } from "./logger.js";
 import { patchItem, readJson, writeJson } from "./storage.js";
-import { buildYoutubeMetadata, publishToYoutube } from "./youtube-publisher.js";
+import { buildYoutubeMetadata, publishToYoutube, setYoutubeThumbnail } from "./youtube-publisher.js";
 import { publishToTikTok } from "./tiktok.js";
 
 function argValue(name, fallback = "") {
@@ -27,8 +29,35 @@ async function patchVideo(videoId, patch) {
   return videos[index];
 }
 
+async function resolveThumbnailPath(job) {
+  const thumbnailPath = job.thumbnail_path || "";
+  if (thumbnailPath) {
+    try {
+      const stat = await fs.stat(thumbnailPath);
+      if (stat.size) return thumbnailPath;
+    } catch {
+      // Fall back to the public FTP URL when the local generated file is gone.
+    }
+  }
+
+  if (!job.public_thumbnail_url) return thumbnailPath;
+
+  try {
+    await fs.mkdir(config.thumbnailDir, { recursive: true });
+    const target = path.join(config.thumbnailDir, `${job.job_id}-youtube-thumbnail.jpg`);
+    const response = await fetch(job.public_thumbnail_url);
+    if (!response.ok) return thumbnailPath;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    await fs.writeFile(target, buffer);
+    return target;
+  } catch {
+    return thumbnailPath;
+  }
+}
+
 const jobId = argValue("--job", "");
 const forceYoutube = process.argv.includes("--force-youtube");
+const forceThumbnail = process.argv.includes("--force-thumbnail") || process.argv.includes("--set-youtube-thumbnail");
 const jobs = await readJson("jobs", []);
 const job = jobId ? jobs.find((item) => item.job_id === jobId) : latestReadyJob(jobs);
 
@@ -55,9 +84,11 @@ await patchItem("jobs", job.job_id, {
   status: "publishing"
 });
 
-let youtube = job.youtube_url ? {
+let youtube = (job.youtube_url || job.youtube_video_id) ? {
   videoId: job.youtube_video_id,
-  url: job.youtube_url,
+  url: job.youtube_url || (job.youtube_video_id ? `https://www.youtube.com/watch?v=${job.youtube_video_id}` : ""),
+  customThumbnail: job.youtube_custom_thumbnail === true,
+  thumbnailError: job.youtube_thumbnail_error || "",
   skipped: true
 } : null;
 let instagram = job.instagram_media_id ? {
@@ -71,10 +102,14 @@ let tiktok = job.tiktok_publish_id ? {
 } : null;
 
 try {
+  const thumbnailPath = await resolveThumbnailPath(job);
   const output = {
     title: job.source_title,
     hook: job.source_title,
-    finalAbsPath: job.final_video_path
+    finalAbsPath: job.final_video_path,
+    caption: job.caption || "",
+    clipTranscript: job.clipTranscript || "",
+    selectedAngle: job.selectedAngle || ""
   };
 
   if (config.youtube.enabled && (!youtube || forceYoutube)) {
@@ -85,8 +120,21 @@ try {
     });
     youtube = await publishToYoutube({
       videoPath: job.final_video_path,
+      thumbnailPath,
       ...metadata
     });
+  }
+
+  if (config.youtube.enabled && youtube?.videoId && thumbnailPath && (forceThumbnail || youtube.customThumbnail !== true)) {
+    const thumbnail = await setYoutubeThumbnail({
+      videoId: youtube.videoId,
+      thumbnailPath
+    });
+    youtube = {
+      ...youtube,
+      customThumbnail: thumbnail.ok,
+      thumbnailError: thumbnail.ok ? "" : thumbnail.error
+    };
   }
 
   if (config.instagram.enabled && !instagram) {
@@ -117,6 +165,8 @@ try {
     youtube_status: youtube ? "published" : "disabled",
     youtube_video_id: youtube?.videoId || "",
     youtube_url: youtube?.url || "",
+    youtube_custom_thumbnail: youtube?.customThumbnail === true,
+    youtube_thumbnail_error: youtube?.thumbnailError || "",
     youtube_published_at: youtube?.skipped ? job.youtube_published_at : youtube ? now : "",
     instagram_status: instagram ? "published" : "disabled",
     instagram_media_id: instagram?.mediaId || "",
