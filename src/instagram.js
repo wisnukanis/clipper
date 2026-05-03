@@ -290,17 +290,23 @@ async function publishContainer(containerId) {
   return published;
 }
 
-async function publishReelViaVideoUrl({ videoUrl, caption }) {
+async function publishReelViaVideoUrl({ videoUrl, caption, coverUrl }) {
   await assertPublicVideoUrl(videoUrl);
 
   console.log("IG upload method: video_url");
 
-  const created = await postForm(`${config.instagram.igUserId}/media`, {
+  const params = {
     media_type: "REELS",
     video_url: videoUrl,
     caption: caption || "",
     share_to_feed: "true"
-  });
+  };
+  if (coverUrl) {
+    params.cover_url = coverUrl;
+    console.log("IG REEL cover_url:", coverUrl);
+  }
+
+  const created = await postForm(`${config.instagram.igUserId}/media`, params);
 
   console.log("IG REEL CONTAINER CREATED:", created.id);
 
@@ -346,15 +352,21 @@ async function downloadVideoBuffer(videoUrl) {
   return buffer;
 }
 
-async function createResumableContainer({ caption }) {
+async function createResumableContainer({ caption, coverUrl }) {
   console.log("IG upload method: resumable");
 
-  const created = await postForm(`${config.instagram.igUserId}/media`, {
+  const params = {
     media_type: "REELS",
     upload_type: "resumable",
     caption: caption || "",
     share_to_feed: "true"
-  });
+  };
+  if (coverUrl) {
+    params.cover_url = coverUrl;
+    console.log("IG REEL cover_url:", coverUrl);
+  }
+
+  const created = await postForm(`${config.instagram.igUserId}/media`, params);
 
   console.log("IG RESUMABLE CONTAINER CREATED:", created);
 
@@ -420,11 +432,11 @@ async function uploadVideoToRupload({ uploadUri, videoBuffer }) {
   }
 }
 
-async function publishReelViaResumable({ videoUrl, caption }) {
+async function publishReelViaResumable({ videoUrl, caption, coverUrl }) {
   await assertPublicVideoUrl(videoUrl);
 
   const videoBuffer = await downloadVideoBuffer(videoUrl);
-  const created = await createResumableContainer({ caption });
+  const created = await createResumableContainer({ caption, coverUrl });
 
   await uploadVideoToRupload({
     uploadUri: created.uri,
@@ -444,7 +456,7 @@ async function publishReelViaResumable({ videoUrl, caption }) {
   };
 }
 
-export async function publishReel({ videoUrl, caption }) {
+export async function publishReel({ videoUrl, caption, coverUrl }) {
   await ensureFreshInstagramToken();
   assertInstagramConfig();
 
@@ -455,30 +467,30 @@ export async function publishReel({ videoUrl, caption }) {
 
   if (method === "resumable") {
     try {
-      return await publishReelViaResumable({ videoUrl, caption });
+      return await publishReelViaResumable({ videoUrl, caption, coverUrl });
     } catch (error) {
       if (!isRuploadProcessingFailure(error)) throw error;
       console.log("IG resumable gagal saat rupload. Mencoba fallback video_url.", {
         message: error.message
       });
-      return publishReelViaVideoUrl({ videoUrl, caption });
+      return publishReelViaVideoUrl({ videoUrl, caption, coverUrl });
     }
   }
 
   if (method === "video_url") {
     try {
-      return await publishReelViaVideoUrl({ videoUrl, caption });
+      return await publishReelViaVideoUrl({ videoUrl, caption, coverUrl });
     } catch (error) {
       if (!isMetaMediaUploadFailed2207076(error)) throw error;
       console.log("IG video_url gagal dengan 2207076. Mencoba fallback resumable upload.", {
         message: error.message
       });
-      return publishReelViaResumable({ videoUrl, caption });
+      return publishReelViaResumable({ videoUrl, caption, coverUrl });
     }
   }
 
   try {
-    return await publishReelViaVideoUrl({ videoUrl, caption });
+    return await publishReelViaVideoUrl({ videoUrl, caption, coverUrl });
   } catch (error) {
     if (!isMetaMediaUploadFailed2207076(error)) {
       throw error;
@@ -488,6 +500,6 @@ export async function publishReel({ videoUrl, caption }) {
       message: error.message
     });
 
-    return publishReelViaResumable({ videoUrl, caption });
+    return publishReelViaResumable({ videoUrl, caption, coverUrl });
   }
 }

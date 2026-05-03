@@ -174,7 +174,8 @@ export async function runWorkflow(options = {}) {
         job,
         output,
         caption,
-        upload
+        upload,
+        thumbnail
       });
       const youtubePrimary = config.youtube.enabled;
       const primaryPublished = youtubePrimary ? Boolean(platformResults.youtube) : platformResults.hasAnySuccess;
@@ -284,7 +285,7 @@ async function updateJob(jobId, patch) {
   return patchItem("jobs", jobId, patch);
 }
 
-async function publishPlatforms({ job, output, caption, upload }) {
+async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
   const platformResults = {
     instagram: null,
     facebook: null,
@@ -314,7 +315,8 @@ async function publishPlatforms({ job, output, caption, upload }) {
         videoUrl: upload.videoUrl,
         videoPath: output.finalAbsPath,
         title: output.title || job.source_title || "Podcast Clip",
-        description: caption
+        description: caption,
+        thumbnailPath: thumbnail?.path || ""
       });
     });
   }
@@ -330,7 +332,8 @@ async function publishPlatforms({ job, output, caption, upload }) {
       });
       return publishReel({
         videoUrl: instagramVideo.videoUrl,
-        caption
+        caption,
+        coverUrl: upload.thumbnailUrl || ""
       });
     });
   }

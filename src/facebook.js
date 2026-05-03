@@ -180,23 +180,68 @@ async function publishFacebookReel({ videoUrl, videoPath, title, description }) 
   });
 }
 
-export async function publishToFacebook({ videoUrl, videoPath, title, description }) {
-  assertFacebookConfig();
-  await ensureFreshFacebookToken({ refreshValid: false });
+async function setFacebookCustomThumbnail({ videoId, thumbnailPath }) {
+  if (!videoId || !thumbnailPath) return false;
 
-  if (config.facebook.mediaType === "video") {
-    return publishFacebookVideo({ videoUrl, title, description });
+  let stat;
+  try {
+    stat = await fsp.stat(thumbnailPath);
+  } catch (error) {
+    console.warn(`Facebook thumbnail file tidak ditemukan, dilewati: ${error.message}`);
+    return false;
+  }
+  if (!stat.size) {
+    console.warn("Facebook thumbnail file kosong, dilewati.");
+    return false;
   }
 
   try {
-    return await publishFacebookReel({ videoUrl, videoPath, title, description });
+    const buffer = await fsp.readFile(thumbnailPath);
+    const blob = new Blob([buffer], { type: "image/jpeg" });
+    const form = new FormData();
+    form.append("source", blob, "thumbnail.jpg");
+    form.append("is_preferred", "true");
+    form.append("access_token", config.facebook.accessToken);
+
+    const response = await axios.post(graphUrl(`${videoId}/thumbnails`), form, {
+      timeout: 60000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity
+    });
+    console.log("FB CUSTOM THUMBNAIL SET:", response.data);
+    return true;
   } catch (error) {
-    console.warn(`Facebook Reel gagal, coba upload sebagai Page video: ${error.message}`);
+    const wrapped = wrapFacebookError(error, "Facebook thumbnail upload failed");
+    console.warn(wrapped.message);
+    return false;
+  }
+}
+
+export async function publishToFacebook({ videoUrl, videoPath, title, description, thumbnailPath }) {
+  assertFacebookConfig();
+  await ensureFreshFacebookToken({ refreshValid: false });
+
+  let result;
+  if (config.facebook.mediaType === "video") {
+    result = await publishFacebookVideo({ videoUrl, title, description });
+  } else {
     try {
-      const fallback = await publishFacebookVideo({ videoUrl, title, description });
-      return { ...fallback, fallbackFrom: "facebook_reel" };
-    } catch (fallbackError) {
-      throw new Error(`${error.message}; fallback Page video juga gagal: ${fallbackError.message}`);
+      result = await publishFacebookReel({ videoUrl, videoPath, title, description });
+    } catch (error) {
+      console.warn(`Facebook Reel gagal, coba upload sebagai Page video: ${error.message}`);
+      try {
+        const fallback = await publishFacebookVideo({ videoUrl, title, description });
+        result = { ...fallback, fallbackFrom: "facebook_reel" };
+      } catch (fallbackError) {
+        throw new Error(`${error.message}; fallback Page video juga gagal: ${fallbackError.message}`);
+      }
     }
   }
+
+  if (result?.videoId && thumbnailPath) {
+    const ok = await setFacebookCustomThumbnail({ videoId: result.videoId, thumbnailPath });
+    if (ok) result.customThumbnail = true;
+  }
+
+  return result;
 }
