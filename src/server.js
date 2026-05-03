@@ -227,6 +227,7 @@ app.get("/api/state", async (_req, res) => {
       facebookEnabled: config.facebook.enabled,
       youtubeEnabled: config.youtube.enabled,
     tiktokEnabled: config.tiktok.enabled,
+    threadsEnabled: config.threads.enabled,
     subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
     subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "550"
     },

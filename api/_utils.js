@@ -134,6 +134,7 @@ export function configSummary() {
     facebookEnabled: boolEnv("FACEBOOK_UPLOAD_ENABLED", true),
     youtubeEnabled: boolEnv("YOUTUBE_UPLOAD_ENABLED", true),
     tiktokEnabled: boolEnv("TIKTOK_UPLOAD_ENABLED", false),
+    threadsEnabled: boolEnv("THREADS_UPLOAD_ENABLED", false),
     subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "550"),
     vercelDashboard: true

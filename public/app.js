@@ -13,6 +13,7 @@ const FALLBACK_PIPELINE = [
   { label: "Facebook" },
   { label: "YouTube" },
   { label: "TikTok" },
+  { label: "Threads" },
   { label: "History" }
 ];
 
@@ -166,6 +167,7 @@ async function refresh() {
     `FB ${cfg.facebookEnabled ? "on" : "off"}`,
     `YT ${cfg.youtubeEnabled ? "on" : "off"}`,
     `TT ${cfg.tiktokEnabled ? "on" : "off"}`,
+    `TH ${cfg.threadsEnabled ? "on" : "off"}`,
     cfg.timezone
   ].filter(Boolean).join(" · ");
 
@@ -330,6 +332,7 @@ function buildPipelineSteps(stateData) {
     platformStep("Facebook", job.facebook_status, Boolean(job.facebook_video_id || job.facebook_post_id), ftpDone, failed),
     platformStep("YouTube", job.youtube_status, Boolean(job.youtube_url), ftpDone, failed),
     platformStep("TikTok", job.tiktok_status, Boolean(job.tiktok_publish_id), ftpDone, failed),
+    platformStep("Threads", job.threads_status, Boolean(job.threads_media_id), ftpDone, failed),
     mkStep(
       "History",
       stageState({
@@ -485,11 +488,12 @@ function renderJobs(jobs) {
       <td data-label="FB">${job.facebook_url ? link(job.facebook_url, job.facebook_status || "published") : escapeHtml(job.facebook_status || "-")}</td>
       <td data-label="YT">${job.youtube_url ? link(job.youtube_url, job.youtube_status || "published") : escapeHtml(job.youtube_status || "-")}</td>
       <td data-label="TT">${job.tiktok_publish_id ? escapeHtml(short(job.tiktok_status || "submitted", 18)) : escapeHtml(job.tiktok_status || "-")}</td>
-      <td data-label="Error">${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || "", 50))}</td>
+      <td data-label="TH">${job.threads_media_id ? (job.threads_url ? link(job.threads_url, job.threads_status || "published") : escapeHtml(short(job.threads_status || "published", 18))) : escapeHtml(job.threads_status || "-")}</td>
+      <td data-label="Error">${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || job.threads_error || "", 50))}</td>
     </tr>
   `
     );
-  els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="7" class="emptyRow">Belum ada job.</td></tr>`;
+  els.jobRows.innerHTML = rows.join("") || `<tr><td colspan="8" class="emptyRow">Belum ada job.</td></tr>`;
   toggleMoreButton(els.jobsMore, total, jobLimit);
 }
 
