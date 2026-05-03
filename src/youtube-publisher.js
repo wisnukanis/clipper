@@ -5,6 +5,8 @@ import { config } from "./config.js";
 
 const tokenUrl = "https://oauth2.googleapis.com/token";
 const uploadUrl = "https://www.googleapis.com/upload/youtube/v3/videos";
+const thumbnailUploadUrl = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set";
+const maxThumbnailBytes = 2 * 1024 * 1024;
 
 function assertYoutubeConfig() {
   const missing = [];
@@ -34,34 +36,53 @@ export async function getYoutubeAccessToken() {
   }
 }
 
-async function setYoutubeThumbnail({ videoId, thumbnailPath, accessToken }) {
-  if (!videoId || !thumbnailPath) return false;
-  try {
-    const stat = await fsp.stat(thumbnailPath);
-    if (!stat.size) return false;
-    const stream = fs.createReadStream(thumbnailPath);
-    const response = await axios.post(
-      "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
-      stream,
-      {
-        params: { videoId, uploadType: "media" },
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "image/jpeg",
-          "Content-Length": stat.size
-        },
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        timeout: 60000
-      }
-    );
-    console.log("YT THUMBNAIL SET:", response.data);
-    return true;
-  } catch (error) {
-    const wrapped = wrapGoogleError(error, "YouTube thumbnail upload failed");
-    console.warn(wrapped.message);
-    return false;
+export async function setYoutubeThumbnail({ videoId, thumbnailPath, accessToken }) {
+  if (!videoId || !thumbnailPath) {
+    return { ok: false, error: "videoId atau thumbnailPath kosong" };
   }
+
+  let stat = null;
+  try {
+    stat = await fsp.stat(thumbnailPath);
+  } catch (error) {
+    return { ok: false, error: `thumbnail tidak ditemukan: ${error.message}` };
+  }
+
+  if (!stat.size) return { ok: false, error: "thumbnail kosong" };
+  if (stat.size > maxThumbnailBytes) {
+    return { ok: false, error: `thumbnail ${stat.size} bytes melebihi batas YouTube 2MB` };
+  }
+
+  let token = accessToken;
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      if (!token) token = await getYoutubeAccessToken();
+      const response = await axios.post(
+        thumbnailUploadUrl,
+        fs.createReadStream(thumbnailPath),
+        {
+          params: { videoId, uploadType: "media" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "image/jpeg",
+            "Content-Length": stat.size
+          },
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+          timeout: 60000
+        }
+      );
+      console.log("YT THUMBNAIL SET:", response.data);
+      return { ok: true, response: response.data };
+    } catch (error) {
+      lastError = wrapGoogleError(error, "YouTube thumbnail upload failed");
+      console.warn(`YouTube thumbnail attempt ${attempt}/3 gagal: ${lastError.message}`);
+      if (attempt < 3) await sleep(5000 * attempt);
+    }
+  }
+
+  return { ok: false, error: lastError?.message || "YouTube thumbnail upload failed" };
 }
 
 export async function publishToYoutube({ videoPath, title, description, tags = [], thumbnailPath }) {
@@ -115,14 +136,15 @@ export async function publishToYoutube({ videoPath, title, description, tags = [
     });
     const id = upload.data?.id;
     if (!id) throw new Error("YouTube upload selesai tetapi video id kosong.");
-    const customThumbnail = await setYoutubeThumbnail({ videoId: id, thumbnailPath, accessToken });
+    const thumbnail = await setYoutubeThumbnail({ videoId: id, thumbnailPath, accessToken });
     return {
       videoId: id,
       url: `https://www.youtube.com/watch?v=${id}`,
       privacyStatus: metadata.status.privacyStatus,
       title: metadata.snippet.title,
       type: "youtube_video",
-      customThumbnail
+      customThumbnail: thumbnail.ok,
+      thumbnailError: thumbnail.ok ? "" : thumbnail.error
     };
   } catch (error) {
     throw wrapGoogleError(error, "YouTube video upload failed");
@@ -149,12 +171,14 @@ export async function getYoutubeChannel() {
 }
 
 export function buildYoutubeMetadata({ job, output, caption }) {
-  const topic = shortTopic(output.title || job.source_title || output.hook || job.theme);
+  const topic = buildHookTitle({ job, output, caption });
   const rawTitle = [config.youtube.titlePrefix, topic, "#Shorts"].filter(Boolean).join(" ");
+  const dynamicTags = tagsFromCaption(caption);
 
   const description = [
     caption,
     "",
+    "Shorts ini dipilih dari bagian paling kuat: hook jelas, konflik terasa, dan konteksnya relevan untuk ditonton sampai akhir.",
     "Diproses otomatis dari clip podcast.",
     config.youtube.descriptionFooter
   ].filter(Boolean).join("\n");
@@ -162,8 +186,75 @@ export function buildYoutubeMetadata({ job, output, caption }) {
   return {
     title: rawTitle,
     description,
-    tags: config.youtube.tags
+    tags: normalizeTags([
+      ...config.youtube.tags,
+      ...dynamicTags,
+      ...keywordsFromText(`${topic} ${output.title || ""} ${output.hook || ""}`)
+    ])
   };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildHookTitle({ job, output, caption }) {
+  const firstLine = String(caption || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith("#"));
+
+  const candidates = [
+    firstLine,
+    output.hook,
+    output.thumbnailText,
+    output.title,
+    job.source_title,
+    job.theme
+  ];
+
+  for (const candidate of candidates) {
+    const topic = shortTopic(candidate);
+    if (topic !== "Podcast Clip") return topic;
+  }
+  return "Podcast Clip";
+}
+
+function tagsFromCaption(value) {
+  return String(value || "")
+    .match(/#[\p{L}\p{N}_]+/gu)
+    ?.map((tag) => tag.replace(/^#/, ""))
+    .filter(Boolean) || [];
+}
+
+function keywordsFromText(value) {
+  const stopwords = new Set([
+    "yang",
+    "dan",
+    "atau",
+    "ini",
+    "itu",
+    "dari",
+    "dengan",
+    "karena",
+    "untuk",
+    "gak",
+    "nggak",
+    "tidak",
+    "kok",
+    "sih"
+  ]);
+  const seen = new Set();
+  const tags = [];
+  for (const word of String(value || "").split(/[^\p{L}\p{N}]+/u)) {
+    const cleaned = word.trim();
+    const key = cleaned.toLowerCase();
+    if (cleaned.length < 4 || stopwords.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    tags.push(cleaned);
+    if (tags.length >= 8) break;
+  }
+  return tags;
 }
 
 function shortTopic(value) {

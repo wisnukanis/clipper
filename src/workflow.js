@@ -204,6 +204,8 @@ export async function runWorkflow(options = {}) {
         youtube_video_id: platformResults.youtube?.videoId || "",
         youtube_url: platformResults.youtube?.url || "",
         youtube_error: platformResults.errors.youtube || "",
+        youtube_custom_thumbnail: platformResults.youtube?.customThumbnail === true,
+        youtube_thumbnail_error: platformResults.youtube?.thumbnailError || "",
         youtube_published_at: platformResults.youtube ? now : "",
         published_at: primaryPublished ? now : ""
       });

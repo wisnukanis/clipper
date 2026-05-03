@@ -52,17 +52,17 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
   const prompt = [
     "Buat caption Instagram Reels berbahasa Indonesia.",
     "Aturan:",
-    "- Hook kuat di baris pertama.",
-    "- Ringkas, natural, dan sesuai transkrip.",
+    "- Baris pertama harus hook kuat, boleh berbentuk kutipan pendek atau pertanyaan yang bikin penasaran.",
+    "- Paragraf kedua menjelaskan konflik, fakta mengejutkan, atau alasan clip ini layak ditonton.",
+    "- Ringkas, natural, emosional, dan sesuai transkrip.",
     "- Jangan mengarang fakta di luar konteks.",
     "- Tambahkan CTA ringan.",
-    "- Tambahkan 4 sampai 6 hashtag yang spesifik dari pembahasan clip.",
-    "- Jangan pakai hashtag template/statis kalau tidak sesuai isi clip.",
+    "- Akhiri dengan hashtag: pakai #PodcastIndonesia #PodcastArtis #ReelsIndonesia #Viral lalu tambah 2 sampai 4 hashtag spesifik dari isi clip.",
     "",
     `Tema: ${job.theme}`,
     `Gaya: ${promptTemplate?.hook_style || "natural emotional"}`,
     `CTA: ${promptTemplate?.cta || "Menurut kamu bagaimana?"}`,
-    `Hindari template statis: ${promptTemplate?.hashtag_template || "#PodcastIndonesia #ReelsIndonesia"}`,
+    `Base hashtag: ${BASE_HASHTAGS.join(" ")}`,
     `Arah hashtag dari konteks: ${dynamicHashtags.join(" ") || "-"}`,
     "",
     "Konteks clip:",
@@ -77,10 +77,6 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
 
 export async function generateThumbnailText({ job, output, promptTemplate }) {
   const existing = output.thumbnailText ? normalizeThumbnailText(output.thumbnailText, "") : "";
-  if (isStrongThumbnailText(existing)) {
-    return existing;
-  }
-
   const fallback = fallbackThumbnailText(output);
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
@@ -88,8 +84,11 @@ export async function generateThumbnailText({ job, output, promptTemplate }) {
     "- Jangan jawab satu kata.",
     "- Jangan ambil potongan transkrip mentah yang tidak jelas.",
     "- Buat seperti judul cover video, bukan subtitle.",
+    "- Wajib mengandung hook: konflik, rahasia, alasan mengejutkan, pertanyaan, atau momen paling bikin penasaran.",
+    "- Hindari kalimat menggantung yang berakhir koma.",
     `Tema: ${job.theme}`,
     `Style: ${promptTemplate?.thumbnail_style || "singkat dan kuat"}`,
+    `Teks clipper jika ada: ${existing || "-"}`,
     `Judul/hook clip: ${output.hook || output.title || ""}`,
     `Alasan clip: ${output.reason || ""}`,
     `Transkrip singkat: ${String(output.clipTranscript || output.caption || "").slice(0, 900)}`,
@@ -117,17 +116,17 @@ function fallbackCaption(output, promptTemplate, dynamicHashtags = []) {
   const hook = output.hook || output.title || "Ada bagian menarik dari obrolan ini.";
   const body = output.caption || output.reason || "Potongan ini diambil dari momen yang paling kuat di podcast.";
   const cta = promptTemplate?.cta || "Menurut kamu, bagian paling relate yang mana?";
-  const tags = normalizeHashtags(dynamicHashtags).join(" ");
+  const tags = mergeHashtags(BASE_HASHTAGS, dynamicHashtags).slice(0, 8).join(" ");
   return `${hook}\n\n${body}\n\n${cta}\n\n${tags}`;
 }
 
 function ensureCaptionHashtags(caption, output, promptTemplate, dynamicHashtags = []) {
   const cleaned = String(caption || "").trim();
   const outputHashtags = normalizeHashtags(output?.hashtags || []);
-  const existingHashtags = normalizeHashtags(extractHashtags(cleaned)).filter((tag) => !isGenericHashtag(tag));
+  const existingHashtags = normalizeHashtags(extractHashtags(cleaned));
   const contextHashtags = normalizeHashtags(dynamicHashtags);
-  const hashtags = mergeHashtags(contextHashtags, outputHashtags, existingHashtags)
-    .filter((tag) => !isGenericHashtag(tag))
+  const templateHashtags = normalizeHashtags(promptTemplate?.hashtag_template || []);
+  const hashtags = mergeHashtags(BASE_HASHTAGS, contextHashtags, outputHashtags, existingHashtags, templateHashtags)
     .slice(0, 8);
   if (!hashtags.length) return cleaned;
   const body = stripHashtags(cleaned);
@@ -150,12 +149,14 @@ function buildDynamicHashtags({ job, output, context = "" }) {
   const source = [...directFields, context, job?.theme].join(" ");
   const candidates = [...provided];
 
+  for (const tag of topicHashtags(source)) addHashtagCandidate(candidates, tag);
+  for (const name of namedPhrases(source)) addHashtagCandidate(candidates, name);
+
   for (const phrase of directFields.slice(0, 5)) {
     addHashtagCandidate(candidates, phrase);
     for (const pair of keywordPairs(phrase)) addHashtagCandidate(candidates, pair);
   }
 
-  for (const name of namedPhrases(source)) addHashtagCandidate(candidates, name);
   for (const keyword of topKeywords(source, 12)) addHashtagCandidate(candidates, keyword);
 
   return normalizeHashtags(candidates)
@@ -201,6 +202,19 @@ function topKeywords(value, limit) {
     })
     .map(([token]) => token)
     .slice(0, limit);
+}
+
+function topicHashtags(value) {
+  const source = String(value || "").toLowerCase();
+  const tags = [];
+  if (/\byusuf\s+hamka\b/i.test(value)) tags.push("Yusuf Hamka");
+  if (/hak|adil|keadilan|nuntut|tuntut|perjuang/.test(source)) tags.push("Keadilan");
+  if (/ancam|diancam|tekan|intimidasi/.test(source)) tags.push("Ancaman");
+  if (/oknum|petugas|backing|orang gede|orang besar/.test(source)) tags.push("Oknum");
+  if (/royalti|lagu|musik/.test(source)) tags.push("Royalti Musik");
+  if (/selingkuh|spill|sosmed/.test(source)) tags.push("Drama Sosmed");
+  if (/usaha|bisnis|jualan|dagang/.test(source)) tags.push("Bisnis");
+  return tags;
 }
 
 function meaningfulTokens(value) {
@@ -306,6 +320,13 @@ const GENERIC_HASHTAGS = new Set([
   "artis"
 ]);
 
+const BASE_HASHTAGS = [
+  "#PodcastIndonesia",
+  "#PodcastArtis",
+  "#ReelsIndonesia",
+  "#Viral"
+];
+
 const STOPWORDS = new Set([
   ...GENERIC_HASHTAGS,
   "ada",
@@ -402,6 +423,7 @@ const STOPWORDS = new Set([
 function normalizeThumbnailText(value, fallback = "CERITA YANG JARANG DIBUKA") {
   const cleaned = String(value || "")
     .replace(/[`"'*_#]/g, "")
+    .replace(/[,:;]+$/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
@@ -409,9 +431,12 @@ function normalizeThumbnailText(value, fallback = "CERITA YANG JARANG DIBUKA") {
 }
 
 function isStrongThumbnailText(value) {
-  const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+  const cleaned = String(value || "").trim();
+  const words = cleaned.split(/\s+/).filter(Boolean);
   if (words.length < 3 || words.length > 10) return false;
-  return words.join("").length >= 10;
+  if (/[,:;]$/.test(cleaned)) return false;
+  const meaningfulCount = words.filter((word) => !STOPWORDS.has(word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""))).length;
+  return words.join("").length >= 10 && meaningfulCount >= 2;
 }
 
 function fallbackThumbnailText(output) {
