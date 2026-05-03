@@ -118,6 +118,27 @@ function escapeAttr(value) {
   return escapeHtml(value).replace(/`/g, "&#96;");
 }
 
+function setSubmittersDisabled(disabled) {
+  for (const form of [els.runForm, els.videoForm]) {
+    if (!form) continue;
+    const btn = form.querySelector('button[type="submit"]');
+    if (!btn) continue;
+    if (disabled) {
+      if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+      btn.disabled = true;
+      btn.classList.add("isBusy");
+      btn.textContent = "Workflow berjalan…";
+    } else {
+      btn.disabled = false;
+      btn.classList.remove("isBusy");
+      if (btn.dataset.originalText) {
+        btn.textContent = btn.dataset.originalText;
+        delete btn.dataset.originalText;
+      }
+    }
+  }
+}
+
 function formData(form) {
   const raw = Object.fromEntries(new FormData(form).entries());
   return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, String(value).trim()]));
@@ -179,6 +200,7 @@ function metricCard(label, value, tone) {
 
 function renderHero(state) {
   const run = state.activeRun;
+  setSubmittersDisabled(run?.status === "running");
   if (!run) {
     els.runBadge.textContent = "Idle";
     els.runBadge.className = "runBadge idle";
@@ -586,28 +608,36 @@ els.preflightBtn.addEventListener("click", async () => {
 
 els.videoForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  setSubmittersDisabled(true);
   try {
     const payload = formData(els.videoForm);
     payload.priority = Number(payload.priority || 1);
+    payload.clip_count = Number(payload.clip_count || 1);
     await api("/api/videos", { method: "POST", body: JSON.stringify(payload) });
     els.videoForm.reset();
     els.videoForm.elements.theme.value = "podcast artis";
     els.videoForm.elements.priority.value = "1";
     els.videoForm.elements.quality_profile.value = "standard";
+    if (els.videoForm.elements.scene_mode) els.videoForm.elements.scene_mode.value = "podcast";
+    if (els.videoForm.elements.clip_count) els.videoForm.elements.clip_count.value = "1";
     await refresh();
   } catch (error) {
+    setSubmittersDisabled(false);
     handleApiError(error);
   }
 });
 
 els.runForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  setSubmittersDisabled(true);
   try {
     const payload = formData(els.runForm);
     payload.publish = els.runForm.elements.publish.checked;
+    payload.clip_count = Number(payload.clip_count || 1);
     await api("/api/run", { method: "POST", body: JSON.stringify(payload) });
     await refresh();
   } catch (error) {
+    setSubmittersDisabled(false);
     handleApiError(error);
   }
 });

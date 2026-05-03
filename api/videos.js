@@ -33,9 +33,11 @@ export default async function handler(req, res) {
         force_reprocess: video.force_reprocess ? "true" : "false",
         quality_profile: video.quality_profile || "standard",
         deepgram_enabled: "1",
-        subtitle_font: video.subtitle_font || "Segoe UI",
-        subtitle_font_size: String(video.subtitle_font_size || 50),
-        subtitle_margin_v: String(video.subtitle_margin_v || 400)
+        scene_mode: video.scene_mode || "podcast",
+        clip_count: String(video.clip_count || 1),
+        subtitle_font: video.subtitle_font || "Segoe UI Semibold",
+        subtitle_font_size: String(video.subtitle_font_size || 52),
+        subtitle_margin_v: String(video.subtitle_margin_v || 240)
       });
     }
 

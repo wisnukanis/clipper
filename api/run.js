@@ -21,9 +21,11 @@ export default async function handler(req, res) {
       force_reprocess: body.force_reprocess === true || body.force_reprocess === "true" ? "true" : "false",
       quality_profile: clean(body.quality_profile || "standard"),
       deepgram_enabled: "1",
-      subtitle_font: clean(body.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI"),
-      subtitle_font_size: clean(body.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || "50"),
-      subtitle_margin_v: clean(body.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || "400")
+      scene_mode: clean(body.scene_mode || process.env.SCENE_MODE || "podcast"),
+      clip_count: clean(body.clip_count || process.env.CLIP_COUNT || "1"),
+      subtitle_font: clean(body.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
+      subtitle_font_size: clean(body.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || "52"),
+      subtitle_margin_v: clean(body.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || "240")
     };
 
     const dispatch = await dispatchWorkflow(inputs);

@@ -118,6 +118,23 @@
                 <input name="range" placeholder="00:01:20-00:02:05">
               </label>
               <label class="field">
+                <span>Scene</span>
+                <select name="scene_mode">
+                  <option value="podcast" selected>Podcast (multi-host)</option>
+                  <option value="solo">Solo</option>
+                  <option value="reaction">Reaction</option>
+                  <option value="game">Game</option>
+                  <option value="sport">Sport</option>
+                  <option value="auto">Auto</option>
+                  <option value="active_speaker">Active speaker</option>
+                  <option value="center">Center</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Clips</span>
+                <input name="clip_count" type="number" min="1" max="10" value="1">
+              </label>
+              <label class="field">
                 <span>Kualitas</span>
                 <select name="quality_profile">
                   <option value="standard">Standard</option>
@@ -130,9 +147,9 @@
                 <input name="publish" type="checkbox">
                 <span>Publish</span>
               </label>
-              <input name="subtitle_font" type="hidden" value="Segoe UI">
-              <input name="subtitle_font_size" type="hidden" value="50">
-              <input name="subtitle_margin_v" type="hidden" value="400">
+              <input name="subtitle_font" type="hidden" value="Segoe UI Semibold">
+              <input name="subtitle_font_size" type="hidden" value="52">
+              <input name="subtitle_margin_v" type="hidden" value="240">
             </div>
             <button class="btn primary small" type="submit">Mulai Workflow</button>
           </form>
@@ -163,6 +180,23 @@
                 <input name="priority" type="number" min="1" value="1">
               </label>
               <label class="field">
+                <span>Scene</span>
+                <select name="scene_mode">
+                  <option value="podcast" selected>Podcast (multi-host)</option>
+                  <option value="solo">Solo</option>
+                  <option value="reaction">Reaction</option>
+                  <option value="game">Game</option>
+                  <option value="sport">Sport</option>
+                  <option value="auto">Auto</option>
+                  <option value="active_speaker">Active speaker</option>
+                  <option value="center">Center</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Clips</span>
+                <input name="clip_count" type="number" min="1" max="10" value="1">
+              </label>
+              <label class="field">
                 <span>Kualitas</span>
                 <select name="quality_profile">
                   <option value="standard">Standard</option>
@@ -173,9 +207,9 @@
               </label>
               <input name="manual_range" type="hidden">
               <input name="notes" type="hidden">
-              <input name="subtitle_font" type="hidden" value="Segoe UI">
-              <input name="subtitle_font_size" type="hidden" value="50">
-              <input name="subtitle_margin_v" type="hidden" value="400">
+              <input name="subtitle_font" type="hidden" value="Segoe UI Semibold">
+              <input name="subtitle_font_size" type="hidden" value="52">
+              <input name="subtitle_margin_v" type="hidden" value="240">
             </div>
             <button class="btn primary small" type="submit">Tambah ke Queue</button>
           </form>

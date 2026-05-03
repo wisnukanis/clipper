@@ -30,15 +30,23 @@ on:
       subtitle_font:
         description: Subtitle font family
         required: false
-        default: "Segoe UI"
+        default: "Selawik Semibold"
       subtitle_font_size:
         description: Subtitle font size
         required: false
-        default: "50"
+        default: "52"
       subtitle_margin_v:
         description: Subtitle bottom margin
         required: false
-        default: "400"
+        default: "240"
+      scene_mode:
+        description: "Scene mode: podcast, solo, game, reaction, sport, auto, active_speaker, center"
+        required: false
+        default: "podcast"
+      clip_count:
+        description: How many clips to render from the source video
+        required: false
+        default: "1"
 
   schedule:
     # GitHub schedule uses UTC.
@@ -129,6 +137,7 @@ jobs:
       CLOD_MODEL: ${{ secrets.CLOD_MODEL || 'DeepSeek V3' }}
       CLOD_TEMPERATURE: ${{ secrets.CLOD_TEMPERATURE || '0.45' }}
 
+      TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
       DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '1' }}
       DEEPGRAM_API_KEYS: ${{ secrets.DEEPGRAM_API_KEYS }}
       DEEPGRAM_MODEL: ${{ secrets.DEEPGRAM_MODEL || 'nova-3' }}
@@ -161,7 +170,6 @@ jobs:
 
       PYTHON_CMD: python
       CLIPPER_ROOT: clipper
-      CLIP_COUNT: "1"
       MIN_CLIP_SECONDS: "40"
       MAX_CLIP_SECONDS: "60"
       OUTPUT_WIDTH: "1080"
@@ -171,11 +179,14 @@ jobs:
       DOWNLOAD_COMPRESS_CRF: "30"
       FINAL_RENDER_CRF: "27"
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
-      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Segoe UI' }}
-      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik,DejaVu Sans' }}
-      SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '50' }}
+      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
+      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik Semibold,Selawik,DejaVu Sans' }}
+      SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '52' }}
+      SCENE_MODE: ${{ github.event.inputs.scene_mode || secrets.SCENE_MODE || 'podcast' }}
+      SMART_CROP_MODE: ${{ github.event.inputs.scene_mode || secrets.SMART_CROP_MODE || 'podcast' }}
+      CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '1' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
-      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '400' }}
+      SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || secrets.SUBTITLE_MARGIN_V || '240' }}
       SUBTITLE_MARGIN_H: ${{ secrets.SUBTITLE_MARGIN_H || '120' }}
       SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '3' }}
       SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H0030A8D6' }}
@@ -184,7 +195,6 @@ jobs:
       SUBTITLE_OUTLINE: ${{ secrets.SUBTITLE_OUTLINE || '1' }}
       SUBTITLE_SHADOW: ${{ secrets.SUBTITLE_SHADOW || '2' }}
       SMART_CROP_ENABLED: "1"
-      SMART_CROP_MODE: auto
       TRANSCRIPT_REVIEW_ENABLED: "1"
       TRANSCRIPT_REVIEW_REQUIRED: ${{ secrets.TRANSCRIPT_REVIEW_REQUIRED || '0' }}
       VIRAL_STRATEGY_ENABLED: ${{ secrets.VIRAL_STRATEGY_ENABLED || '1' }}

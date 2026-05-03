@@ -5,7 +5,6 @@ import os
 import re
 import subprocess
 import sys
-import textwrap
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,20 +27,34 @@ def log_warn(message):
     print(f"[WARN] {message}", flush=True)
 
 
-def load_env():
-    env_paths = [ROOT.parent / ".env", ROOT / ".env"]
+def log_progress(stage, overall=None, *, stage_pct=None, clip=None, total=None, note=""):
+    fields = [f"stage={str(stage).strip().lower()}"]
+    if overall is not None:
+        fields.append(f"overall={clamp(float(overall), 0.0, 100.0):.1f}")
+    if stage_pct is not None:
+        fields.append(f"pct={clamp(float(stage_pct), 0.0, 100.0):.1f}")
+    if clip is not None:
+        fields.append(f"clip={int(clip)}")
+    if total is not None:
+        fields.append(f"total={int(total)}")
+    if note:
+        safe_note = re.sub(r"\s+", "_", str(note).strip())[:80]
+        fields.append(f"note={safe_note}")
+    print(f"[PROGRESS] {' '.join(fields)}", flush=True)
 
-    for env_path in env_paths:
-        if not env_path.exists():
+
+def load_env():
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
+
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
             continue
 
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-
-            key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 def parse_int(value, default):
@@ -68,13 +81,16 @@ def parse_keys(value):
 
 
 def cfg():
+    transcribe_provider = os.environ.get("TRANSCRIBE_PROVIDER", "offline").strip().lower()
+    if transcribe_provider not in {"offline", "auto", "deepgram"}:
+        transcribe_provider = "offline"
+
     return {
         "gemini_keys": parse_keys(os.environ.get("GEMINI_API_KEYS") or os.environ.get("GEMINI_API_KEY")),
         "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
-        "clod_key": os.environ.get("CLOD_API_KEY", "").strip(),
-        "clod_base_url": os.environ.get("CLOD_BASE_URL", "https://api.clod.io/v1").rstrip("/"),
-        "clod_model": os.environ.get("CLOD_MODEL", "DeepSeek V3"),
-        "clod_temperature": parse_float(os.environ.get("CLOD_TEMPERATURE"), 0.45),
+        "ai_clip_selection": parse_int(os.environ.get("AI_CLIP_SELECTION_ENABLED"), 1),
+        "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 5),
+        "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 4000),
         "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 1),
         "min_clip_seconds": parse_int(os.environ.get("MIN_CLIP_SECONDS"), 40),
         "max_clip_seconds": parse_int(os.environ.get("MAX_CLIP_SECONDS"), 60),
@@ -86,7 +102,7 @@ def cfg():
         "subtitle_offset": parse_float(os.environ.get("SUBTITLE_OFFSET_SECONDS"), 0.0),
         "smart_crop": parse_int(os.environ.get("SMART_CROP_ENABLED"), 1),
         "smart_crop_mode": os.environ.get("SMART_CROP_MODE", "auto"),
-        "smart_crop_sample": parse_float(os.environ.get("SMART_CROP_SAMPLE_SECONDS"), 0.75),
+        "smart_crop_sample": parse_float(os.environ.get("SMART_CROP_SAMPLE_SECONDS"), 0.35),
         "smart_crop_smoothing": parse_float(os.environ.get("SMART_CROP_SMOOTHING"), 0.38),
         "smart_crop_max_shift": parse_float(os.environ.get("SMART_CROP_MAX_SHIFT_PER_SECOND"), 0.16),
         "active_speaker_switch_seconds": parse_float(os.environ.get("ACTIVE_SPEAKER_SWITCH_SECONDS"), 1.2),
@@ -97,7 +113,9 @@ def cfg():
         "active_speaker_max_faces": parse_int(os.environ.get("ACTIVE_SPEAKER_MAX_FACES"), 4),
         "active_speaker_no_face_strategy": os.environ.get("ACTIVE_SPEAKER_NO_FACE_STRATEGY", "visual_content"),
         "active_speaker_no_face_center_after_seconds": parse_float(os.environ.get("ACTIVE_SPEAKER_NO_FACE_CENTER_AFTER_SECONDS"), 6.0),
+        "active_speaker_center_fallback_enabled": parse_int(os.environ.get("ACTIVE_SPEAKER_CENTER_FALLBACK_ENABLED"), 0),
         "active_speaker_min_mouth_score_to_switch": parse_float(os.environ.get("ACTIVE_SPEAKER_MIN_MOUTH_SCORE_TO_SWITCH"), 0.06),
+        "active_speaker_switch_score_margin": parse_float(os.environ.get("ACTIVE_SPEAKER_SWITCH_SCORE_MARGIN"), 0.12),
         "active_speaker_visual_fallback_enabled": parse_int(os.environ.get("ACTIVE_SPEAKER_VISUAL_FALLBACK_ENABLED"), 1),
         "active_speaker_visual_min_score": parse_float(os.environ.get("ACTIVE_SPEAKER_VISUAL_MIN_SCORE"), 0.025),
         "active_speaker_visual_hold_seconds": parse_float(os.environ.get("ACTIVE_SPEAKER_VISUAL_HOLD_SECONDS"), 1.5),
@@ -106,23 +124,41 @@ def cfg():
         "active_speaker_initial_sample_seconds": parse_float(os.environ.get("ACTIVE_SPEAKER_INITIAL_SAMPLE_SECONDS"), 0.5),
         "active_speaker_initial_min_score": parse_float(os.environ.get("ACTIVE_SPEAKER_INITIAL_MIN_SCORE"), 0.010),
         "active_speaker_initial_side_bias": parse_float(os.environ.get("ACTIVE_SPEAKER_INITIAL_SIDE_BIAS"), 0.06),
+        # ---- Scene mode + new face engine ----
+        "scene_mode": (os.environ.get("SCENE_MODE") or os.environ.get("SMART_CROP_MODE") or "auto").strip().lower(),
+        "face_engine_pack": os.environ.get("FACE_ENGINE_PACK", "buffalo_sc"),
+        "face_engine_det_size": parse_int(os.environ.get("FACE_ENGINE_DET_SIZE"), 640),
+        "face_engine_iou": parse_float(os.environ.get("FACE_ENGINE_IOU"), 0.20),
+        "face_engine_max_dist": parse_float(os.environ.get("FACE_ENGINE_MAX_DIST"), 0.18),
+        "face_engine_max_lost": parse_int(os.environ.get("FACE_ENGINE_MAX_LOST"), 15),
+        "face_engine_min_score": parse_float(os.environ.get("FACE_ENGINE_MIN_SCORE"), 0.55),
+        "face_engine_use_insightface": parse_int(os.environ.get("FACE_ENGINE_USE_INSIGHTFACE"), 1),
+        "fullscreen_blur_strength": parse_int(os.environ.get("FULLSCREEN_BLUR_STRENGTH"), 22),
+        "fullscreen_min_segment_seconds": parse_float(os.environ.get("FULLSCREEN_MIN_SEGMENT_SECONDS"), 0.7),
+        "crossfade_seconds": parse_float(os.environ.get("CROSSFADE_SECONDS"), 0.4),
+        "dynamic_zoom_enabled": parse_int(os.environ.get("DYNAMIC_ZOOM_ENABLED"), 1),
+        "dynamic_zoom_width_smooth": parse_float(os.environ.get("DYNAMIC_ZOOM_WIDTH_SMOOTH"), 0.18),
+        "dynamic_zoom_center_smooth": parse_float(os.environ.get("DYNAMIC_ZOOM_CENTER_SMOOTH"), 0.30),
+        "dynamic_zoom_confidence_fall": parse_float(os.environ.get("DYNAMIC_ZOOM_CONFIDENCE_FALL"), 0.72),
+        "dynamic_zoom_confidence_rise": parse_float(os.environ.get("DYNAMIC_ZOOM_CONFIDENCE_RISE"), 0.24),
+        "dynamic_zoom_transition_lead": parse_float(os.environ.get("DYNAMIC_ZOOM_TRANSITION_LEAD_SECONDS"), 0.25),
         "transcript_review": parse_int(os.environ.get("TRANSCRIPT_REVIEW_ENABLED"), 1),
-        "transcript_review_required": parse_int(os.environ.get("TRANSCRIPT_REVIEW_REQUIRED"), 0),
         "transcript_review_batch": parse_int(os.environ.get("TRANSCRIPT_REVIEW_BATCH_SIZE"), 80),
-        "viral_strategy_enabled": parse_int(os.environ.get("VIRAL_STRATEGY_ENABLED"), 1),
-        "viral_strategy_required": parse_int(os.environ.get("VIRAL_STRATEGY_REQUIRED"), 0),
-        "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 5),
-        "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 4000),
-        "min_viral_score_to_publish": parse_int(os.environ.get("MIN_VIRAL_SCORE_TO_PUBLISH"), 0),
-        "force_publish": parse_int(os.environ.get("FORCE_PUBLISH"), 1),
         "language": os.environ.get("VIDEO_LANGUAGE", "id"),
-        "deepgram_enabled": parse_int(os.environ.get("DEEPGRAM_ENABLED"), 1),
+        "transcribe_provider": transcribe_provider,
+        "deepgram_enabled": parse_int(os.environ.get("DEEPGRAM_ENABLED"), 0),
         "deepgram_keys": parse_keys(os.environ.get("DEEPGRAM_API_KEYS") or os.environ.get("DEEPGRAM_API_KEY")),
         "deepgram_model": os.environ.get("DEEPGRAM_MODEL", "nova-3"),
         "deepgram_language": os.environ.get("DEEPGRAM_LANGUAGE") or os.environ.get("VIDEO_LANGUAGE", "id"),
         "deepgram_timeout": parse_int(os.environ.get("DEEPGRAM_TIMEOUT_SECONDS"), 900),
-        "deepgram_audio_bitrate": os.environ.get("DEEPGRAM_AUDIO_BITRATE", "32k"),
-        "deepgram_audio_sample_rate": parse_int(os.environ.get("DEEPGRAM_AUDIO_SAMPLE_RATE"), 16000),
+        "offline_model": os.environ.get("OFFLINE_TRANSCRIBE_MODEL", "small"),
+        "offline_device": os.environ.get("OFFLINE_TRANSCRIBE_DEVICE", "cpu"),
+        "offline_compute": os.environ.get("OFFLINE_TRANSCRIBE_COMPUTE_TYPE", "int8"),
+        "offline_beam_size": parse_int(os.environ.get("OFFLINE_TRANSCRIBE_BEAM_SIZE"), 5),
+        "offline_vad_filter": parse_int(os.environ.get("OFFLINE_TRANSCRIBE_VAD_FILTER"), 1),
+        "offline_vad_min_silence_ms": parse_int(os.environ.get("OFFLINE_TRANSCRIBE_VAD_MIN_SILENCE_MS"), 500),
+        "offline_cpu_threads": parse_int(os.environ.get("OFFLINE_TRANSCRIBE_CPU_THREADS"), 0),
+        "offline_num_workers": parse_int(os.environ.get("OFFLINE_TRANSCRIBE_NUM_WORKERS"), 1),
     }
 
 
@@ -209,9 +245,9 @@ def ytdlp_common_args():
     fragment_retries = os.environ.get("YTDLP_FRAGMENT_RETRIES", "").strip()
     retry_sleep = os.environ.get("YTDLP_RETRY_SLEEP", "").strip()
 
-    # Prioritas 1: pakai file cookies.txt.
-    # Di GitHub Actions file ini dibuat dari secret YTDLP_COOKIES_TXT.
-    # Di lokal, letakkan cookies.txt di root folder clipper.
+    # Prioritas 1: pakai file cookies.txt
+    # Letakkan cookies.txt di root project:
+    # C:\xampp\htdocs\auto-video-clipper\cookies.txt
     if not cookies_file and os.path.exists("cookies.txt"):
         cookies_file = "cookies.txt"
 
@@ -220,8 +256,6 @@ def ytdlp_common_args():
     elif cookies_browser:
         args.extend(["--cookies-from-browser", cookies_browser])
 
-    # Samakan identitas request dengan browser yang dipakai saat export cookies.
-    # Ini membantu saat YouTube menolak cookies karena user-agent runner berbeda jauh.
     if user_agent:
         args.extend(["--user-agent", user_agent])
 
@@ -234,7 +268,6 @@ def ytdlp_common_args():
     if js_runtimes:
         args.extend(["--js-runtimes", js_runtimes])
 
-    # Opsi throttling/retry ini opsional. Isi lewat env jika GitHub Actions sering dianggap bot.
     if sleep_requests:
         args.extend(["--sleep-requests", sleep_requests])
 
@@ -254,6 +287,7 @@ def ytdlp_common_args():
         args.extend(["--retry-sleep", retry_sleep])
 
     return args
+
 
 def get_video_info(url):
     result = run_ytdlp(["-J", "--skip-download", "--no-warnings", url], capture=True)
@@ -520,41 +554,6 @@ def download_audio(url, job_id):
     return output
 
 
-def prepare_deepgram_audio(audio_path, job_id, config):
-    audio_path = Path(audio_path)
-    output = ROOT / "temp" / f"{job_id}-deepgram.mp3"
-    bitrate = str(config.get("deepgram_audio_bitrate", "32k") or "32k")
-    sample_rate = str(config.get("deepgram_audio_sample_rate", 16000) or 16000)
-
-    try:
-        run([
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(audio_path),
-            "-vn",
-            "-ac",
-            "1",
-            "-ar",
-            sample_rate,
-            "-b:a",
-            bitrate,
-            str(output),
-        ], capture=True)
-
-        original_mb = audio_path.stat().st_size / (1024 * 1024)
-        output_mb = output.stat().st_size / (1024 * 1024)
-        if output_mb > 0:
-            log_info(
-                f"Audio Deepgram dikompres: {original_mb:.2f} MB -> {output_mb:.2f} MB "
-                f"({sample_rate} Hz, {bitrate})."
-            )
-            return output
-    except Exception as exc:
-        log_warn(f"Gagal kompres audio Deepgram, pakai audio asli: {exc}")
-
-    return audio_path
-
 
 def audio_content_type(audio_path):
     suffix = Path(audio_path).suffix.lower()
@@ -587,13 +586,11 @@ def transcribe_deepgram(audio_path, job_id, config):
     if not keys:
         raise RuntimeError("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi di .env atau environment variable.")
 
-    upload_audio_path = prepare_deepgram_audio(audio_path, job_id, config)
-
     last_error = None
     for index, api_key in enumerate(keys):
         try:
             log_info(f"Deepgram key {index + 1}/{len(keys)} aktif ({mask_secret(api_key)})")
-            return transcribe_deepgram_single_key(upload_audio_path, job_id, config, api_key, index)
+            return transcribe_deepgram_single_key(audio_path, job_id, config, api_key, index)
         except Exception as exc:
             last_error = exc
             log_warn(f"Deepgram key {index + 1}/{len(keys)} gagal: {exc}")
@@ -763,13 +760,90 @@ def normalize_deepgram_words(words):
 
 
 def transcribe_audio(audio_path, job_id, config):
-    if int(config.get("deepgram_enabled", 1)) != 1:
-        raise RuntimeError("DEEPGRAM_ENABLED harus 1. Pipeline ini hanya memakai Deepgram untuk transkripsi.")
+    provider = str(config.get("transcribe_provider", "offline")).lower()
 
-    if not config.get("deepgram_keys"):
-        raise RuntimeError("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY wajib diisi. Pipeline ini hanya memakai Deepgram untuk transkripsi.")
+    if provider == "offline":
+        log_info("TRANSCRIBE_PROVIDER=offline. Deepgram dilewati.")
+        return transcribe_offline(audio_path, job_id, config)
 
-    return transcribe_deepgram(audio_path, job_id, config)
+    if provider in {"auto", "deepgram"} and int(config.get("deepgram_enabled", 0)) == 1:
+        if config.get("deepgram_keys"):
+            try:
+                return transcribe_deepgram(audio_path, job_id, config)
+            except Exception as exc:
+                log_warn(f"Deepgram gagal total: {exc}")
+                if provider == "deepgram":
+                    log_warn("Fallback tetap memakai faster-whisper agar proses lokal tidak putus.")
+                log_step("Fallback transkripsi offline dengan faster-whisper.")
+        else:
+            log_warn("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi. Pakai faster-whisper offline.")
+    elif provider == "deepgram":
+        log_warn("TRANSCRIBE_PROVIDER=deepgram tetapi DEEPGRAM_ENABLED=0. Pakai faster-whisper offline.")
+    else:
+        log_warn("TRANSCRIBE_PROVIDER=auto tanpa Deepgram aktif. Pakai faster-whisper offline.")
+
+    return transcribe_offline(audio_path, job_id, config)
+
+
+def transcribe_offline(audio_path, job_id, config):
+    log_step("Transkripsi audio offline dengan faster-whisper.")
+
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as exc:
+        raise RuntimeError("faster-whisper belum terinstall. Jalankan: npm run setup:offline") from exc
+
+    model_kwargs = {
+        "device": config["offline_device"],
+        "compute_type": config["offline_compute"],
+    }
+    if int(config.get("offline_cpu_threads", 0)) > 0:
+        model_kwargs["cpu_threads"] = int(config["offline_cpu_threads"])
+    if int(config.get("offline_num_workers", 1)) > 0:
+        model_kwargs["num_workers"] = int(config["offline_num_workers"])
+
+    log_info(
+        "faster-whisper "
+        f"model={config['offline_model']} "
+        f"device={config['offline_device']} "
+        f"compute={config['offline_compute']} "
+        f"beam={config.get('offline_beam_size', 5)}"
+    )
+
+    model = WhisperModel(config["offline_model"], **model_kwargs)
+
+    vad_enabled = int(config.get("offline_vad_filter", 1)) == 1
+    transcribe_kwargs = {
+        "language": config["language"],
+        "vad_filter": vad_enabled,
+        "beam_size": max(1, int(config.get("offline_beam_size", 5))),
+    }
+    if vad_enabled:
+        transcribe_kwargs["vad_parameters"] = {
+            "min_silence_duration_ms": max(100, int(config.get("offline_vad_min_silence_ms", 500)))
+        }
+
+    segments, info = model.transcribe(str(audio_path), **transcribe_kwargs)
+    result = [
+        {"start": float(segment.start), "end": float(segment.end), "text": segment.text.strip()}
+        for segment in segments
+        if segment.text and segment.text.strip()
+    ]
+
+    transcript_path = ROOT / "temp" / f"{job_id}-offline-transcript.json"
+    transcript_path.write_text(
+        json.dumps(
+            {
+                "language": info.language,
+                "language_probability": info.language_probability,
+                "segments": result,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return result
 
 
 def format_ts(seconds):
@@ -802,11 +876,11 @@ def extract_json(text):
         data, _ = decoder.raw_decode(fenced.group(1).strip())
         return data
 
-    starts = [pos for pos in [raw.find("["), raw.find("{")] if pos >= 0]
-    if not starts:
-        raise ValueError("Gemini tidak mengembalikan JSON valid.")
+    start = raw.find("[")
+    if start < 0:
+        raise ValueError("Gemini tidak mengembalikan JSON array valid.")
 
-    data, _ = decoder.raw_decode(raw[min(starts):])
+    data, _ = decoder.raw_decode(raw[start:])
     return data
 
 
@@ -843,40 +917,6 @@ def call_gemini(prompt, api_key, model):
     return "".join(part.get("text", "") for part in parts)
 
 
-def call_clod(prompt, config, max_tokens=1200):
-    if not config.get("clod_key"):
-        raise RuntimeError("CLOD_API_KEY belum diisi.")
-
-    endpoint = f"{config.get('clod_base_url', 'https://api.clod.io/v1')}/chat/completions"
-    payload = json.dumps(
-        {
-            "model": config.get("clod_model", "DeepSeek V3"),
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": float(config.get("clod_temperature", 0.45)),
-            "max_completion_tokens": int(max_tokens),
-        }
-    ).encode("utf-8")
-
-    request = urllib.request.Request(
-        endpoint,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {config['clod_key']}",
-        },
-        method="POST",
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"CLOD HTTP {exc.code}: {detail}") from exc
-
-    return str(data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-
-
 def segment_text_window(segments, start, end, max_chars=180):
     text = " ".join(
         str(segment.get("text", "")).strip()
@@ -909,6 +949,13 @@ def local_clip_score(text, start, duration):
         "salah": 3,
         "benar": 3,
         "jangan": 3,
+        "jujur": 3,
+        "gagal": 3,
+        "sukses": 3,
+        "bisnis": 3,
+        "keluarga": 3,
+        "karier": 3,
+        "hidup": 3,
         "kalau": 2,
         "tapi": 2,
         "karena": 2,
@@ -916,6 +963,12 @@ def local_clip_score(text, start, duration):
         "gue": 1,
         "saya": 1,
     }
+    intro_penalties = [
+        "assalamualaikum",
+        "jangan lupa subscribe",
+        "like comment",
+        "terima kasih sudah menonton",
+    ]
 
     for keyword, weight in keyword_weights.items():
         if keyword in normalized:
@@ -927,10 +980,12 @@ def local_clip_score(text, start, duration):
         score += 3
     if "!" in text:
         score += 2
-    if 40 <= duration <= 60:
+    if 40 <= duration <= 65:
         score += 3
     if start < 20:
         score -= 4
+    if any(phrase in normalized for phrase in intro_penalties):
+        score -= 6
 
     words = normalized.split()
     unique_ratio = len(set(words)) / max(len(words), 1)
@@ -947,77 +1002,10 @@ def local_clip_title(text, index):
     return title[:70]
 
 
-def find_local_important_clips(segments, config, reason=""):
-    min_duration = max(10, int(config.get("min_clip_seconds", 40)))
-    max_duration = max(min_duration, int(config.get("max_clip_seconds", 60)))
-    clip_count = max(1, int(config.get("clip_count", 1)))
-
-    candidates = []
-    for start_index, segment in enumerate(segments):
-        start = float(segment.get("start", 0))
-        end = start
-
-        for next_segment in segments[start_index:]:
-            end = float(next_segment.get("end", end))
-            duration = end - start
-            if duration < min_duration:
-                continue
-            if duration > max_duration:
-                break
-
-            text = segment_text_window(segments, start, end)
-            if len(text.split()) < 8:
-                continue
-
-            candidates.append({
-                "score": local_clip_score(text, start, duration),
-                "start": start,
-                "end": end,
-                "text": text,
-            })
-
-    candidates.sort(key=lambda item: item["score"], reverse=True)
-    selected = []
-    for candidate in candidates:
-        overlaps = any(
-            candidate["start"] < item["end"] and candidate["end"] > item["start"]
-            for item in selected
-        )
-        if overlaps:
-            continue
-        selected.append(candidate)
-        if len(selected) >= clip_count:
-            break
-
-    if not selected and segments:
-        start = float(segments[0].get("start", 0))
-        end = min(float(segments[-1].get("end", start + max_duration)), start + max_duration)
-        selected.append({
-            "score": 0,
-            "start": start,
-            "end": end,
-            "text": segment_text_window(segments, start, end),
-        })
-
-    clips = []
-    for index, item in enumerate(selected):
-        title = local_clip_title(item["text"], index)
-        clips.append({
-            "title": title,
-            "reason": reason or "Fallback lokal memilih bagian dengan sinyal hook, angka, konflik, dan kata kunci kuat.",
-            "start": round(float(item["start"]), 2),
-            "end": round(float(item["end"]), 2),
-            "hook": item["text"],
-            "caption": item["text"],
-        })
-
-    return clips
-
-
 def build_candidate_clips(segments, config):
     min_duration = max(10, int(config.get("min_clip_seconds", 40)))
     max_duration = max(min_duration, int(config.get("max_clip_seconds", 60)))
-    max_candidates = max(1, min(5, int(config.get("ai_candidate_max_count", 5))))
+    max_candidates = max(1, min(8, int(config.get("ai_candidate_max_count", 5))))
     max_total_chars = max(700, int(config.get("ai_candidate_max_chars", 4000)))
     per_candidate_chars = max(220, min(1100, max_total_chars // max_candidates))
 
@@ -1038,13 +1026,15 @@ def build_candidate_clips(segments, config):
             if len(text.split()) < 8:
                 continue
 
-            scored.append({
-                "score": local_clip_score(text, start, duration),
-                "start": start,
-                "end": end,
-                "duration": duration,
-                "text": text,
-            })
+            scored.append(
+                {
+                    "score": local_clip_score(text, start, duration),
+                    "start": start,
+                    "end": end,
+                    "duration": duration,
+                    "text": text,
+                }
+            )
 
     scored.sort(key=lambda item: item["score"], reverse=True)
     selected = []
@@ -1062,13 +1052,15 @@ def build_candidate_clips(segments, config):
     if not selected and segments:
         start = float(segments[0].get("start", 0))
         end = min(float(segments[-1].get("end", start + max_duration)), start + max_duration)
-        selected.append({
-            "score": 0,
-            "start": start,
-            "end": end,
-            "duration": end - start,
-            "text": segment_text_window(segments, start, end, max_chars=per_candidate_chars),
-        })
+        selected.append(
+            {
+                "score": 0,
+                "start": start,
+                "end": end,
+                "duration": end - start,
+                "text": segment_text_window(segments, start, end, max_chars=per_candidate_chars),
+            }
+        )
 
     candidates = []
     used_chars = 0
@@ -1082,22 +1074,25 @@ def build_candidate_clips(segments, config):
             text = text[: room - 3].rstrip() + "..."
 
         used_chars += len(text)
-        candidates.append({
-            "candidate_id": index + 1,
-            "start": round(float(item["start"]), 2),
-            "end": round(float(item["end"]), 2),
-            "duration": round(float(item["duration"]), 2),
-            "text": text,
-            "local_score": round(float(item["score"]), 2),
-        })
+        candidates.append(
+            {
+                "candidate_id": index + 1,
+                "start": round(float(item["start"]), 2),
+                "end": round(float(item["end"]), 2),
+                "duration": round(float(item["duration"]), 2),
+                "text": text,
+                "local_score": round(float(item["score"]), 2),
+            }
+        )
 
     return candidates
 
 
 def candidate_to_clip(candidate, index=0, reason=""):
     text = str(candidate.get("text", "")).strip()
+    title = local_clip_title(text, index)
     return {
-        "title": local_clip_title(text, index),
+        "title": title,
         "reason": reason or "Fallback lokal memilih bagian dengan sinyal hook, angka, konflik, dan kata kunci kuat.",
         "start": float(candidate.get("start", 0)),
         "end": float(candidate.get("end", 0)),
@@ -1110,202 +1105,72 @@ def candidate_to_clip(candidate, index=0, reason=""):
     }
 
 
-def build_viral_strategy_prompt(candidates, config):
-    theme = os.environ.get("DEFAULT_THEME", "podcast artis")
-    source_title = os.environ.get("SOURCE_TITLE", "")
-    candidate_payload = [
-        {
-            "candidate_id": item["candidate_id"],
-            "start": item["start"],
-            "end": item["end"],
-            "duration": item["duration"],
-            "text": item["text"],
-        }
-        for item in candidates
-    ]
-
-    return f"""
-Kamu adalah Viral Content Strategist untuk konten Shorts, Reels, dan TikTok.
-
-Tugas kamu bukan hanya membuat caption.
-Tugas kamu adalah memilih kandidat clip yang paling berpotensi viral berdasarkan candidate transcript yang diberikan.
-
-Aturan:
-- Semua output wajib berdasarkan transcript.
-- Jangan mengarang fakta.
-- Jangan membuat klaim yang tidak ada di transcript.
-- Jangan membuat clickbait menipu.
-- Gunakan bahasa Indonesia.
-- Hook harus kuat dan pendek.
-- Caption harus natural, singkat, dan relevan.
-- CTA harus ringan dan memancing komentar.
-- Hashtag harus relevan dengan niche.
-- Setiap hashtag wajib diawali tanda #.
-- Thumbnail text harus 3 sampai 7 kata.
-- Pilih angle yang paling kuat secara emosi, konflik, curiosity, relate, atau pelajaran hidup.
-- Output wajib JSON valid saja, tanpa markdown.
-
-Niche:
-{theme}
-
-Judul video sumber:
-{source_title}
-
-Candidate clips:
-{json.dumps(candidate_payload, ensure_ascii=False, indent=2)}
-
-Output wajib JSON valid:
-{{
-  "selected_candidate_id": 1,
-  "viral_score": 0,
-  "selected_angle": "",
-  "viral_reason": "",
-  "hook": "",
-  "caption": "",
-  "cta": "",
-  "hashtags": [],
-  "thumbnail_text": "",
-  "publish_decision": "approved_or_low_quality"
-}}
-"""
-
-
-def strategy_result_to_clips(data, candidates, config):
-    if isinstance(data, list):
-        return data
-
-    if not isinstance(data, dict):
-        raise ValueError("Output Gemini viral strategy harus object JSON.")
-
-    try:
-        selected_id = int(data.get("selected_candidate_id") or 0)
-    except (TypeError, ValueError):
-        selected_id = 0
-
-    candidate = next((item for item in candidates if int(item["candidate_id"]) == selected_id), None)
-    if candidate is None:
-        candidate = candidates[0]
-
-    try:
-        viral_score = int(float(data.get("viral_score") or 0))
-    except (TypeError, ValueError):
-        viral_score = 0
-
-    hashtags = normalize_hashtags(data.get("hashtags") or [])
-    hashtags_text = " ".join(hashtags)
-    hook = str(data.get("hook") or "").strip() or candidate["text"]
-
-    caption_parts = [
-        hook,
-        str(data.get("caption") or "").strip(),
-        str(data.get("cta") or "").strip(),
-        hashtags_text,
-    ]
-    caption = "\n\n".join(part for part in caption_parts if part)
-    thumbnail_text = str(data.get("thumbnail_text") or "").strip()
-    publish_decision = str(data.get("publish_decision") or "approved").strip()
-
-    minimum = int(config.get("min_viral_score_to_publish", 0))
-    if minimum > 0 and not int(config.get("force_publish", 1)) and viral_score < minimum:
-        publish_decision = "low_quality_clip"
-        log_warn(f"Viral score {viral_score} di bawah batas {minimum}. Clip ditandai low_quality_clip.")
-
-    return [{
-        "title": thumbnail_text or hook,
-        "reason": str(data.get("viral_reason") or data.get("selected_angle") or "").strip(),
-        "start": float(candidate["start"]),
-        "end": float(candidate["end"]),
-        "hook": hook,
-        "caption": caption or candidate["text"],
-        "hashtags": hashtags,
-        "thumbnail_text": thumbnail_text,
-        "viral_score": viral_score,
-        "selected_angle": str(data.get("selected_angle") or "").strip(),
-        "publish_decision": publish_decision,
-        "candidate_id": candidate["candidate_id"],
-        "clip_transcript": candidate["text"],
-    }]
-
-
-def normalize_hashtags(value):
-    if isinstance(value, str):
-        items = [item.strip() for item in re.split(r"[\s,]+", value) if item.strip()]
-    elif isinstance(value, list):
-        items = value
-    else:
-        items = []
-
-    if not items:
-        items = ["PodcastIndonesia", "PodcastArtis", "ReelsIndonesia"]
-
-    tags = []
-    seen = set()
-    for item in items:
-        cleaned = re.sub(r"[^\w]", "", str(item).strip().lstrip("#"), flags=re.UNICODE)
-        if not cleaned:
-            continue
-        tag = f"#{cleaned}"
-        key = tag.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        tags.append(tag)
-        if len(tags) >= 8:
-            break
-    return tags
-
-
 def find_important_clips(segments, config):
     candidates = build_candidate_clips(segments, config)
     if not candidates:
-        return validate_clips(find_local_important_clips(segments, config), segments, config)
+        raise RuntimeError("Tidak ada kandidat clip lokal dari transcript.")
+
+    local_clips = [candidate_to_clip(item, index) for index, item in enumerate(candidates)]
+
+    if int(config.get("ai_clip_selection", 1)) != 1:
+        log_warn("AI_CLIP_SELECTION_ENABLED=0. Pakai kandidat lokal offline.")
+        return validate_clips(local_clips, segments, config)
+
+    if not config["gemini_keys"]:
+        log_warn("GEMINI_API_KEYS kosong. Pakai fallback analisis lokal offline.")
+        return validate_clips(local_clips, segments, config)
 
     log_info(
-        f"Candidate clip lokal: {len(candidates)} kandidat, "
-        f"Gemini hanya menerima potongan pendek <= {config.get('ai_candidate_max_chars', 4000)} karakter."
+        f"Candidate clip lokal: {len(candidates)} kandidat. "
+        f"Gemini hanya menerima potongan kandidat <= {config.get('ai_candidate_max_chars', 4000)} karakter."
     )
 
-    if int(config.get("viral_strategy_enabled", 1)) != 1:
-        log_warn("Viral strategy Gemini nonaktif. Pakai kandidat lokal.")
-        local_clips = [candidate_to_clip(item, index) for index, item in enumerate(candidates)]
-        return validate_clips(local_clips, segments, config)
+    prompt = f"""
+Anda adalah editor video short-form profesional.
 
-    if not config["gemini_keys"] and not config.get("clod_key"):
-        log_warn("GEMINI_API_KEYS dan CLOD_API_KEY kosong. Pakai fallback analisis lokal.")
-        local_clips = [candidate_to_clip(item, index) for index, item in enumerate(candidates)]
-        return validate_clips(local_clips, segments, config)
+Tugas:
+Pilih {config['clip_count']} bagian terbaik dari daftar candidate clip untuk dijadikan clip pendek.
 
-    prompt = build_viral_strategy_prompt(candidates, config)
+Kriteria:
+- Ada hook kuat.
+- Ada insight, konflik, edukasi, data menarik, kejutan, emosi, atau kalimat yang cocok untuk short video.
+- Durasi minimal {config['min_clip_seconds']} detik.
+- Durasi maksimal {config['max_clip_seconds']} detik.
+- Mudah dipahami tanpa konteks terlalu panjang.
+- Hindari opening basa-basi.
+- Cocok untuk TikTok, Instagram Reels, dan YouTube Shorts.
+- Untuk tahap ini pilih hanya bagian paling kuat, jangan banyak-banyak.
+- Output harus JSON valid saja, tanpa markdown.
+
+Format output:
+[
+  {{
+    "title": "Judul singkat clip",
+    "reason": "Alasan bagian ini menarik",
+    "start": 80,
+    "end": 130,
+    "hook": "Kalimat pembuka yang menarik",
+    "caption": "Caption posting singkat"
+  }}
+]
+
+Gunakan start dan end dari candidate yang dipilih. Jangan mengarang fakta di luar candidate transcript.
+
+Candidate clips:
+{json.dumps(candidates, ensure_ascii=False, indent=2)}
+"""
+
     last_error = None
-
     for index, key in enumerate(config["gemini_keys"]):
         try:
-            log_info(f"Viral strategy memakai Gemini key {index + 1}/{len(config['gemini_keys'])}")
-            data = extract_json(call_gemini(prompt, key, config["gemini_model"]))
-            clips = strategy_result_to_clips(data, candidates, config)
+            log_info(f"Analisis bagian penting memakai Gemini key {index + 1}/{len(config['gemini_keys'])}")
+            clips = extract_json(call_gemini(prompt, key, config["gemini_model"]))
             return validate_clips(clips, segments, config)
         except Exception as exc:
             last_error = exc
-            log_warn(f"Gemini viral strategy gagal: {exc}")
+            log_warn(f"Gemini key gagal: {exc}")
 
-    if config.get("clod_key"):
-        try:
-            log_info(f"Viral strategy memakai CLOD model {config.get('clod_model', 'DeepSeek V3')}")
-            data = extract_json(call_clod(prompt, config, max_tokens=1400))
-            clips = strategy_result_to_clips(data, candidates, config)
-            return validate_clips(clips, segments, config)
-        except Exception as exc:
-            last_error = exc
-            log_warn(f"CLOD viral strategy gagal: {exc}")
-
-    if int(config.get("viral_strategy_required", 0)) == 1:
-        raise RuntimeError(f"Viral strategy gagal dan wajib berhasil: {last_error}")
-
-    log_warn(f"Viral strategy gagal. Pakai fallback kandidat lokal: {last_error}")
-    local_clips = [
-        candidate_to_clip(item, index, f"Fallback lokal setelah provider AI gagal: {last_error}")
-        for index, item in enumerate(candidates)
-    ]
+    log_warn(f"Semua Gemini key gagal. Pakai fallback analisis lokal offline: {last_error}")
     return validate_clips(local_clips, segments, config)
 
 
@@ -1342,7 +1207,6 @@ def validate_clips(clips, segments, config):
                 "caption": clip.get("caption") or "",
                 "thumbnail_text": clip.get("thumbnail_text") or clip.get("thumbnailText") or "",
                 "viral_score": clip.get("viral_score") or clip.get("viralScore") or 0,
-                "selected_angle": clip.get("selected_angle") or clip.get("selectedAngle") or "",
                 "publish_decision": clip.get("publish_decision") or clip.get("publishDecision") or "",
                 "candidate_id": clip.get("candidate_id") or clip.get("candidateId") or "",
                 "clip_transcript": clip.get("clip_transcript")
@@ -1358,8 +1222,8 @@ def review_clip_transcript_segments(segments, clip, config, job_id, index):
     if int(config.get("transcript_review", 1)) != 1:
         return segments, None
 
-    if not config.get("gemini_keys") and not config.get("clod_key"):
-        log_warn("Transcript review dilewati: GEMINI_API_KEYS dan CLOD_API_KEY kosong.")
+    if not config.get("gemini_keys"):
+        log_warn("Transcript review dilewati: GEMINI_API_KEYS kosong.")
         return segments, None
 
     clip_start = float(clip["start"])
@@ -1377,7 +1241,7 @@ def review_clip_transcript_segments(segments, clip, config, job_id, index):
     batch_size = max(20, int(config.get("transcript_review_batch", 80)))
     corrections = []
 
-    log_step(f"AI review subtitle clip {index + 1}.")
+    log_step(f"Gemini review subtitle clip {index + 1}.")
 
     for offset in range(0, len(target_indexes), batch_size):
         batch_indexes = target_indexes[offset : offset + batch_size]
@@ -1462,10 +1326,8 @@ Segmen subtitle:
 
 def call_gemini_for_transcript_review(prompt, config):
     last_error = None
-    review_required = int(config.get("transcript_review_required", 0)) == 1
-    gemini_keys = config["gemini_keys"] if review_required else config["gemini_keys"][:1]
 
-    for index, key in enumerate(gemini_keys):
+    for index, key in enumerate(config["gemini_keys"]):
         try:
             log_info(f"Review subtitle memakai Gemini key {index + 1}/{len(config['gemini_keys'])}")
             data = extract_json(call_gemini(prompt, key, config["gemini_model"]))
@@ -1473,15 +1335,6 @@ def call_gemini_for_transcript_review(prompt, config):
         except Exception as exc:
             last_error = exc
             log_warn(f"Gemini transcript review gagal: {exc}")
-
-    if review_required and config.get("clod_key"):
-        try:
-            log_info(f"Review subtitle memakai CLOD model {config.get('clod_model', 'DeepSeek V3')}")
-            data = extract_json(call_clod(prompt, config, max_tokens=1200))
-            return data if isinstance(data, list) else []
-        except Exception as exc:
-            last_error = exc
-            log_warn(f"CLOD transcript review gagal: {exc}")
 
     log_warn(f"Transcript review dilewati: {last_error}")
     return []
@@ -1549,7 +1402,7 @@ def create_ass(segments, clip, index, config, job_id):
 
         text = re.sub(r"\s+", " ", str(segment.get("text", ""))).strip()
         if text and cue_end > cue_start:
-            events.append((cue_start, cue_end, wrap_caption(text, config)))
+            events.append((cue_start, cue_end, ass_escape(wrap_caption(text))))
 
     if not events:
         rounded_duration = max(1, int(round(duration)))
@@ -1563,7 +1416,7 @@ def create_ass(segments, clip, index, config, job_id):
 
             cue_start = float(offset)
             cue_end = min(duration, cue_start + 1.0)
-            events.append((cue_start, cue_end, wrap_caption(text, config)))
+            events.append((cue_start, cue_end, ass_escape(wrap_caption(text))))
 
     ass = build_ass(events, config)
     ass_path.write_text(ass, encoding="utf-8-sig")
@@ -1592,66 +1445,17 @@ def caption_for_window(segments, window_start, window_end):
     return re.sub(r"\s+", " ", best_segment["text"]).strip()
 
 
-def wrap_caption(text, config):
-    clean = re.sub(r"\s+", " ", str(text or "")).strip()
-    if not clean:
+def wrap_caption(text, words_per_line=5, lines_per_cue=2):
+    words = re.sub(r"\s+", " ", text).strip().split()
+    if not words:
         return ""
 
-    width = int(config.get("width", 1080))
-    base_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 50)
-    min_size = min(base_size, parse_int(os.environ.get("SUBTITLE_MIN_FONT_SIZE"), 34))
-    max_lines = max(2, min(3, parse_int(os.environ.get("SUBTITLE_MAX_LINES"), 3)))
-    margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 120)
-    safe_width = max(360, width - (margin_h * 2))
-
-    for font_size in range(base_size, min_size - 1, -2):
-        chars_per_line = subtitle_chars_per_line(safe_width, font_size)
-        lines = wrap_text_to_lines(clean, chars_per_line, max_lines, truncate=False)
-        if (
-            lines
-            and all(len(line) <= chars_per_line for line in lines)
-            and " ".join(lines).replace("...", "").strip() == clean
-        ):
-            return subtitle_text_with_size(lines, font_size, base_size)
-
-    chars_per_line = subtitle_chars_per_line(safe_width, min_size)
-    lines = wrap_text_to_lines(clean, chars_per_line, max_lines, truncate=True)
-    return subtitle_text_with_size(lines, min_size, base_size)
-
-
-def subtitle_chars_per_line(safe_width, font_size):
-    # Serif fonts are visually wider than the previous sans-serif captions.
-    return max(12, int(float(safe_width) / max(float(font_size) * 0.54, 1.0)))
-
-
-def wrap_text_to_lines(text, chars_per_line, max_lines, truncate=False):
-    wrapped = textwrap.wrap(
-        text,
-        width=max(8, int(chars_per_line)),
-        break_long_words=True,
-        break_on_hyphens=False,
-    )
-
-    if len(wrapped) <= max_lines:
-        return wrapped
-
-    if not truncate:
-        return []
-
-    lines = wrapped[:max_lines]
-    remaining = " ".join(wrapped[max_lines:])
-    if remaining:
-        last = lines[-1]
-        room = max(4, int(chars_per_line) - 3)
-        lines[-1] = f"{last[:room].rstrip()}..."
-    return lines
-
-
-def subtitle_text_with_size(lines, font_size, base_size):
-    text = "\\N".join(ass_escape(line) for line in lines[:3])
-    if font_size < base_size:
-        return f"{{\\fs{font_size}}}{text}"
-    return text
+    words = words[: words_per_line * lines_per_cue]
+    lines = [
+        " ".join(words[i : i + words_per_line])
+        for i in range(0, len(words), words_per_line)
+    ]
+    return "\\N".join(lines[:lines_per_cue])
 
 
 def ass_escape(text):
@@ -1666,26 +1470,20 @@ def ass_escape(text):
 def build_ass(events, config):
     width = config["width"]
     height = config["height"]
-    font_family = subtitle_font_family()
-    font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 50)
-    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 400)
-    margin_h = parse_int(os.environ.get("SUBTITLE_MARGIN_H"), 120)
-    primary_colour = os.environ.get("SUBTITLE_PRIMARY_COLOUR", "&H0030A8D6").strip() or "&H0030A8D6"
-    outline_colour = os.environ.get("SUBTITLE_OUTLINE_COLOUR", "&H66000000").strip() or "&H66000000"
-    back_colour = os.environ.get("SUBTITLE_SHADOW_COLOUR", "&H99000000").strip() or "&H99000000"
-    outline = min(1.0, max(0.0, parse_float(os.environ.get("SUBTITLE_OUTLINE"), 1.0)))
-    shadow = max(0.0, parse_float(os.environ.get("SUBTITLE_SHADOW"), 2.0))
+    font_name = (os.environ.get("SUBTITLE_FONT_FAMILY") or "Segoe UI Semibold").strip() or "Segoe UI Semibold"
+    font_size = parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 52)
+    margin_v = parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 240)
 
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
 PlayResY: {height}
 ScaledBorderAndShadow: yes
-WrapStyle: 0
+WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,{font_family},{font_size},{primary_colour},{primary_colour},{outline_colour},{back_colour},0,0,0,0,100,100,0,0,1,{outline:g},{shadow:g},2,{margin_h},{margin_h},{margin_v},1
+Style: Caption,{font_name},{font_size},&H0000FFFF,&H0000FFFF,&H00111111,&H66000000,-1,0,0,0,100,100,0,0,1,4,1,2,80,80,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -1698,33 +1496,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         )
 
     return "".join(lines)
-
-
-def subtitle_font_family():
-    font_family = os.environ.get("SUBTITLE_FONT_FAMILY", "Segoe UI").strip() or "Segoe UI"
-    requested = [
-        font_family.split(",")[0].strip(),
-        *parse_keys(os.environ.get("SUBTITLE_FALLBACK_FONTS", "Selawik,DejaVu Sans")),
-    ]
-    requested = [font.replace(",", " ").strip() for font in requested if font.strip()]
-
-    try:
-        for font in requested:
-            result = subprocess.run(
-                ["fc-match", "-f", "%{family}", font],
-                cwd=ROOT,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            families = [item.strip().lower() for item in str(result.stdout or "").split(",")]
-            if font.lower() in families:
-                return font
-    except (OSError, subprocess.SubprocessError):
-        pass
-
-    return requested[0] if requested else "Segoe UI"
 
 
 def download_clip_source(url, job_id, clip, index, config):
@@ -1875,7 +1646,30 @@ def centered_video_filter(config):
     return f"fps=30,scale={width}:{height}:force_original_aspect_ratio=increase,setsar=1,crop={width}:{height}"
 
 
+def resolve_scene_mode_name(config):
+    """Map smart_crop_mode + scene_mode env to a SceneMode preset name.
+
+    Legacy values like 'active_speaker', 'face', 'center', 'auto' still work.
+    New values map directly: 'podcast', 'solo', 'game', 'reaction', 'sport'.
+    """
+    raw = str(config.get("scene_mode") or config.get("smart_crop_mode") or "auto").lower().strip()
+    legacy_aliases = {
+        "off": "center",
+        "none": "center",
+        "static": "center",
+        "face": "auto",
+    }
+    return legacy_aliases.get(raw, raw)
+
+
 def smart_video_filter(source_clip, config, job_id, index):
+    """Returns (vf_string, crop_path, points). points may be None for legacy single-pass.
+
+    When the resolved scene mode supports `fullscreen` fallback (podcast / game / etc),
+    we return points with `modeState` annotation so that the renderer can switch
+    to segment-based rendering. The vf_string is still computed for the case where
+    only one segment exists (=> single-pass render is fine and faster).
+    """
     width = config["width"]
     height = config["height"]
     crop_path = None
@@ -1884,16 +1678,16 @@ def smart_video_filter(source_clip, config, job_id, index):
 
     if int(config.get("smart_crop", 1)) != 1 or crop_mode in {"center", "off", "none", "static"}:
         log_info("Smart crop nonaktif untuk render ini. Pakai crop tengah.")
-        return centered_video_filter(config), crop_path
+        return centered_video_filter(config), crop_path, None
 
     try:
         points, crop_path = create_smart_crop_points(source_clip, config, job_id, index)
     except Exception as exc:
         log_warn(f"Smart crop gagal, pakai crop tengah: {exc}")
-        return centered_video_filter(config), None
+        return centered_video_filter(config), None, None
 
     if not points:
-        return centered_video_filter(config), crop_path
+        return centered_video_filter(config), crop_path, None
 
     center_expr = build_interpolated_expression(points, "centerRatio")
     x_expr = f"min(max(iw*({center_expr})-ow/2,0),iw-ow)"
@@ -1903,7 +1697,7 @@ def smart_video_filter(source_clip, config, job_id, index):
     return (
         f"fps=30,scale={width}:{height}:force_original_aspect_ratio=increase,"
         f"setsar=1,crop={width}:{height}:x='{x_expr}':y='(ih-oh)/2'"
-    ), crop_path
+    ), crop_path, points
 
 
 def build_interpolated_expression(points, key):
@@ -1934,9 +1728,20 @@ def create_smart_crop_points(source_clip, config, job_id, index):
         log_warn("OpenCV belum tersedia. Jalankan: python -m pip install opencv-python")
         return [], None
 
+    scene_mode_name = resolve_scene_mode_name(config)
     crop_mode = str(config.get("smart_crop_mode", "auto")).lower().strip()
 
-    if crop_mode in {"active_speaker", "auto"}:
+    new_pipeline_modes = {"podcast", "solo", "game", "reaction", "sport", "auto"}
+    if scene_mode_name in new_pipeline_modes:
+        try:
+            points, crop_path = create_scene_mode_crop_points(source_clip, config, job_id, index)
+            if points:
+                return points, crop_path
+            log_warn(f"Scene-mode '{scene_mode_name}' tidak menghasilkan tracking. Fallback ke active speaker legacy.")
+        except Exception as exc:
+            log_warn(f"Scene-mode '{scene_mode_name}' gagal: {exc}. Fallback ke active speaker legacy.")
+
+    if crop_mode in {"active_speaker", "auto"} or scene_mode_name in new_pipeline_modes:
         points, crop_path = create_active_speaker_crop_points(source_clip, config, job_id, index)
         if points:
             return points, crop_path
@@ -2030,7 +1835,7 @@ def create_smart_crop_points(source_clip, config, job_id, index):
     crop_path.write_text(
         json.dumps(
             {
-                "sourceClipPath": str(Path(source_clip).relative_to(ROOT)),
+                "sourceClipPath": str(Path(source_clip).resolve().relative_to(ROOT)),
                 "sourceWidth": source_width,
                 "sourceHeight": source_height,
                 "sampleSeconds": sample_seconds,
@@ -2054,8 +1859,8 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
     - Jika wajah terdeteksi tetapi bibir/gerak mulut tidak kuat: tahan speaker aktif sebelumnya agar tidak lompat.
     - Sebelum tracking dimulai: scan beberapa detik awal untuk menentukan initial visual anchor.
     - Jika tidak ada wajah/orang terdeteksi: fallback ke area visual paling berisi, lalu motion center.
-    - Jika tidak ada wajah dan tidak ada motion/visual: tahan crop terakhir.
-    - Center hanya fallback terakhir agar podcast side-by-side tidak kosong di tengah.
+    - Jika tidak ada wajah dan tidak ada motion/visual: tahan crop terakhir/initial visual anchor.
+    - Center fallback default nonaktif agar podcast side-by-side tidak kosong di tengah.
     """
     try:
         import cv2
@@ -2102,7 +1907,9 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
     no_face_strategy = str(config.get("active_speaker_no_face_strategy", "visual_content")).lower().strip()
     no_face_center_after_seconds = max(0.5, float(config.get("active_speaker_no_face_center_after_seconds", 6.0)))
     no_face_center_hits = max(1, int(round(no_face_center_after_seconds / sample_seconds)))
+    center_fallback_enabled = int(config.get("active_speaker_center_fallback_enabled", 0)) == 1
     min_mouth_score_to_switch = max(0.0, float(config.get("active_speaker_min_mouth_score_to_switch", 0.06)))
+    switch_score_margin = max(0.0, float(config.get("active_speaker_switch_score_margin", 0.12)))
     visual_fallback_enabled = int(config.get("active_speaker_visual_fallback_enabled", 1)) == 1
     visual_min_score = max(0.0, float(config.get("active_speaker_visual_min_score", 0.025)))
     visual_hold_seconds = max(0.0, float(config.get("active_speaker_visual_hold_seconds", 1.5)))
@@ -2173,6 +1980,7 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
                 previous_tracks,
                 next_track_id,
             )
+            selected_debug = None
 
             for det in detections:
                 track_id = det["track_id"]
@@ -2197,6 +2005,9 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
                 detections.sort(key=lambda item: item["score"], reverse=True)
                 best = detections[0]
                 best_track_id = best["track_id"]
+                active_det = next((det for det in detections if det["track_id"] == active_track_id), None)
+                active_score = float(active_det.get("score", 0.0)) if active_det else 0.0
+                best_score = float(best.get("score", 0.0))
 
                 if active_track_id is None:
                     active_track_id = best_track_id
@@ -2205,7 +2016,8 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
                 elif best_track_id != active_track_id:
                     # Kalau mulut tidak cukup aktif, jangan cepat pindah speaker.
                     # Ini mencegah crop lompat hanya karena wajah lebih besar saat orang diam.
-                    if float(best.get("mouth_score", 0.0)) < min_mouth_score_to_switch:
+                    has_clear_score_margin = active_det is None or best_score >= active_score + switch_score_margin
+                    if float(best.get("mouth_score", 0.0)) < min_mouth_score_to_switch or not has_clear_score_margin:
                         low_mouth_hold_total += 1
                         candidate_track_id = active_track_id
                         candidate_hits = 0
@@ -2226,6 +2038,14 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
                 center = selected["center_x"]
                 source = "active_speaker"
                 last_center = center
+                selected_debug = {
+                    "faceCount": len(detections),
+                    "trackId": int(selected.get("track_id", 0)),
+                    "mouthScore": round(float(selected.get("mouth_score", 0.0)), 4),
+                    "mouthRatio": round(float(selected.get("mouth_ratio", 0.0)), 4),
+                    "faceScore": round(float(selected.get("face_score", 0.0)), 4),
+                    "score": round(float(selected.get("score", 0.0)), 4),
+                }
             else:
                 no_face_hits += 1
                 no_face_total += 1
@@ -2273,9 +2093,9 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
                     source = "no_face_motion_after_visual"
                     last_center = center
                     motion_fallback_total += 1
-                elif no_face_hits < no_face_center_hits:
+                elif no_face_hits < no_face_center_hits or not center_fallback_enabled:
                     center = last_center
-                    source = "no_face_carry"
+                    source = "no_face_carry" if center_fallback_enabled else "no_face_visual_lock"
                     carry_fallback_total += 1
                 else:
                     # Center hanya fallback terakhir. Pada podcast, center bisa kosong,
@@ -2286,14 +2106,15 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
                     center_fallback_total += 1
 
             center = clamp(center, 0, source_width)
-            points.append(
-                {
-                    "time": round(t, 3),
-                    "centerX": round(center, 2),
-                    "centerRatio": round(center / source_width, 6),
-                    "source": source,
-                }
-            )
+            point = {
+                "time": round(t, 3),
+                "centerX": round(center, 2),
+                "centerRatio": round(center / source_width, 6),
+                "source": source,
+            }
+            if selected_debug:
+                point.update(selected_debug)
+            points.append(point)
             t += sample_seconds
 
     cap.release()
@@ -2308,7 +2129,7 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
     crop_path.write_text(
         json.dumps(
             {
-                "sourceClipPath": str(Path(source_clip).relative_to(ROOT)),
+                "sourceClipPath": str(Path(source_clip).resolve().relative_to(ROOT)),
                 "sourceWidth": source_width,
                 "sourceHeight": source_height,
                 "sampleSeconds": sample_seconds,
@@ -2316,6 +2137,7 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
                 "switchSeconds": switch_seconds,
                 "noFaceStrategy": no_face_strategy,
                 "noFaceCenterAfterSeconds": no_face_center_after_seconds,
+                "centerFallbackEnabled": center_fallback_enabled,
                 "initialAnchor": {
                     "centerX": round(float(initial_center), 2),
                     "centerRatio": round(float(initial_center) / float(source_width), 6),
@@ -2347,6 +2169,270 @@ def create_active_speaker_crop_points(source_clip, config, job_id, index):
     )
     return points, crop_path
 
+
+# ---------------------------------------------------------------------------
+# Scene-mode pipeline V2 (InsightFace + state machine + fullscreen fallback)
+# ---------------------------------------------------------------------------
+
+def create_scene_mode_crop_points(source_clip, config, job_id, index):
+    """V2 tracker: InsightFace SCRFD + scene-mode preset + tight/full state machine.
+
+    Each tracking point is annotated with `modeState` ('tight' or 'full') so the
+    renderer can split the clip into segments and render each with the correct
+    filter (tight crop window vs full-frame fit-with-blur).
+    """
+    try:
+        import cv2
+        import numpy as np  # noqa: F401
+    except ImportError:
+        log_warn("OpenCV/numpy belum tersedia. Scene-mode dibatalkan.")
+        return [], None
+
+    try:
+        from face_engine import FaceEngine
+        from scene_modes import get_mode, CropStateMachine
+    except ImportError as exc:
+        log_warn(f"Modul scene-mode tidak bisa di-import: {exc}")
+        return [], None
+
+    scene_mode_name = resolve_scene_mode_name(config)
+    mode = get_mode(scene_mode_name)
+    log_info(f"Scene mode aktif: {mode.label} ({mode.name}) - {mode.description}")
+
+    cap = cv2.VideoCapture(str(source_clip))
+    if not cap.isOpened():
+        log_warn("Scene-mode tracker tidak bisa membuka source video.")
+        return [], None
+
+    source_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    source_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0)
+    frame_count = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    duration = frame_count / fps if fps > 0 and frame_count > 0 else 0
+
+    if not source_width or not source_height or duration <= 0:
+        cap.release()
+        return [], None
+
+    target_aspect = float(config["width"]) / float(config["height"])
+    source_aspect = float(source_width) / float(source_height)
+    needs_horizontal_crop = source_aspect > target_aspect + 0.02
+
+    # If source is already 9:16 (or narrower), crop centerRatio is locked at 0.5.
+    # We still annotate modeState so renderer can decide tight vs full when needed.
+
+    configured_sample_seconds = max(0.12, float(config.get("smart_crop_sample", 0.35)))
+    if mode.name in {"podcast", "auto"}:
+        sample_seconds = min(configured_sample_seconds, 0.25)
+    else:
+        sample_seconds = max(0.20, configured_sample_seconds)
+    min_face_score = float(config.get("face_engine_min_score", 0.55))
+    min_face_area = 0.006 if mode.name in {"podcast", "auto"} else 0.01
+
+    face_engine = None
+    if int(config.get("face_engine_use_insightface", 1)) == 1 and mode.use_insightface:
+        try:
+            face_engine = FaceEngine(config, log=log_info).load()
+        except Exception as exc:
+            log_warn(f"InsightFace tidak bisa di-load: {exc}. Scene-mode dibatalkan.")
+            cap.release()
+            return [], None
+
+    initial_center = source_width / 2.0
+    if needs_horizontal_crop and mode.initial_anchor_enabled:
+        initial_center, initial_score, initial_source = find_initial_visual_anchor_center(
+            source_clip, source_width, source_height, config
+        )
+        log_info(
+            f"Initial anchor (scene-mode): centerRatio={initial_center / source_width:.3f} "
+            f"score={initial_score:.4f} source={initial_source}"
+        )
+
+    last_center = float(initial_center)
+    state_machine = CropStateMachine(mode, sample_seconds)
+    points = []
+    log_info(f"Scene-mode sample interval: {sample_seconds:.2f}s")
+
+    active_track_id = None
+    candidate_track_id = None
+    candidate_hits = 0
+    switch_hits_needed = max(1, int(round(mode.switch_seconds / sample_seconds)))
+
+    no_face_total = 0
+    full_total = 0
+    tight_total = 0
+
+    t = 0.0
+    while t < duration:
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ok, frame = cap.read()
+        if not ok:
+            break
+
+        observations = []
+        if face_engine is not None:
+            try:
+                observations = face_engine.process(frame)
+            except Exception as exc:
+                log_warn(f"InsightFace error pada t={t:.2f}: {exc}")
+                observations = []
+
+        confident = [
+            obs for obs in observations
+            if obs.score >= min_face_score and obs.area_ratio >= min_face_area
+        ]
+
+        face_confidence = 0.0
+        if observations:
+            best_for_confidence = max(
+                observations,
+                key=lambda obs: (float(obs.score), float(obs.area_ratio)),
+            )
+            score_span = max(0.001, 1.0 - min_face_score)
+            score_conf = clamp((float(best_for_confidence.score) - min_face_score) / score_span, 0.0, 1.0)
+            area_conf = clamp(float(best_for_confidence.area_ratio) / max(0.001, min_face_area * 1.8), 0.0, 1.0)
+            face_confidence = clamp(score_conf * 0.68 + area_conf * 0.32, 0.0, 1.0)
+            if confident:
+                face_confidence = max(face_confidence, 0.70)
+
+        # Active-speaker scoring among confident faces.
+        selected = None
+        if confident:
+            for obs in confident:
+                mouth_score = min(1.0, float(obs.mouth_open) * 3.5) * 0.45 + min(1.0, float(obs.mouth_motion) * 10.0) * 0.55
+                face_score = min(1.0, float(obs.area_ratio) / 0.08)
+                center_score = 1.0 - min(1.0, abs(float(obs.cx) / source_width - 0.5) * 2.0)
+                stickiness = 1.0 if obs.track_id == active_track_id else 0.0
+                obs.score_total = (
+                    mouth_score * mode.mouth_weight
+                    + face_score * mode.face_weight
+                    + center_score * mode.center_weight
+                    + stickiness * mode.stickiness_weight
+                )
+                obs.mouth_score = mouth_score
+                obs.face_score_norm = face_score
+
+            confident.sort(key=lambda o: o.score_total, reverse=True)
+            best = confident[0]
+            best_track_id = best.track_id
+
+            if active_track_id is None:
+                active_track_id = best_track_id
+                candidate_track_id = best_track_id
+                candidate_hits = 0
+            elif best_track_id != active_track_id:
+                active_obs = next((o for o in confident if o.track_id == active_track_id), None)
+                active_score = float(active_obs.score_total) if active_obs else 0.0
+                has_margin = best.score_total >= active_score + mode.switch_score_margin
+                if (best.mouth_score < mode.min_mouth_score_to_switch) or not has_margin:
+                    candidate_track_id = active_track_id
+                    candidate_hits = 0
+                elif candidate_track_id == best_track_id:
+                    candidate_hits += 1
+                else:
+                    candidate_track_id = best_track_id
+                    candidate_hits = 1
+                if candidate_hits >= switch_hits_needed:
+                    active_track_id = best_track_id
+                    candidate_hits = 0
+
+            selected = next((o for o in confident if o.track_id == active_track_id), best)
+            last_center = float(selected.cx)
+        else:
+            no_face_total += 1
+
+        # State machine: tight vs full
+        has_confident_face = bool(confident)
+        mode_state = state_machine.update(has_confident_face)
+        if mode_state == "full":
+            full_total += 1
+        else:
+            tight_total += 1
+
+        if needs_horizontal_crop:
+            center_x = last_center
+        else:
+            center_x = source_width / 2.0
+
+        center_x = clamp(center_x, 0.0, float(source_width))
+        center_ratio = center_x / float(source_width)
+
+        point = {
+            "time": round(t, 3),
+            "centerX": round(center_x, 2),
+            "centerRatio": round(center_ratio, 6),
+            "modeState": mode_state,
+            "faceConfidence": round(float(face_confidence), 4),
+            "faceCount": len(confident),
+            "trackId": int(selected.track_id) if selected is not None else -1,
+        }
+        points.append(point)
+        t += sample_seconds
+
+    cap.release()
+    if face_engine is not None:
+        face_engine.close()
+
+    if not points:
+        return [], None
+
+    if needs_horizontal_crop:
+        points = smooth_smart_crop_points(points, config, source_width)
+        # Re-attach modeState (smoother only writes centerRatio/centerX)
+        # Actually smoother preserves keys, but be safe:
+        # smooth_smart_crop_points should keep all original keys.
+
+    points = compress_smart_crop_points_preserving_state(points)
+
+    crop_path = ROOT / "temp" / f"{job_id}-clip-{index + 1:02d}-scene-{mode.name}.json"
+    crop_path.write_text(
+        json.dumps(
+            {
+                "sourceClipPath": str(Path(source_clip).resolve().relative_to(ROOT)),
+                "sourceWidth": source_width,
+                "sourceHeight": source_height,
+                "sampleSeconds": sample_seconds,
+                "mode": "scene_mode",
+                "sceneMode": mode.name,
+                "stats": {
+                    "noFaceFrames": no_face_total,
+                    "tightFrames": tight_total,
+                    "fullFrames": full_total,
+                },
+                "points": points,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    log_info(
+        f"Scene-mode tracker aktif: {len(points)} titik | tight={tight_total} full={full_total} no-face={no_face_total}"
+    )
+    return points, crop_path
+
+
+def compress_smart_crop_points_preserving_state(points):
+    """Compress consecutive points but keep mode state changes as boundary points."""
+    if len(points) <= 2:
+        return points
+    out = [points[0]]
+    for i in range(1, len(points) - 1):
+        prev = out[-1]
+        cur = points[i]
+        nxt = points[i + 1]
+        same_state = cur.get("modeState") == prev.get("modeState") == nxt.get("modeState")
+        if not same_state:
+            out.append(cur)
+            continue
+        # Drop redundant point if center barely changed (linear interpolation still fine).
+        if abs(float(cur.get("centerRatio", 0)) - float(prev.get("centerRatio", 0))) < 0.001 and \
+           abs(float(cur.get("centerRatio", 0)) - float(nxt.get("centerRatio", 0))) < 0.001:
+            continue
+        out.append(cur)
+    out.append(points[-1])
+    return out
 
 
 def find_initial_visual_anchor_center(source_clip, source_width, source_height, config):
@@ -2515,9 +2601,20 @@ def active_speaker_visual_content_center(frame, source_width, source_height, con
 
     # Brightness mask: jangan tertipu area hitam total/putih total.
     value = hsv[:, :, 2].astype("float32") / 255.0
-    usable = ((value > 0.08) & (value < 0.96)).astype("float32")
+    usable = ((value > 0.035) & (value < 0.995)).astype("float32")
 
-    score_map = (edge_score * 0.55 + texture * 0.30 + saturation * 0.15) * usable
+    median_value = float(np.median(value))
+    contrast = np.abs(value - median_value).astype("float32")
+    chroma_or_contrast = ((saturation > 0.14) | (contrast > 0.10)).astype("float32")
+
+    # No-face fallback harus bisa melihat objek/orang statis juga.
+    # Edge/motion saja terlalu mudah gagal pada frame podcast yang diam.
+    score_map = (
+        edge_score * 0.35
+        + texture * 0.20
+        + saturation * 0.22
+        + contrast * 0.23
+    ) * usable * (0.35 + chroma_or_contrast * 0.65)
     column_score = score_map.mean(axis=0)
 
     small_crop_width = max(2, int(round(crop_width * scale)))
@@ -2553,7 +2650,7 @@ def active_speaker_visual_content_center(frame, source_width, source_height, con
     global_score = float(column_score.mean())
 
     # Jika seluruh frame benar-benar flat/kosong, jangan paksa pindah.
-    if best_score <= 0.0 or global_score <= 0.001:
+    if best_score <= 0.0 or global_score <= 0.00002:
         return None, 0.0
 
     return float(best_center_small / scale), max(float(best_score), 0.0)
@@ -2794,17 +2891,112 @@ def clamp(value, minimum, maximum):
     return max(minimum, min(maximum, float(value)))
 
 
-def render_clip(source_clip, ass_path, clip, index, config, job_id):
+def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_base=0.0, progress_span=100.0, total_clips=None):
     safe_title = clean_filename(clip["title"])
     final_clip = ROOT / "output" / f"py-final-{index + 1:02d}-{safe_title}.mp4"
 
     centered_vf = centered_video_filter(config)
-    base_vf, crop_path = smart_video_filter(source_clip, config, job_id, index)
+    log_progress(
+        "tracking",
+        progress_base,
+        stage_pct=0,
+        clip=index + 1,
+        total=total_clips,
+        note="smart_crop",
+    )
+    base_vf, crop_path, points = smart_video_filter(source_clip, config, job_id, index)
+    log_progress(
+        "tracking",
+        progress_base + progress_span * 0.22,
+        stage_pct=100,
+        clip=index + 1,
+        total=total_clips,
+        note="smart_crop_ready",
+    )
     subtitle_path = str(ass_path.resolve()).replace("\\", "/").replace(":", "\\:")
     subtitle_vf = f"{base_vf},subtitles='{subtitle_path}'"
 
+    has_mode_state = points and any("modeState" in p for p in points)
+    needs_dynamic_zoom = bool(has_mode_state and int(config.get("dynamic_zoom_enabled", 1)) == 1)
+
+    if needs_dynamic_zoom:
+        try:
+            from dynamic_zoom_render import render_dynamic_zoom_clip
+            full_count = sum(1 for p in points if p.get("modeState") == "full")
+            tight_count = sum(1 for p in points if p.get("modeState") == "tight")
+            log_info(
+                f"Dynamic-zoom render aktif: {tight_count} sample tight, {full_count} sample full"
+            )
+            log_progress(
+                "render",
+                progress_base + progress_span * 0.30,
+                stage_pct=0,
+                clip=index + 1,
+                total=total_clips,
+                note="dynamic_zoom",
+            )
+
+            def _emit_progress(pct: float, label: str):
+                overall = progress_base + progress_span * (0.30 + (0.65 * clamp(float(pct), 0.0, 100.0) / 100.0))
+                log_progress(
+                    "render",
+                    overall,
+                    stage_pct=pct,
+                    clip=index + 1,
+                    total=total_clips,
+                    note=label,
+                )
+
+            render_dynamic_zoom_clip(
+                source=Path(source_clip),
+                output=final_clip,
+                points=points,
+                width=config["width"],
+                height=config["height"],
+                crf=config["final_crf"],
+                blur_strength=int(config.get("fullscreen_blur_strength", 22)),
+                ass_path=ass_path,
+                workdir=ROOT / "temp",
+                job_id=job_id,
+                index=index,
+                log=log_info,
+                progress=_emit_progress,
+                width_smooth_alpha=float(config.get("dynamic_zoom_width_smooth", 0.18)),
+                center_smooth_alpha=float(config.get("dynamic_zoom_center_smooth", 0.30)),
+                confidence_fall_alpha=float(config.get("dynamic_zoom_confidence_fall", 0.72)),
+                confidence_rise_alpha=float(config.get("dynamic_zoom_confidence_rise", 0.24)),
+                transition_lead_seconds=float(config.get("dynamic_zoom_transition_lead", 0.25)),
+            )
+            log_progress(
+                "render",
+                progress_base + progress_span * 0.98,
+                stage_pct=100,
+                clip=index + 1,
+                total=total_clips,
+                note="dynamic_zoom_done",
+            )
+            return source_clip, final_clip, crop_path
+        except Exception as exc:
+            log_warn(f"Dynamic-zoom render gagal: {exc}. Fallback ke single-pass.")
+
     try:
+        log_progress(
+            "render",
+            progress_base + progress_span * 0.35,
+            stage_pct=0,
+            clip=index + 1,
+            total=total_clips,
+            note="ffmpeg",
+        )
         run_render(source_clip, final_clip, subtitle_vf, config)
+        log_progress(
+            "render",
+            progress_base + progress_span * 0.98,
+            stage_pct=100,
+            clip=index + 1,
+            total=total_clips,
+            note="ffmpeg_done",
+        )
     except subprocess.CalledProcessError as exc:
         log_warn(f"Render smart/subtitle gagal, coba crop tengah dengan subtitle: {exc}")
         try:
@@ -2813,6 +3005,14 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id):
             log_warn(f"Render subtitle gagal, fallback tanpa hardsub: {fallback_exc}")
             run_render(source_clip, final_clip, centered_vf, config)
 
+    log_progress(
+        "render",
+        progress_base + progress_span * 0.98,
+        stage_pct=100,
+        clip=index + 1,
+        total=total_clips,
+        note="render_done",
+    )
     return source_clip, final_clip, crop_path
 
 
@@ -2861,30 +3061,19 @@ def run_render(source_clip, final_clip, vf, config):
     )
 
 
-def short_manual_title(source_title, index):
-    cleaned = re.sub(r"\s+", " ", str(source_title or "")).strip()
-    if not cleaned:
-        return f"Manual Clip {index + 1}"
-
-    cleaned = re.split(r"\s[-|]\s", cleaned, maxsplit=1)[0].strip()
-    words = cleaned.split()
-    return " ".join(words[:7]) or f"Manual Clip {index + 1}"
-
-
-def parse_range(value, index, source_title=""):
+def parse_range(value, index):
     start_raw, end_raw = str(value).split("-", 1)
     start = parse_time(start_raw)
     end = parse_time(end_raw)
     if end <= start:
         raise ValueError(f"Range tidak valid: {value}")
 
-    title = short_manual_title(source_title, index)
     return {
-        "title": title,
+        "title": f"Manual Clip {index + 1}",
         "reason": "Timestamp dipilih manual oleh user.",
         "start": start,
         "end": end,
-        "hook": title,
+        "hook": "",
         "caption": "",
     }
 
@@ -2909,20 +3098,26 @@ def main():
     job_id = create_job_id(args.url)
     log_step(f"Mulai job Python: {job_id}")
     log_info(f"Target upload: {config['width']}x{config['height']} vertical 9:16")
+    log_progress("start", 1, note="init")
 
     subtitle_path = download_subtitle(args.url, job_id, config["language"]) or latest_cached_subtitle(args.url)
     segments = parse_vtt(subtitle_path) if subtitle_path else []
     transcript_source = "youtube" if segments else ""
+    if segments:
+        log_progress("transcript", 18, note=transcript_source or "youtube")
 
     if not segments and not args.range:
         cached_segments = latest_cached_json(args.url, "segments")
         if cached_segments:
             segments = cached_segments
             transcript_source = "cache"
+            log_progress("transcript", 18, note="cache")
         else:
             audio_path = download_audio(args.url, job_id)
+            log_progress("transcript", 8, note="audio_ready")
             segments = transcribe_audio(audio_path, job_id, config)
-            transcript_source = "deepgram"
+            transcript_source = config.get("transcribe_provider", "offline")
+            log_progress("transcript", 22, note=transcript_source)
 
     if not segments and not args.range:
         raise RuntimeError("Transkrip kosong. Tidak bisa lanjut.")
@@ -2931,19 +3126,18 @@ def main():
     segments_path.write_text(json.dumps(segments, ensure_ascii=False, indent=2), encoding="utf-8")
 
     if args.range:
-        source_title = ""
-        try:
-            source_title = str(get_video_info(args.url).get("title") or "")
-        except Exception as exc:
-            log_warn(f"Gagal mengambil judul video untuk manual range: {exc}")
-        clips = [parse_range(value, index, source_title) for index, value in enumerate(args.range)]
+        clips = [parse_range(value, index) for index, value in enumerate(args.range)]
+        log_progress("clip_select", 32, note="manual_range")
     else:
         cached_clips = latest_cached_json(args.url, "clips")
         if cached_clips:
             clips = validate_clips(cached_clips, segments, config)
+            log_progress("clip_select", 32, note="cache")
         else:
-            log_step("Buat kandidat clip lokal, lalu Gemini pilih strategi viral.")
+            log_step("Gemini mencari bagian penting dari transcript.")
+            log_progress("clip_select", 24, note="selecting")
             clips = find_important_clips(segments, config)
+            log_progress("clip_select", 32, note="selected")
 
     if not clips:
         raise RuntimeError("Tidak ada clip valid.")
@@ -2952,13 +3146,31 @@ def main():
     clips_path.write_text(json.dumps(clips, ensure_ascii=False, indent=2), encoding="utf-8")
 
     outputs = []
+    total_clips = len(clips)
+    clip_span = 64.0 / max(1, total_clips)
 
     for index, clip in enumerate(clips):
+        clip_base = 34.0 + clip_span * index
         log_step(f"Render clip {index + 1}/{len(clips)}: {clip['title']}")
+        log_progress("download", clip_base + clip_span * 0.04, stage_pct=0, clip=index + 1, total=total_clips, note="source")
         source_clip = download_clip_source(args.url, job_id, clip, index, config)
+        log_progress("download", clip_base + clip_span * 0.18, stage_pct=100, clip=index + 1, total=total_clips, note="source_ready")
+        log_progress("subtitle", clip_base + clip_span * 0.20, stage_pct=0, clip=index + 1, total=total_clips, note="review")
         subtitle_segments, review_path = review_clip_transcript_segments(segments, clip, config, job_id, index)
+        log_progress("subtitle", clip_base + clip_span * 0.28, stage_pct=60, clip=index + 1, total=total_clips, note="ass")
         ass_path = create_ass(subtitle_segments, clip, index, config, job_id)
-        raw_clip, final_clip, smart_crop_path = render_clip(source_clip, ass_path, clip, index, config, job_id)
+        log_progress("subtitle", clip_base + clip_span * 0.30, stage_pct=100, clip=index + 1, total=total_clips, note="ass_ready")
+        raw_clip, final_clip, smart_crop_path = render_clip(
+            source_clip,
+            ass_path,
+            clip,
+            index,
+            config,
+            job_id,
+            progress_base=clip_base + clip_span * 0.32,
+            progress_span=clip_span * 0.64,
+            total_clips=total_clips,
+        )
         outputs.append(
             {
                 "index": index + 1,
@@ -2972,7 +3184,6 @@ def main():
                 "transcriptSource": transcript_source,
                 "thumbnailText": clip.get("thumbnail_text", ""),
                 "viralScore": clip.get("viral_score", 0),
-                "selectedAngle": clip.get("selected_angle", ""),
                 "publishDecision": clip.get("publish_decision", ""),
                 "candidateId": clip.get("candidate_id", ""),
                 "clipTranscript": clip.get("clip_transcript", ""),
@@ -2985,12 +3196,14 @@ def main():
             }
         )
         log_info(f"Output final: {final_clip.relative_to(ROOT)}")
+        log_progress("clip_done", clip_base + clip_span * 0.98, stage_pct=100, clip=index + 1, total=total_clips, note="done")
 
     result = {
         "jobId": job_id,
         "sourceUrl": args.url,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "transcriptSource": transcript_source,
+        "transcribeProvider": config.get("transcribe_provider", "offline"),
         "target": "TikTok / Instagram Reels / YouTube Shorts",
         "resolution": f"{config['width']}x{config['height']}",
         "totalClips": len(outputs),
@@ -3000,6 +3213,7 @@ def main():
     result_path = ROOT / "output" / f"py-result-{job_id}.json"
     result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     log_step("Selesai.")
+    log_progress("done", 100, note="complete")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

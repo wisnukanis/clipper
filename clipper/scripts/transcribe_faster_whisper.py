@@ -12,6 +12,12 @@ def main():
     parser.add_argument("--model", default="small")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--compute-type", default="int8")
+    parser.add_argument("--beam-size", type=int, default=5)
+    parser.add_argument("--cpu-threads", type=int, default=0)
+    parser.add_argument("--num-workers", type=int, default=1)
+    parser.add_argument("--vad-min-silence-ms", type=int, default=500)
+    parser.add_argument("--vad-filter", dest="vad_filter", action="store_true", default=True)
+    parser.add_argument("--no-vad-filter", dest="vad_filter", action="store_false")
     args = parser.parse_args()
 
     try:
@@ -23,18 +29,35 @@ def main():
         )
         return 2
 
-    model = WhisperModel(
-        args.model,
-        device=args.device,
-        compute_type=args.compute_type,
+    model_kwargs = {
+        "device": args.device,
+        "compute_type": args.compute_type,
+    }
+    if args.cpu_threads > 0:
+        model_kwargs["cpu_threads"] = args.cpu_threads
+    if args.num_workers > 0:
+        model_kwargs["num_workers"] = args.num_workers
+
+    print(
+        "faster-whisper "
+        f"model={args.model} device={args.device} compute={args.compute_type} "
+        f"beam={max(1, args.beam_size)} vad={args.vad_filter}",
+        file=sys.stderr,
     )
 
-    segments, info = model.transcribe(
-        args.audio,
-        language=args.language,
-        vad_filter=True,
-        beam_size=5,
-    )
+    model = WhisperModel(args.model, **model_kwargs)
+
+    transcribe_kwargs = {
+        "language": args.language,
+        "vad_filter": args.vad_filter,
+        "beam_size": max(1, args.beam_size),
+    }
+    if args.vad_filter:
+        transcribe_kwargs["vad_parameters"] = {
+            "min_silence_duration_ms": max(100, args.vad_min_silence_ms)
+        }
+
+    segments, info = model.transcribe(args.audio, **transcribe_kwargs)
 
     result = {
         "language": info.language,
