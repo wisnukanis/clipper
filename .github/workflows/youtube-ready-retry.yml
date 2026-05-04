@@ -1,0 +1,79 @@
+name: Retry Ready YouTube Uploads
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Optional job_id to retry
+        required: false
+        default: ""
+      limit:
+        description: Max ready clips to upload
+        required: false
+        default: "0"
+  schedule:
+    # Setelah reset harian YouTube Data API. 08:15 UTC = 15:15 WIB.
+    - cron: "15 8 * * *"
+
+concurrency:
+  group: youtube-ready-retry
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      APP_TIMEZONE: Asia/Jakarta
+      UPLOAD_DRIVER: ftp
+      PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+      FTP_TIMEOUT_SECONDS: ${{ secrets.FTP_TIMEOUT_SECONDS || '300' }}
+      FTP_STATE_TIMEOUT_SECONDS: ${{ secrets.FTP_STATE_TIMEOUT_SECONDS || '180' }}
+
+      YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'true' }}
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      YOUTUBE_PRIVACY_STATUS: ${{ secrets.YOUTUBE_PRIVACY_STATUS || 'public' }}
+      YOUTUBE_CATEGORY_ID: ${{ secrets.YOUTUBE_CATEGORY_ID || '22' }}
+      YOUTUBE_TAGS: ${{ secrets.YOUTUBE_TAGS || 'podcast,shorts,indonesia' }}
+      YOUTUBE_TITLE_PREFIX: ${{ secrets.YOUTUBE_TITLE_PREFIX }}
+      YOUTUBE_DESCRIPTION_FOOTER: ${{ secrets.YOUTUBE_DESCRIPTION_FOOTER }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node with cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Retry ready uploads
+        env:
+          JOB_ID: ${{ github.event.inputs.job || '' }}
+          LIMIT: ${{ github.event.inputs.limit || '0' }}
+        shell: bash
+        run: |
+          args=(--all)
+          if [ -n "$JOB_ID" ]; then
+            args=(--job "$JOB_ID")
+          fi
+          if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
+            args+=(--limit "$LIMIT")
+          fi
+          npm run youtube:retry-ready -- "${args[@]}"
