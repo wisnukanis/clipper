@@ -786,9 +786,11 @@ GEMINI_API_KEYS=
 GEMINI_MODEL=gemini-flash-latest
 GEMINI_TEMPERATURE=0.85
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5-nano
+OPENAI_MODEL=gpt-4.1-nano
+OPENAI_MODELS=gpt-4.1-nano,gpt-5-nano,gpt-4o-mini
 OPENAI_TEMPERATURE=0.45
 OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
+AI_REQUEST_TIMEOUT_SECONDS=25
 CLOD_API_KEY=
 CLOD_BASE_URL=https://api.clod.io/v1
 CLOD_MODEL=DeepSeek V3
@@ -819,6 +821,9 @@ AUTO_DASHBOARD_ALLOW_REMOTE=false
 
 POST_CRON=0 8,13,19 * * *
 DEFAULT_THEME=auto
+AUTO_DISCOVER_CHANNEL_HANDLES=@corbuzier|@VINDES|@radityadika|@DanielManantaNetwork|@HASCreative|@podkesmas|@podhub|@Kasisolusi|@TotalPolitik
+AUTO_DISCOVER_FRESH_UPLOAD_DAYS=3
+AUTO_DISCOVER_CHANNEL_MAX_RESULTS=5
 
 GRAPH_API_VERSION=v25.0
 YOUTUBE_UPLOAD_ENABLED=true
@@ -882,11 +887,19 @@ API key OpenAI untuk opsi `AI_PROVIDER=openai`.
 
 #### `OPENAI_MODEL`
 
-Model OpenAI untuk caption/thumbnail. Default: `gpt-5-nano`.
+Model OpenAI utama untuk caption/thumbnail. Default: `gpt-4.1-nano`.
+
+#### `OPENAI_MODELS`
+
+Urutan fallback model OpenAI. Default: `gpt-4.1-nano,gpt-5-nano,gpt-4o-mini`.
 
 #### `OPENAI_TRANSCRIBE_MODEL`
 
 Fallback transkripsi OpenAI jika semua key Deepgram gagal. Default: `gpt-4o-mini-transcribe`.
+
+#### `AI_REQUEST_TIMEOUT_SECONDS`
+
+Timeout AI teks per request agar workflow tidak lama saat Gemini/OpenAI sedang gagal. Default: `25`.
 
 #### `GEMINI_API_KEY`
 

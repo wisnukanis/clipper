@@ -198,32 +198,41 @@ async function checkOpenAi(online, required = false) {
     return checkResult("OpenAI API", false, "OPENAI_API_KEY belum diisi", required);
   }
 
+  const models = config.openai.models?.length ? config.openai.models : [config.openai.model];
   if (!online) {
-    return checkResult("OpenAI API", true, `key terkonfigurasi, model ${config.openai.model}`, required);
+    return checkResult("OpenAI API", true, `key terkonfigurasi, model ${models.join(" -> ")}`, required);
   }
 
+  const failures = [];
   try {
-    await fetchJson("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.openai.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: config.openai.model,
-        input: "Balas OK saja.",
-        max_output_tokens: 4
-      })
-    });
-    return checkResult("OpenAI API", true, `model ${config.openai.model}`, required);
+    for (const model of models) {
+      try {
+        await fetchJson("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.openai.apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model,
+            input: "Balas OK saja.",
+            max_output_tokens: 16
+          })
+        });
+        return checkResult("OpenAI API", true, `model valid: ${model}`, required);
+      } catch (error) {
+        failures.push(`${model}: ${error.message}`);
+      }
+    }
+    throw new Error(failures.join("; "));
   } catch (error) {
     return checkResult("OpenAI API", false, error.message, required);
   }
 }
 
 async function aiChecks(online) {
-  const gemini = await checkGemini(online, true);
-  const openai = await checkOpenAi(online, config.ai.provider === "openai");
+  const gemini = await checkGemini(online, false);
+  const openai = await checkOpenAi(online, false);
   return [gemini, openai];
 }
 

@@ -30,6 +30,18 @@ const FALLBACK_QUERIES = [
   "podcast politik indonesia"
 ];
 
+const DEFAULT_CHANNEL_HANDLES = [
+  "@corbuzier",
+  "@VINDES",
+  "@radityadika",
+  "@DanielManantaNetwork",
+  "@HASCreative",
+  "@podkesmas",
+  "@podhub",
+  "@Kasisolusi",
+  "@TotalPolitik"
+];
+
 const TOPIC_RE = /podcast|podhub|podkesmas|vindes|deddy|corbuzier|raditya|artis|aktor|aktris|penyanyi|komika|komedi|stand\s*up|lucu|politik|pilpres|dpr|presiden|menteri|prabowo|jokowi|anies|ganjar/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 
@@ -138,8 +150,10 @@ function scoreCandidate(item) {
     stats.likesPerHour * 2 +
     stats.commentsPerHour * 25 +
     stats.engagementRate * 50000;
+  const trustedChannelBoost = item.discovery_source === "youtube_api_channel" ? 30000 : 0;
+  const freshBoost = stats.ageHours <= 24 ? 40000 : stats.ageHours <= 72 ? 18000 : 0;
 
-  return Math.round(raw * topicMultiplier(text) * durationMultiplier * recencyMultiplier);
+  return Math.round((raw + trustedChannelBoost + freshBoost) * topicMultiplier(text) * durationMultiplier * recencyMultiplier);
 }
 
 function isViralCandidate(item, options) {
@@ -167,6 +181,20 @@ function isTopicCandidate(item, options) {
   if (duration && duration > options.maxDuration) return false;
 
   return TOPIC_RE.test(candidateText(item));
+}
+
+function isFreshChannelCandidate(item, options) {
+  const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
+  if (!id) return false;
+
+  const duration = numberValue(item.duration);
+  if (duration && duration < options.minDuration) return false;
+  if (duration && duration > options.maxDuration) return false;
+
+  const isFresh = ageHours(item.publishedAt || item.upload_date) <= options.publishedAfterDays * 24 + 6;
+  if (!isFresh) return false;
+
+  return item.discovery_source === "youtube_api_channel" || TOPIC_RE.test(candidateText(item));
 }
 
 function parseJsonLines(stdout) {
@@ -274,6 +302,48 @@ async function searchYoutubeIds({ credential, query, channelId, options }) {
     .filter(Boolean);
 }
 
+async function resolveChannelHandles(credential, handles) {
+  const resolved = [];
+  for (const rawHandle of handles) {
+    const handle = String(rawHandle || "").trim();
+    if (!handle) continue;
+    if (/^UC[A-Za-z0-9_-]{20,}$/.test(handle)) {
+      resolved.push(handle);
+      continue;
+    }
+
+    const forHandle = handle.startsWith("@") ? handle : `@${handle}`;
+    try {
+      const data = await fetchYoutube("channels", {
+        part: "id,snippet",
+        forHandle
+      }, credential);
+      const id = data.items?.[0]?.id;
+      if (id) {
+        resolved.push(id);
+        continue;
+      }
+    } catch (error) {
+      console.warn(`Resolve channel handle gagal (${handle}): ${error.message}`);
+    }
+
+    try {
+      const data = await fetchYoutube("search", {
+        part: "snippet",
+        type: "channel",
+        q: handle.replace(/^@/, ""),
+        maxResults: 1,
+        safeSearch: "none"
+      }, credential);
+      const id = data.items?.[0]?.id?.channelId;
+      if (id) resolved.push(id);
+    } catch (error) {
+      console.warn(`Fallback search channel gagal (${handle}): ${error.message}`);
+    }
+  }
+  return uniqueList(resolved);
+}
+
 async function loadYoutubeDetails(credential, ids, queryById) {
   const candidates = [];
   for (const group of chunk(ids, 50)) {
@@ -288,6 +358,7 @@ async function loadYoutubeDetails(credential, ids, queryById) {
       const snippet = item.snippet || {};
       const statistics = item.statistics || {};
       const duration = parseIsoDuration(item.contentDetails?.duration);
+      const discoveryQuery = queryById.get(item.id) || "";
       candidates.push({
         id: item.id,
         url: videoUrl(item.id),
@@ -301,8 +372,8 @@ async function loadYoutubeDetails(credential, ids, queryById) {
         view_count: numberValue(statistics.viewCount),
         like_count: numberValue(statistics.likeCount),
         comment_count: numberValue(statistics.commentCount),
-        discovery_source: "youtube_api",
-        discovery_query: queryById.get(item.id) || ""
+        discovery_source: discoveryQuery.startsWith("channel:") ? "youtube_api_channel" : "youtube_api",
+        discovery_query: discoveryQuery
       });
     }
   }
@@ -323,14 +394,15 @@ async function youtubeDiscoveryCredentials() {
   return [];
 }
 
-async function discoverWithYoutubeApi({ queries, knownIds, options }) {
+async function discoverWithYoutubeApi({ queries, knownIds, options, channelOnly = false }) {
   const credentials = await youtubeDiscoveryCredentials();
   if (!credentials.length) {
     console.log("AUTO DISCOVERY: credential YouTube discovery belum ada, fallback ke yt-dlp search.");
     return null;
   }
 
-  const channelIds = listEnv("AUTO_DISCOVER_CHANNEL_IDS", []);
+  const configuredChannelIds = listEnv("AUTO_DISCOVER_CHANNEL_IDS", []);
+  const channelHandles = listEnv("AUTO_DISCOVER_CHANNEL_HANDLES", DEFAULT_CHANNEL_HANDLES);
   let lastError = null;
   for (const credential of credentials) {
     const ids = [];
@@ -338,15 +410,21 @@ async function discoverWithYoutubeApi({ queries, knownIds, options }) {
 
     try {
       console.log(`AUTO DISCOVERY: memakai YouTube ${credential.label}.`);
-      for (const query of queries) {
-        const found = await searchYoutubeIds({ credential, query, options });
-        for (const id of found) {
-          if (knownIds.has(id) || queryById.has(id)) continue;
-          ids.push(id);
-          queryById.set(id, query);
+      if (!channelOnly) {
+        for (const query of queries) {
+          const found = await searchYoutubeIds({ credential, query, options });
+          for (const id of found) {
+            if (knownIds.has(id) || queryById.has(id)) continue;
+            ids.push(id);
+            queryById.set(id, query);
+          }
         }
       }
 
+      const channelIds = uniqueList([
+        ...configuredChannelIds,
+        ...await resolveChannelHandles(credential, channelHandles)
+      ]);
       for (const channelId of channelIds) {
         const found = await searchYoutubeIds({ credential, channelId, options });
         for (const id of found) {
@@ -390,10 +468,10 @@ async function discoverWithYtDlp({ queries, knownIds, options }) {
   return [...candidates.values()];
 }
 
-async function loadRawCandidates({ queries, knownIds, options }) {
+async function loadRawCandidates({ queries, knownIds, options, channelOnly = false }) {
   let rawCandidates = null;
   try {
-    rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options });
+    rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options, channelOnly });
   } catch (error) {
     console.warn(`YouTube API discovery dilewati: ${error.message}`);
   }
@@ -406,7 +484,9 @@ async function loadRawCandidates({ queries, knownIds, options }) {
 }
 
 function selectDiscoveredCandidates(rawCandidates, options, addCount, mode) {
-  const filter = mode === "best_available" ? isTopicCandidate : isViralCandidate;
+  const filter = mode === "fresh_channels"
+    ? isFreshChannelCandidate
+    : mode === "best_available" ? isTopicCandidate : isViralCandidate;
   return rawCandidates
     .filter((item) => filter(item, options))
     .map((item) => ({
@@ -422,8 +502,22 @@ function selectDiscoveredCandidates(rawCandidates, options, addCount, mode) {
 function fallbackPasses(baseQueries, baseOptions) {
   const fallbackQueries = uniqueList([...baseQueries, ...FALLBACK_QUERIES]);
   const fallbackMaxResults = numberEnv("AUTO_DISCOVER_FALLBACK_MAX_RESULTS", 25, baseOptions.maxResults, 50);
+  const freshUploadDays = numberEnv("AUTO_DISCOVER_FRESH_UPLOAD_DAYS", 3, 1, 30);
+  const freshChannelMaxResults = numberEnv("AUTO_DISCOVER_CHANNEL_MAX_RESULTS", 5, 1, 25);
 
   return [
+    {
+      mode: "fresh_channels",
+      channelOnly: true,
+      queries: [],
+      options: {
+        ...baseOptions,
+        maxResults: freshChannelMaxResults,
+        publishedAfterDays: freshUploadDays,
+        minViews: 0,
+        minViewsPerHour: 0
+      }
+    },
     {
       mode: "strict",
       queries: baseQueries,
@@ -506,7 +600,8 @@ export async function discoverAndQueueVideos(options = {}) {
     const rawCandidates = await loadRawCandidates({
       queries: pass.queries,
       knownIds,
-      options: pass.options
+      options: pass.options,
+      channelOnly: Boolean(pass.channelOnly)
     });
     selected = selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
     if (selected.length) {
@@ -528,6 +623,7 @@ export async function discoverAndQueueVideos(options = {}) {
       priority: 10 + index,
       status: "queued",
       quality_profile: process.env.VIDEO_QUALITY_PROFILE || "standard",
+      clip_count: Number(process.env.CLIP_COUNT || 1),
       subtitle_font: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
       subtitle_font_size: Number(process.env.SUBTITLE_FONT_SIZE || 46),
       subtitle_margin_v: Number(process.env.SUBTITLE_MARGIN_V || 550),

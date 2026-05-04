@@ -13,6 +13,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+FAILED_GEMINI_KEYS = set()
+FAILED_OPENAI_MODELS = set()
 
 
 def log_step(message):
@@ -80,16 +82,31 @@ def parse_keys(value):
     return [key.strip() for key in str(value or "").split(",") if key.strip()]
 
 
+def parse_keys_from_env(*names):
+    keys = []
+    for name in names:
+        keys.extend(parse_keys(os.environ.get(name)))
+    return list(dict.fromkeys(keys))
+
+
 def cfg():
     transcribe_provider = os.environ.get("TRANSCRIBE_PROVIDER", "offline").strip().lower()
     if transcribe_provider not in {"offline", "auto", "deepgram"}:
         transcribe_provider = "offline"
 
+    openai_models = parse_keys(os.environ.get("OPENAI_MODELS"))
+    openai_model = os.environ.get("OPENAI_MODEL", openai_models[0] if openai_models else "gpt-4.1-nano")
+    openai_models = list(dict.fromkeys([
+        item for item in [*openai_models, openai_model, "gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"] if item
+    ]))
+
     return {
-        "gemini_keys": parse_keys(os.environ.get("GEMINI_API_KEYS") or os.environ.get("GEMINI_API_KEY")),
+        "gemini_keys": parse_keys_from_env("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS"),
         "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
         "ai_provider": os.environ.get("AI_PROVIDER", "gemini").strip().lower(),
-        "openai_model": os.environ.get("OPENAI_MODEL", "gpt-5-nano"),
+        "openai_model": openai_model,
+        "openai_models": openai_models,
+        "ai_request_timeout": parse_int(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS"), 25),
         "ai_clip_selection": parse_int(os.environ.get("AI_CLIP_SELECTION_ENABLED"), 1),
         "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 5),
         "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 4000),
@@ -1008,7 +1025,7 @@ def extract_json(text):
     return data
 
 
-def call_gemini(prompt, api_key, model):
+def call_gemini(prompt, api_key, model, timeout=25):
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload = json.dumps(
         {
@@ -1031,7 +1048,7 @@ def call_gemini(prompt, api_key, model):
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with urllib.request.urlopen(request, timeout=max(5, int(timeout or 25))) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
@@ -1052,12 +1069,12 @@ def openai_output_text(data):
     return "".join(texts).strip()
 
 
-def call_openai_text(prompt, config):
+def call_openai_text(prompt, config, model=None):
     api_key = str(config.get("openai_api_key") or "").strip()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY belum diisi.")
 
-    model = str(config.get("openai_model") or "gpt-5-nano").strip()
+    model = str(model or config.get("openai_model") or "gpt-4.1-nano").strip()
     body = {
         "model": model,
         "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
@@ -1074,7 +1091,7 @@ def call_openai_text(prompt, config):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with urllib.request.urlopen(request, timeout=max(5, int(config.get("ai_request_timeout") or 25))) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
@@ -1089,11 +1106,15 @@ def call_json_with_ai_fallback(prompt, config, label):
     def try_gemini():
         nonlocal last_error
         for index, key in enumerate(config.get("gemini_keys") or []):
+            cache_key = f"{config['gemini_model']}:{index}:{str(key)[-8:]}"
+            if cache_key in FAILED_GEMINI_KEYS:
+                continue
             try:
                 log_info(f"{label} memakai Gemini key {index + 1}/{len(config.get('gemini_keys') or [])}")
-                return extract_json(call_gemini(prompt, key, config["gemini_model"]))
+                return extract_json(call_gemini(prompt, key, config["gemini_model"], config.get("ai_request_timeout", 25)))
             except Exception as exc:
                 last_error = exc
+                FAILED_GEMINI_KEYS.add(cache_key)
                 log_warn(f"Gemini gagal: {exc}")
         return None
 
@@ -1101,13 +1122,17 @@ def call_json_with_ai_fallback(prompt, config, label):
         nonlocal last_error
         if not str(config.get("openai_api_key") or "").strip():
             return None
-        try:
-            log_info(f"{label} fallback OpenAI {config.get('openai_model', 'gpt-5-nano')}")
-            return extract_json(call_openai_text(prompt, config))
-        except Exception as exc:
-            last_error = exc
-            log_warn(f"OpenAI gagal: {exc}")
-            return None
+        for model in config.get("openai_models") or [config.get("openai_model", "gpt-4.1-nano")]:
+            if model in FAILED_OPENAI_MODELS:
+                continue
+            try:
+                log_info(f"{label} fallback OpenAI {model}")
+                return extract_json(call_openai_text(prompt, config, model))
+            except Exception as exc:
+                last_error = exc
+                FAILED_OPENAI_MODELS.add(model)
+                log_warn(f"OpenAI {model} gagal: {exc}")
+        return None
 
     result = try_openai() if provider == "openai" else try_gemini()
     if result is not None:

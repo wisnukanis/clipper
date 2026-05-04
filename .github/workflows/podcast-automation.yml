@@ -158,9 +158,11 @@ jobs:
       GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-flash-latest' }}
       AI_PROVIDER: ${{ github.event.inputs.ai_provider || secrets.AI_PROVIDER || 'gemini' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-5-nano' }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4.1-nano' }}
+      OPENAI_MODELS: ${{ secrets.OPENAI_MODELS || 'gpt-4.1-nano,gpt-5-nano,gpt-4o-mini' }}
       OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE || '0.45' }}
       OPENAI_TRANSCRIBE_MODEL: ${{ secrets.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe' }}
+      AI_REQUEST_TIMEOUT_SECONDS: ${{ secrets.AI_REQUEST_TIMEOUT_SECONDS || '25' }}
       TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
       MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '0' }}
       DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '1' }}
@@ -190,6 +192,9 @@ jobs:
       AUTO_DISCOVER_REGION_CODE: ${{ secrets.AUTO_DISCOVER_REGION_CODE || 'ID' }}
       AUTO_DISCOVER_RELEVANCE_LANGUAGE: ${{ secrets.AUTO_DISCOVER_RELEVANCE_LANGUAGE || 'id' }}
       AUTO_DISCOVER_CHANNEL_IDS: ${{ secrets.AUTO_DISCOVER_CHANNEL_IDS }}
+      AUTO_DISCOVER_CHANNEL_HANDLES: ${{ secrets.AUTO_DISCOVER_CHANNEL_HANDLES || '@corbuzier|@VINDES|@radityadika|@DanielManantaNetwork|@HASCreative|@podkesmas|@podhub|@Kasisolusi|@TotalPolitik' }}
+      AUTO_DISCOVER_FRESH_UPLOAD_DAYS: ${{ secrets.AUTO_DISCOVER_FRESH_UPLOAD_DAYS || '3' }}
+      AUTO_DISCOVER_CHANNEL_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_CHANNEL_MAX_RESULTS || '5' }}
 
       YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY || secrets.YOUTUBE_DATA_API_KEY || secrets.GOOGLE_API_KEY }}
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
@@ -340,12 +345,10 @@ jobs:
           fi
 
           if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ]; then
-            echo "::error::Minimal satu Gemini key harus diisi untuk analisis transkrip"
-            missing=1
+            echo "::warning::Gemini key belum diisi. AI review/analisis akan memakai OpenAI atau fallback lokal."
           fi
           if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi"
-            missing=1
+            echo "::warning::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi. Sistem akan fallback ke Gemini/lokal."
           fi
 
           if [ "$DEEPGRAM_ENABLED" != "1" ] || [ -z "$DEEPGRAM_API_KEYS" ]; then
@@ -749,12 +752,10 @@ jobs:
           fi
 
           if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ]; then
-            echo "::error::Minimal satu Gemini key harus diisi untuk analisis transkrip"
-            missing=1
+            echo "::warning::Gemini key belum diisi. AI review/analisis akan memakai OpenAI atau fallback lokal."
           fi
           if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi"
-            missing=1
+            echo "::warning::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi. Sistem akan fallback ke Gemini/lokal."
           fi
 
           if [ "$DEEPGRAM_ENABLED" != "1" ]; then
@@ -792,6 +793,7 @@ jobs:
           echo "DEEPGRAM_ENABLED=$DEEPGRAM_ENABLED"
           echo "AI_PROVIDER=$AI_PROVIDER"
           echo "OPENAI_MODEL=$OPENAI_MODEL"
+          echo "OPENAI_MODELS=$OPENAI_MODELS"
           echo "OPENAI_TRANSCRIBE_MODEL=$OPENAI_TRANSCRIBE_MODEL"
           if [ -n "$OPENAI_API_KEY" ]; then
             echo "OPENAI_API_KEY=configured"
@@ -888,10 +890,12 @@ jobs:
           fi
 
           args+=(--quality "$VIDEO_QUALITY_PROFILE")
+          args+=(--clip-count "$CLIP_COUNT")
           args+=(--ai-provider "$AI_PROVIDER")
           args+=(--subtitle-font "$SUBTITLE_FONT_FAMILY")
           args+=(--subtitle-font-size "$SUBTITLE_FONT_SIZE")
           args+=(--subtitle-margin-v "$SUBTITLE_MARGIN_V")
+          args+=(--subtitle-margin-h "$SUBTITLE_MARGIN_H")
 
           echo "Running command:"
           printf 'node src/run.js'

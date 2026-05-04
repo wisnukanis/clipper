@@ -131,169 +131,120 @@ export async function runWorkflow(options = {}) {
       }
     });
 
-    const output = clipperResult.outputs[0];
-    if (!output?.finalAbsPath || !await fileExists(output.finalAbsPath)) {
+    const outputs = clipperResult.outputs.filter((output) => output?.finalAbsPath);
+    if (!outputs.length) {
       throw new Error("Clipper tidak menghasilkan file MP4 final.");
+    }
+
+    for (const output of outputs) {
+      if (!await fileExists(output.finalAbsPath)) {
+        throw new Error(`Clipper output tidak ditemukan: ${output.finalAbsPath}`);
+      }
     }
 
     await updateJob(job.job_id, {
       status: "clipper_done",
       clipper_status: "done",
-      source_title: output.title || "",
-      final_video_path: output.finalAbsPath,
-      transcript_path: output.transcriptReviewAbsPath || output.subtitleAbsPath || ""
+      source_title: outputs[0]?.title || "",
+      final_video_path: outputs[0]?.finalAbsPath || "",
+      transcript_path: outputs[0]?.transcriptReviewAbsPath || outputs[0]?.subtitleAbsPath || "",
+      clip_total: outputs.length
     });
 
-    const caption = await generateCaption({
-      job,
-      output,
-      promptTemplate: prompt,
-      clipperRoot: clipperResult.clipperRoot,
-      aiProvider: options.aiProvider
-    });
-    await updateJob(job.job_id, {
-      caption_status: "done",
-      caption
-    });
-
-    const thumbnailText = await generateThumbnailText({ job, output, promptTemplate: prompt, aiProvider: options.aiProvider });
-    const thumbnail = await generateThumbnail({
-      job,
-      videoPath: output.finalAbsPath,
-      text: thumbnailText
-    });
-    await updateJob(job.job_id, {
-      thumbnail_status: "done",
-      thumbnail_path: thumbnail.path,
-      thumbnail_text: thumbnail.text
-    });
-
-    const metadata = buildMetadata({
-      job,
-      video,
-      theme,
-      prompt,
-      output,
-      clipperResult,
-      caption,
-      thumbnail
-    });
-    const metadataPath = await saveGeneratedJson("metadata", `${job.job_id}.json`, metadata);
-
-    let upload = {
-      videoUrl: "",
-      thumbnailUrl: "",
-      metadataUrl: ""
-    };
-    if (shouldUploadToFtp()) {
-      upload = await uploadJobFiles({
-        job,
-        videoPath: output.finalAbsPath,
-        thumbnailPath: thumbnail.path,
-        metadataPath
+    const clipResults = [];
+    for (const [index, output] of outputs.entries()) {
+      await updateJob(job.job_id, {
+        status: "clip_processing",
+        current_clip_index: index + 1,
+        clip_total: outputs.length
       });
-      const videoPublicOk = await validatePublicUrl(upload.videoUrl);
-      if (!videoPublicOk) throw new Error(`Public video URL belum valid: ${upload.videoUrl}`);
-    }
-    console.log("Public video URL valid:", upload.videoUrl);
 
-    await updateJob(job.job_id, {
-      status: "ready_to_publish",
-      publish_status: "ready",
-      metadata_path: metadataPath,
-      public_video_url: upload.videoUrl,
-      public_thumbnail_url: upload.thumbnailUrl,
-      public_metadata_url: upload.metadataUrl
-    });
-
-    if (options.publish && canPublish()) {
-      const platformResults = await publishPlatforms({
-        job,
-        output,
-        caption,
-        upload,
-        thumbnail
-      });
-      const youtubePrimary = config.youtube.enabled;
-      const primaryPublished = youtubePrimary ? Boolean(platformResults.youtube) : platformResults.hasAnySuccess;
-      const finalStatus = primaryPublished ? "published" : "ready_to_publish";
-      const publishStatus = primaryPublished
-        ? platformResults.hasErrors ? "published_with_warnings" : "published"
-        : "publish_failed";
-      const now = new Date().toISOString();
+      try {
+        const result = await processClipOutput({
+          job,
+          video,
+          theme,
+          prompt,
+          output,
+          clipperResult,
+          index,
+          total: outputs.length,
+          options
+        });
+        clipResults.push(result);
+      } catch (error) {
+        const failed = {
+          ok: false,
+          clipIndex: index + 1,
+          clipJobId: buildClipStorageJob(job, index, outputs.length).job_id,
+          error: error.message
+        };
+        clipResults.push(failed);
+        await appendLog("clip_failed", {
+          job_id: job.job_id,
+          clip_index: index + 1,
+          error: error.message
+        });
+        console.warn(`Clip ${index + 1}/${outputs.length} gagal, lanjut clip berikutnya: ${error.message}`);
+      }
 
       await updateJob(job.job_id, {
-        status: finalStatus,
-        publish_status: publishStatus,
-        instagram_status: platformResults.instagram ? "published" : config.instagram.enabled ? "failed" : "disabled",
-        instagram_media_id: platformResults.instagram?.mediaId || "",
-        instagram_error: platformResults.errors.instagram || "",
-        facebook_status: platformResults.facebook ? "published" : config.facebook.enabled ? "failed" : "disabled",
-        facebook_video_id: platformResults.facebook?.videoId || "",
-        facebook_post_id: platformResults.facebook?.postId || "",
-        facebook_url: platformResults.facebook?.url || "",
-        facebook_error: platformResults.errors.facebook || "",
-        tiktok_status: platformResults.tiktok ? "submitted" : config.tiktok.enabled ? "failed" : "disabled",
-        tiktok_publish_id: platformResults.tiktok?.publishId || "",
-        tiktok_mode: platformResults.tiktok?.mode || "",
-        tiktok_error: platformResults.errors.tiktok || "",
-        threads_status: platformResults.threads ? "published" : config.threads.enabled ? "failed" : "disabled",
-        threads_media_id: platformResults.threads?.mediaId || "",
-        threads_url: platformResults.threads?.url || "",
-        threads_error: platformResults.errors.threads || "",
-        youtube_status: platformResults.youtube ? "published" : config.youtube.enabled ? "failed" : "disabled",
-        youtube_video_id: platformResults.youtube?.videoId || "",
-        youtube_url: platformResults.youtube?.url || "",
-        youtube_error: platformResults.errors.youtube || "",
-        youtube_custom_thumbnail: platformResults.youtube?.customThumbnail === true,
-        youtube_thumbnail_error: platformResults.youtube?.thumbnailError || "",
-        youtube_published_at: platformResults.youtube ? now : "",
-        published_at: primaryPublished ? now : ""
+        clip_results: clipResults.map(summarizeClipResult)
       });
-      await updateVideoStatus(video.id, primaryPublished ? "published" : "ready_to_publish", {
-        youtube_video_id: platformResults.youtube?.videoId || video.youtube_video_id,
-        youtube_url: platformResults.youtube?.url || "",
-        instagram_media_id: platformResults.instagram?.mediaId || "",
-        facebook_video_id: platformResults.facebook?.videoId || "",
-        facebook_url: platformResults.facebook?.url || "",
-        tiktok_publish_id: platformResults.tiktok?.publishId || "",
-        threads_media_id: platformResults.threads?.mediaId || "",
-        threads_url: platformResults.threads?.url || "",
-        error_message: primaryPublished ? "" : platformResults.errors.youtube || "Publish platform gagal; siap retry."
-      });
-      await appendHistoryEntry({
-        job,
-        video,
-        caption,
-        output,
-        upload,
-        platformResults,
-        status: primaryPublished ? "published" : "publish_failed"
-      });
-      await uploadHistoryIfPossible();
-      await uploadStateToRemote().catch(() => {});
-      await appendLog(primaryPublished ? "published" : "publish_failed", {
-        job_id: job.job_id,
-        instagram_media_id: platformResults.instagram?.mediaId || "",
-        facebook_video_id: platformResults.facebook?.videoId || "",
-        tiktok_publish_id: platformResults.tiktok?.publishId || "",
-        youtube_video_id: platformResults.youtube?.videoId || "",
-        threads_media_id: platformResults.threads?.mediaId || ""
-      });
-      return { status: publishStatus, job_id: job.job_id, platformResults };
     }
 
-    const status = options.publish ? "dry_run" : "ready_to_publish";
+    if (!clipResults.some((item) => item.ok)) {
+      throw new Error(clipResults.map((item) => item.error).filter(Boolean).join("; ") || "Semua clip gagal diproses.");
+    }
+
+    const final = finalStatusFromClipResults(clipResults, Boolean(options.publish && canPublish()));
+    const firstSuccess = clipResults.find((item) => item.ok);
+    const lastPlatformResults = [...clipResults].reverse().find((item) => item.platformResults)?.platformResults || {};
+
     await updateJob(job.job_id, {
-      status,
-      publish_status: status
+      status: final.status,
+      publish_status: final.publishStatus,
+      successful_clip_count: final.successfulClips,
+      failed_clip_count: final.failedClips,
+      published_clip_count: final.publishedClips,
+      clip_results: clipResults.map(summarizeClipResult),
+      public_video_url: firstSuccess?.upload?.videoUrl || "",
+      public_thumbnail_url: firstSuccess?.upload?.thumbnailUrl || "",
+      public_metadata_url: firstSuccess?.upload?.metadataUrl || "",
+      published_at: final.publishedClips > 0 ? new Date().toISOString() : ""
     });
-    await updateVideoStatus(video.id, status === "dry_run" ? "queued" : "ready_to_publish");
-    await appendHistoryEntry({ job, video, caption, output, upload, status });
+
+    await updateVideoStatus(video.id, final.videoStatus, {
+      youtube_video_id: lastPlatformResults.youtube?.videoId || video.youtube_video_id,
+      youtube_url: lastPlatformResults.youtube?.url || "",
+      instagram_media_id: lastPlatformResults.instagram?.mediaId || "",
+      facebook_video_id: lastPlatformResults.facebook?.videoId || "",
+      facebook_url: lastPlatformResults.facebook?.url || "",
+      tiktok_publish_id: lastPlatformResults.tiktok?.publishId || "",
+      threads_media_id: lastPlatformResults.threads?.mediaId || "",
+      threads_url: lastPlatformResults.threads?.url || "",
+      error_message: final.errorMessage
+    });
+
     await uploadHistoryIfPossible();
     await uploadStateToRemote().catch(() => {});
-    await appendLog(status, { job_id: job.job_id, video_url: upload.videoUrl || "" });
-    return { status, job_id: job.job_id, videoUrl: upload.videoUrl };
+    await appendLog(final.event, {
+      job_id: job.job_id,
+      clip_total: outputs.length,
+      successful_clip_count: final.successfulClips,
+      failed_clip_count: final.failedClips,
+      published_clip_count: final.publishedClips
+    });
+
+    return {
+      status: final.publishStatus,
+      job_id: job.job_id,
+      clip_total: outputs.length,
+      successful_clip_count: final.successfulClips,
+      failed_clip_count: final.failedClips,
+      published_clip_count: final.publishedClips,
+      clips: clipResults.map(summarizeClipResult)
+    };
   } catch (error) {
     await updateJob(job.job_id, {
       status: "failed",
@@ -314,9 +265,11 @@ async function createManualSelection(options) {
     priority: 0,
     manual_range: options.range || "",
     quality_profile: options.qualityProfile || "standard",
+    clip_count: Number(options.clipCount || process.env.CLIP_COUNT || 1),
     subtitle_font: options.subtitleFont || "Segoe UI Semibold",
     subtitle_font_size: options.subtitleFontSize || 46,
     subtitle_margin_v: options.subtitleMarginV || 550,
+    subtitle_margin_h: options.subtitleMarginH || 180,
     force_reprocess: options.forceReprocess === true,
     notes: "Ditambahkan dari CLI/manual run"
   });
@@ -325,6 +278,244 @@ async function createManualSelection(options) {
     targetDate: todayDate(),
     forceReprocess: options.forceReprocess === true
   });
+}
+
+async function processClipOutput({ job, video, theme, prompt, output, clipperResult, index, total, options }) {
+  const clipIndex = index + 1;
+  const storageJob = buildClipStorageJob(job, index, total);
+  const aiProvider = options.aiProvider || video.ai_provider || "";
+
+  const caption = await generateCaption({
+    job: storageJob,
+    output,
+    promptTemplate: prompt,
+    clipperRoot: clipperResult.clipperRoot,
+    aiProvider
+  });
+  await updateJob(job.job_id, {
+    caption_status: "done",
+    caption,
+    current_clip_index: clipIndex
+  });
+
+  const thumbnailText = await generateThumbnailText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
+  const thumbnail = await generateThumbnail({
+    job: storageJob,
+    videoPath: output.finalAbsPath,
+    text: thumbnailText
+  });
+  await updateJob(job.job_id, {
+    thumbnail_status: "done",
+    thumbnail_path: thumbnail.path,
+    thumbnail_text: thumbnail.text
+  });
+
+  const metadata = buildMetadata({
+    job: storageJob,
+    video,
+    theme,
+    prompt,
+    output,
+    clipperResult,
+    caption,
+    thumbnail,
+    clipIndex,
+    clipTotal: total
+  });
+  const metadataPath = await saveGeneratedJson("metadata", `${storageJob.job_id}.json`, metadata);
+
+  let upload = {
+    videoUrl: "",
+    thumbnailUrl: "",
+    metadataUrl: ""
+  };
+  if (shouldUploadToFtp()) {
+    upload = await uploadJobFiles({
+      job: storageJob,
+      videoPath: output.finalAbsPath,
+      thumbnailPath: thumbnail.path,
+      metadataPath
+    });
+    const videoPublicOk = await validatePublicUrl(upload.videoUrl);
+    if (!videoPublicOk) throw new Error(`Public video URL belum valid: ${upload.videoUrl}`);
+  }
+  console.log(`Public video URL valid clip ${clipIndex}/${total}:`, upload.videoUrl);
+
+  await updateJob(job.job_id, {
+    status: "ready_to_publish",
+    publish_status: "ready",
+    metadata_path: metadataPath,
+    public_video_url: upload.videoUrl,
+    public_thumbnail_url: upload.thumbnailUrl,
+    public_metadata_url: upload.metadataUrl
+  });
+
+  if (options.publish && canPublish()) {
+    const platformResults = await publishPlatforms({
+      job,
+      output,
+      caption,
+      upload,
+      thumbnail
+    });
+    const youtubePrimary = config.youtube.enabled;
+    const primaryPublished = youtubePrimary ? Boolean(platformResults.youtube) : platformResults.hasAnySuccess;
+    const publishStatus = primaryPublished
+      ? platformResults.hasErrors ? "published_with_warnings" : "published"
+      : "publish_failed";
+    const now = new Date().toISOString();
+
+    await updateJob(job.job_id, {
+      status: primaryPublished ? "published" : "ready_to_publish",
+      publish_status: publishStatus,
+      instagram_status: platformResults.instagram ? "published" : config.instagram.enabled ? "failed" : "disabled",
+      instagram_media_id: platformResults.instagram?.mediaId || "",
+      instagram_error: platformResults.errors.instagram || "",
+      facebook_status: platformResults.facebook ? "published" : config.facebook.enabled ? "failed" : "disabled",
+      facebook_video_id: platformResults.facebook?.videoId || "",
+      facebook_post_id: platformResults.facebook?.postId || "",
+      facebook_url: platformResults.facebook?.url || "",
+      facebook_error: platformResults.errors.facebook || "",
+      tiktok_status: platformResults.tiktok ? "submitted" : config.tiktok.enabled ? "failed" : "disabled",
+      tiktok_publish_id: platformResults.tiktok?.publishId || "",
+      tiktok_mode: platformResults.tiktok?.mode || "",
+      tiktok_error: platformResults.errors.tiktok || "",
+      threads_status: platformResults.threads ? "published" : config.threads.enabled ? "failed" : "disabled",
+      threads_media_id: platformResults.threads?.mediaId || "",
+      threads_url: platformResults.threads?.url || "",
+      threads_error: platformResults.errors.threads || "",
+      youtube_status: platformResults.youtube ? "published" : config.youtube.enabled ? "failed" : "disabled",
+      youtube_video_id: platformResults.youtube?.videoId || "",
+      youtube_url: platformResults.youtube?.url || "",
+      youtube_error: platformResults.errors.youtube || "",
+      youtube_custom_thumbnail: platformResults.youtube?.customThumbnail === true,
+      youtube_thumbnail_error: platformResults.youtube?.thumbnailError || "",
+      youtube_published_at: platformResults.youtube ? now : "",
+      published_at: primaryPublished ? now : ""
+    });
+
+    await appendHistoryEntry({
+      job: storageJob,
+      video,
+      caption,
+      output,
+      upload,
+      platformResults,
+      status: primaryPublished ? "published" : "publish_failed",
+      clipIndex,
+      clipTotal: total
+    });
+
+    return {
+      ok: true,
+      clipIndex,
+      clipJobId: storageJob.job_id,
+      output,
+      upload,
+      caption,
+      platformResults,
+      primaryPublished,
+      publishStatus
+    };
+  }
+
+  const status = options.publish ? "dry_run" : "ready_to_publish";
+  await appendHistoryEntry({ job: storageJob, video, caption, output, upload, status, clipIndex, clipTotal: total });
+  return {
+    ok: true,
+    clipIndex,
+    clipJobId: storageJob.job_id,
+    output,
+    upload,
+    caption,
+    platformResults: null,
+    primaryPublished: false,
+    publishStatus: status
+  };
+}
+
+function buildClipStorageJob(job, index, total) {
+  if (total <= 1) return job;
+  return {
+    ...job,
+    job_id: `${job.job_id}-clip-${String(index + 1).padStart(2, "0")}`
+  };
+}
+
+function summarizeClipResult(result) {
+  return {
+    ok: Boolean(result.ok),
+    clip_index: result.clipIndex,
+    clip_job_id: result.clipJobId,
+    status: result.publishStatus || (result.ok ? "ready" : "failed"),
+    error: result.error || "",
+    public_video_url: result.upload?.videoUrl || "",
+    public_thumbnail_url: result.upload?.thumbnailUrl || "",
+    youtube_video_id: result.platformResults?.youtube?.videoId || "",
+    youtube_url: result.platformResults?.youtube?.url || "",
+    instagram_media_id: result.platformResults?.instagram?.mediaId || "",
+    facebook_video_id: result.platformResults?.facebook?.videoId || "",
+    tiktok_publish_id: result.platformResults?.tiktok?.publishId || "",
+    threads_media_id: result.platformResults?.threads?.mediaId || ""
+  };
+}
+
+function finalStatusFromClipResults(clipResults, publishEnabled) {
+  const successfulClips = clipResults.filter((item) => item.ok).length;
+  const failedClips = clipResults.filter((item) => !item.ok).length;
+  const publishedClips = clipResults.filter((item) => item.primaryPublished).length;
+  const hasPlatformErrors = clipResults.some((item) => item.platformResults?.hasErrors);
+  const total = clipResults.length;
+
+  if (!publishEnabled) {
+    return {
+      status: failedClips ? "partial_ready" : "ready_to_publish",
+      publishStatus: failedClips ? "partial_ready" : "ready_to_publish",
+      videoStatus: failedClips ? "partial_ready" : "ready_to_publish",
+      event: failedClips ? "partial_ready" : "ready_to_publish",
+      successfulClips,
+      failedClips,
+      publishedClips,
+      errorMessage: failedClips ? `${failedClips}/${total} clip gagal diproses.` : ""
+    };
+  }
+
+  if (publishedClips === total && !hasPlatformErrors) {
+    return {
+      status: "published",
+      publishStatus: "published",
+      videoStatus: "published",
+      event: "published",
+      successfulClips,
+      failedClips,
+      publishedClips,
+      errorMessage: ""
+    };
+  }
+
+  if (publishedClips > 0) {
+    return {
+      status: "published_partial",
+      publishStatus: hasPlatformErrors || failedClips ? "published_with_warnings" : "published_partial",
+      videoStatus: "published_partial",
+      event: "published_partial",
+      successfulClips,
+      failedClips,
+      publishedClips,
+      errorMessage: `${publishedClips}/${total} clip berhasil publish.`
+    };
+  }
+
+  return {
+    status: "ready_to_publish",
+    publishStatus: "publish_failed",
+    videoStatus: "ready_to_publish",
+    event: "publish_failed",
+    successfulClips,
+    failedClips,
+    publishedClips,
+    errorMessage: "Publish platform gagal; siap retry."
+  };
 }
 
 async function updateJob(jobId, patch) {
@@ -430,9 +621,11 @@ async function publishPlatform(name, platformResults, jobId, callback) {
   }
 }
 
-function buildMetadata({ job, video, theme, prompt, output, clipperResult, caption, thumbnail }) {
+function buildMetadata({ job, video, theme, prompt, output, clipperResult, caption, thumbnail, clipIndex = 1, clipTotal = 1 }) {
   return {
     job_id: job.job_id,
+    clip_index: clipIndex,
+    clip_total: clipTotal,
     source_type: "youtube_video",
     source_url: video.url,
     youtube_video_id: video.youtube_video_id,
@@ -460,9 +653,11 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
   };
 }
 
-async function appendHistoryEntry({ job, video, caption, output, upload, platformResults = {}, status }) {
+async function appendHistoryEntry({ job, video, caption, output, upload, platformResults = {}, status, clipIndex = 1, clipTotal = 1 }) {
   await appendHistory({
     job_id: job.job_id,
+    clip_index: clipIndex,
+    clip_total: clipTotal,
     video_id: video.id,
     source_url: video.url,
     youtube_video_id: video.youtube_video_id,
