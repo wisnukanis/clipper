@@ -379,12 +379,9 @@ async function checkYoutubeDiscovery(online) {
   }
 
   try {
-    const url = new URL("https://www.googleapis.com/youtube/v3/search");
-    url.searchParams.set("part", "snippet");
-    url.searchParams.set("type", "video");
-    url.searchParams.set("q", "podcast artis indonesia");
-    url.searchParams.set("maxResults", "1");
-    url.searchParams.set("regionCode", "ID");
+    const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+    url.searchParams.set("part", "id");
+    url.searchParams.set("id", "dQw4w9WgXcQ");
     url.searchParams.set("key", key);
     await fetchJson(url);
     return checkResult("YouTube Discovery API", true, "API key valid", false);

@@ -44,6 +44,7 @@ const DEFAULT_CHANNEL_HANDLES = [
 
 const TOPIC_RE = /podcast|podhub|podkesmas|vindes|deddy|corbuzier|raditya|artis|aktor|aktris|penyanyi|komika|komedi|stand\s*up|lucu|politik|pilpres|dpr|presiden|menteri|prabowo|jokowi|anies|ganjar/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
+let youtubeApiQuotaExhausted = false;
 
 function boolEnv(name, fallback = false) {
   const value = process.env[name];
@@ -77,6 +78,11 @@ function uniqueList(items) {
 
 function videoUrl(id) {
   return `https://www.youtube.com/watch?v=${id}`;
+}
+
+function isYoutubeQuotaError(error) {
+  const text = String(error?.message || error || "");
+  return /quota|quotaExceeded|exceeded your/i.test(text);
 }
 
 function knownVideoIds(videos, history) {
@@ -269,7 +275,10 @@ async function fetchYoutube(pathname, params, credential) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = body?.error?.message || `${response.status} ${response.statusText}`;
-    throw new Error(`YouTube API ${pathname} gagal: ${message}`);
+    const error = new Error(`YouTube API ${pathname} gagal: ${message}`);
+    error.reason = body?.error?.errors?.[0]?.reason || "";
+    if (isYoutubeQuotaError(error) || error.reason === "quotaExceeded") error.quotaExceeded = true;
+    throw error;
   }
   return body;
 }
@@ -324,6 +333,7 @@ async function resolveChannelHandles(credential, handles) {
         continue;
       }
     } catch (error) {
+      if (error.quotaExceeded || isYoutubeQuotaError(error)) throw error;
       console.warn(`Resolve channel handle gagal (${handle}): ${error.message}`);
     }
 
@@ -338,6 +348,7 @@ async function resolveChannelHandles(credential, handles) {
       const id = data.items?.[0]?.id?.channelId;
       if (id) resolved.push(id);
     } catch (error) {
+      if (error.quotaExceeded || isYoutubeQuotaError(error)) throw error;
       console.warn(`Fallback search channel gagal (${handle}): ${error.message}`);
     }
   }
@@ -395,6 +406,11 @@ async function youtubeDiscoveryCredentials() {
 }
 
 async function discoverWithYoutubeApi({ queries, knownIds, options, channelOnly = false }) {
+  if (youtubeApiQuotaExhausted) {
+    console.log("AUTO DISCOVERY: YouTube API quota sudah habis, langsung fallback ke yt-dlp search.");
+    return null;
+  }
+
   const credentials = await youtubeDiscoveryCredentials();
   if (!credentials.length) {
     console.log("AUTO DISCOVERY: credential YouTube discovery belum ada, fallback ke yt-dlp search.");
@@ -421,16 +437,19 @@ async function discoverWithYoutubeApi({ queries, knownIds, options, channelOnly 
         }
       }
 
-      const channelIds = uniqueList([
-        ...configuredChannelIds,
-        ...await resolveChannelHandles(credential, channelHandles)
-      ]);
-      for (const channelId of channelIds) {
-        const found = await searchYoutubeIds({ credential, channelId, options });
-        for (const id of found) {
-          if (knownIds.has(id) || queryById.has(id)) continue;
-          ids.push(id);
-          queryById.set(id, `channel:${channelId}`);
+      const includeChannels = channelOnly || boolEnv("AUTO_DISCOVER_INCLUDE_CHANNELS_EVERY_PASS", false);
+      if (includeChannels) {
+        const channelIds = uniqueList([
+          ...configuredChannelIds,
+          ...await resolveChannelHandles(credential, channelHandles)
+        ]);
+        for (const channelId of channelIds) {
+          const found = await searchYoutubeIds({ credential, channelId, options });
+          for (const id of found) {
+            if (knownIds.has(id) || queryById.has(id)) continue;
+            ids.push(id);
+            queryById.set(id, `channel:${channelId}`);
+          }
         }
       }
 
@@ -438,6 +457,10 @@ async function discoverWithYoutubeApi({ queries, knownIds, options, channelOnly 
       return loadYoutubeDetails(credential, ids, queryById);
     } catch (error) {
       lastError = error;
+      if (error.quotaExceeded || isYoutubeQuotaError(error)) {
+        youtubeApiQuotaExhausted = true;
+        throw error;
+      }
       console.warn(`YouTube API discovery gagal, coba credential berikutnya: ${error.message}`);
     }
   }
@@ -468,12 +491,16 @@ async function discoverWithYtDlp({ queries, knownIds, options }) {
   return [...candidates.values()];
 }
 
-async function loadRawCandidates({ queries, knownIds, options, channelOnly = false }) {
+async function loadRawCandidates({ queries, knownIds, options, channelOnly = false, useApi = true }) {
   let rawCandidates = null;
-  try {
-    rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options, channelOnly });
-  } catch (error) {
-    console.warn(`YouTube API discovery dilewati: ${error.message}`);
+  if (useApi) {
+    try {
+      rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options, channelOnly });
+    } catch (error) {
+      console.warn(`YouTube API discovery dilewati: ${error.message}`);
+    }
+  } else {
+    console.log("AUTO DISCOVERY: pass ini pakai yt-dlp agar hemat YouTube API quota.");
   }
 
   if (!rawCandidates) {
@@ -509,6 +536,7 @@ function fallbackPasses(baseQueries, baseOptions) {
     {
       mode: "fresh_channels",
       channelOnly: true,
+      useApi: true,
       queries: [],
       options: {
         ...baseOptions,
@@ -520,11 +548,13 @@ function fallbackPasses(baseQueries, baseOptions) {
     },
     {
       mode: "strict",
+      useApi: true,
       queries: baseQueries,
       options: baseOptions
     },
     {
       mode: "wide_search",
+      useApi: false,
       queries: fallbackQueries,
       options: {
         ...baseOptions,
@@ -536,6 +566,7 @@ function fallbackPasses(baseQueries, baseOptions) {
     },
     {
       mode: "relaxed_viral",
+      useApi: false,
       queries: fallbackQueries,
       options: {
         ...baseOptions,
@@ -548,6 +579,7 @@ function fallbackPasses(baseQueries, baseOptions) {
     },
     {
       mode: "best_available",
+      useApi: false,
       queries: fallbackQueries,
       options: {
         ...baseOptions,
@@ -601,7 +633,8 @@ export async function discoverAndQueueVideos(options = {}) {
       queries: pass.queries,
       knownIds,
       options: pass.options,
-      channelOnly: Boolean(pass.channelOnly)
+      channelOnly: Boolean(pass.channelOnly),
+      useApi: pass.useApi !== false
     });
     selected = selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
     if (selected.length) {
