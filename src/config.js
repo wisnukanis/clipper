@@ -175,8 +175,10 @@ function buildConfig() {
       password: process.env.FTP_PASSWORD || "",
       remoteDir: cleanText(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated"),
       timeoutMs: numberEnv("FTP_TIMEOUT_SECONDS", 300) * 1000,
+      uploadTimeoutMs: numberEnv("FTP_UPLOAD_TIMEOUT_SECONDS", 1800) * 1000,
+      cleanupTimeoutMs: numberEnv("FTP_CLEANUP_TIMEOUT_SECONDS", 600) * 1000,
       stateTimeoutMs: numberEnv("FTP_STATE_TIMEOUT_SECONDS", 45) * 1000,
-      retries: Math.max(1, numberEnv("FTP_UPLOAD_RETRIES", 3)),
+      retries: Math.max(1, numberEnv("FTP_UPLOAD_RETRIES", 2)),
       publicUrlRetries: Math.max(1, numberEnv("FTP_PUBLIC_URL_RETRIES", 8)),
       publicUrlRetryDelayMs: Math.max(250, numberEnv("FTP_PUBLIC_URL_RETRY_DELAY_MS", 2500))
     },

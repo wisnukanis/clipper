@@ -34,6 +34,49 @@ function retryDelayMs(attempt) {
   return Math.min(30000, 1500 * attempt);
 }
 
+async function localFileSize(filePath) {
+  const stat = await fs.stat(filePath);
+  return stat.size;
+}
+
+async function remoteSize(client, remoteName) {
+  try {
+    return await client.size(remoteName);
+  } catch {
+    return -1;
+  }
+}
+
+async function remoteFileMatches(fullRemotePath, expectedSize) {
+  try {
+    return await withFtpClient(async (client) => {
+      return await remoteSize(client, fullRemotePath) === expectedSize;
+    }, { timeoutMs: config.ftp.stateTimeoutMs, retries: 1 });
+  } catch {
+    return false;
+  }
+}
+
+async function uploadFromVerified(client, localPath, remoteName, remoteDir) {
+  const expectedSize = await localFileSize(localPath);
+  const fullRemotePath = path.posix.join(remoteDir, remoteName);
+
+  if (await remoteSize(client, remoteName) === expectedSize) {
+    console.log(`FTP skip, remote sudah lengkap: ${fullRemotePath}`);
+    return;
+  }
+
+  try {
+    await client.uploadFrom(localPath, remoteName);
+  } catch (error) {
+    if (isRetriableFtpError(error) && await remoteFileMatches(fullRemotePath, expectedSize)) {
+      console.warn(`FTP upload timeout, tapi file remote lengkap. Lanjut: ${fullRemotePath}`);
+      return;
+    }
+    throw error;
+  }
+}
+
 export async function withFtpClient(callback, options = {}) {
   requireFtpConfig();
   const maxAttempts = Math.max(1, Number(options.retries || config.ftp.retries || 3));
@@ -81,15 +124,19 @@ export async function uploadJobFiles({ job, videoPath, thumbnailPath, metadataPa
   }
 
   await withFtpClient(async (client) => {
-    await client.ensureDir(path.posix.join(config.ftp.remoteDir, "videos"));
-    await client.uploadFrom(videoPath, videoName);
+    const videosDir = path.posix.join(config.ftp.remoteDir, "videos");
+    const thumbnailsDir = path.posix.join(config.ftp.remoteDir, "thumbnails");
+    const metadataDir = path.posix.join(config.ftp.remoteDir, "metadata");
 
-    await client.ensureDir(path.posix.join(config.ftp.remoteDir, "thumbnails"));
-    await client.uploadFrom(thumbnailPath, thumbnailName);
+    await client.ensureDir(videosDir);
+    await uploadFromVerified(client, videoPath, videoName, videosDir);
 
-    await client.ensureDir(path.posix.join(config.ftp.remoteDir, "metadata"));
-    await client.uploadFrom(metadataPath, metadataName);
-  }, { timeoutMs: config.ftp.timeoutMs });
+    await client.ensureDir(thumbnailsDir);
+    await uploadFromVerified(client, thumbnailPath, thumbnailName, thumbnailsDir);
+
+    await client.ensureDir(metadataDir);
+    await uploadFromVerified(client, metadataPath, metadataName, metadataDir);
+  }, { timeoutMs: config.ftp.uploadTimeoutMs, retries: config.ftp.retries });
 
   return {
     videoUrl: publicVideoUrl(videoName),
@@ -105,9 +152,10 @@ export async function uploadVideoFile({ videoPath, videoName }) {
   if (!shouldUploadToFtp()) return "";
 
   await withFtpClient(async (client) => {
-    await client.ensureDir(path.posix.join(config.ftp.remoteDir, "videos"));
-    await client.uploadFrom(videoPath, videoName);
-  }, { timeoutMs: config.ftp.timeoutMs });
+    const videosDir = path.posix.join(config.ftp.remoteDir, "videos");
+    await client.ensureDir(videosDir);
+    await uploadFromVerified(client, videoPath, videoName, videosDir);
+  }, { timeoutMs: config.ftp.uploadTimeoutMs, retries: config.ftp.retries });
 
   return publicVideoUrl(videoName);
 }

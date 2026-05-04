@@ -68,9 +68,15 @@ const envGroups = [
       field("FTP_PASSWORD", "Password", true),
       field("FTP_REMOTE_DIR", "Remote dir"),
       field("FTP_TIMEOUT_SECONDS", "Timeout seconds"),
+      field("FTP_UPLOAD_TIMEOUT_SECONDS", "Upload timeout seconds"),
+      field("FTP_CLEANUP_TIMEOUT_SECONDS", "Cleanup timeout seconds"),
       field("FTP_UPLOAD_RETRIES", "Upload retries"),
       field("FTP_PUBLIC_URL_RETRIES", "Public URL retries"),
-      field("FTP_PUBLIC_URL_RETRY_DELAY_MS", "Public URL retry delay ms")
+      field("FTP_PUBLIC_URL_RETRY_DELAY_MS", "Public URL retry delay ms"),
+      field("FTP_CLEANUP_DAYS", "Cleanup days"),
+      field("FTP_CLEANUP_DELETE_ALL", "Cleanup delete all"),
+      field("FTP_CLEANUP_SUBDIRS", "Cleanup subdirs"),
+      field("FTP_CLEANUP_MATCH", "Cleanup match")
     ]
   },
   {

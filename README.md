@@ -802,11 +802,17 @@ FTP_USER=
 FTP_PASSWORD=
 FTP_REMOTE_DIR=/public_html/ig-generated
 FTP_TIMEOUT_SECONDS=300
+FTP_UPLOAD_TIMEOUT_SECONDS=1800
+FTP_CLEANUP_TIMEOUT_SECONDS=600
 FTP_STATE_TIMEOUT_SECONDS=90
 FTP_PRECHECK_RETRIES=3
-FTP_UPLOAD_RETRIES=3
+FTP_UPLOAD_RETRIES=2
 FTP_PUBLIC_URL_RETRIES=8
 FTP_PUBLIC_URL_RETRY_DELAY_MS=2500
+FTP_CLEANUP_DAYS=1
+FTP_CLEANUP_DELETE_ALL=false
+FTP_CLEANUP_SUBDIRS=videos,thumbnails,metadata,history
+FTP_CLEANUP_MATCH=
 
 DEPLOY_REMOTE_DIR=/public_html
 DEPLOY_CLEAN_REMOTE=false
@@ -959,7 +965,15 @@ Folder remote tujuan upload.
 
 #### `FTP_TIMEOUT_SECONDS`
 
-Timeout per koneksi/upload FTP. Default: `300`.
+Timeout koneksi FTP umum. Default: `300`.
+
+#### `FTP_UPLOAD_TIMEOUT_SECONDS`
+
+Timeout khusus upload media besar. Default: `1800`.
+
+#### `FTP_CLEANUP_TIMEOUT_SECONDS`
+
+Timeout khusus cleanup FTP. Default: `600`.
 
 #### `FTP_STATE_TIMEOUT_SECONDS`
 
@@ -971,7 +985,7 @@ Jumlah retry untuk preflight FTP sebelum workflow jalan. Default: `3`.
 
 #### `FTP_UPLOAD_RETRIES`
 
-Jumlah retry upload FTP dengan koneksi baru. Default: `3`.
+Jumlah retry upload FTP dengan koneksi baru. Default: `2`. Jika timeout terjadi setelah file lengkap di remote, sistem memverifikasi ukuran file dan lanjut tanpa upload ulang.
 
 #### `FTP_PUBLIC_URL_RETRIES`
 
@@ -980,6 +994,22 @@ Jumlah retry cek URL publik setelah file selesai di-upload. Default: `8`.
 #### `FTP_PUBLIC_URL_RETRY_DELAY_MS`
 
 Jeda antar cek URL publik setelah upload. Default: `2500`.
+
+#### `FTP_CLEANUP_DAYS`
+
+Umur file minimum untuk dihapus cleanup. Default: `1`; isi `0` untuk hapus semua file yang match.
+
+#### `FTP_CLEANUP_DELETE_ALL`
+
+Jika `true`, cleanup menghapus semua file di subfolder target.
+
+#### `FTP_CLEANUP_SUBDIRS`
+
+Subfolder cleanup, default: `videos,thumbnails,metadata,history`.
+
+#### `FTP_CLEANUP_MATCH`
+
+Filter nama file opsional untuk cleanup, contoh `*.mp4`.
 
 #### `DEPLOY_REMOTE_DIR`
 
