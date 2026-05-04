@@ -18,21 +18,50 @@ function requireFtpConfig() {
   if (missing.length) throw new Error(`FTP config belum lengkap: ${missing.join(", ")}`);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetriableFtpError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || error || "");
+  const text = `${code} ${message}`;
+  if (/\b(530|550|553)\b/.test(text)) return false;
+  return /timeout|timed out|closed|socket|econn|etimedout|econnreset|econnrefused|epipe|no control connection|421|425|426|450|451/i.test(text);
+}
+
+function retryDelayMs(attempt) {
+  return Math.min(30000, 1500 * attempt);
+}
+
 export async function withFtpClient(callback, options = {}) {
   requireFtpConfig();
-  const client = new Client(options.timeoutMs || config.ftp.timeoutMs);
-  try {
-    await client.access({
-      host: config.ftp.host,
-      port: config.ftp.port,
-      user: config.ftp.user,
-      password: config.ftp.password,
-      secure: false
-    });
-    return await callback(client);
-  } finally {
-    client.close();
+  const maxAttempts = Math.max(1, Number(options.retries || config.ftp.retries || 3));
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const client = new Client(options.timeoutMs || config.ftp.timeoutMs);
+    try {
+      await client.access({
+        host: config.ftp.host,
+        port: config.ftp.port,
+        user: config.ftp.user,
+        password: config.ftp.password,
+        secure: false
+      });
+      return await callback(client, attempt);
+    } catch (error) {
+      lastError = error;
+      const canRetry = attempt < maxAttempts && isRetriableFtpError(error);
+      if (!canRetry) throw error;
+      console.warn(`FTP gagal attempt ${attempt}/${maxAttempts}, reconnect lalu retry: ${error.message || error}`);
+      await sleep(retryDelayMs(attempt));
+    } finally {
+      client.close();
+    }
   }
+
+  throw lastError;
 }
 
 export async function uploadJobFiles({ job, videoPath, thumbnailPath, metadataPath }) {
@@ -94,17 +123,25 @@ export async function uploadHistoryFile(historyFile) {
 
 export async function validatePublicUrl(url) {
   if (!url) return false;
-  try {
-    let response = await fetch(url, { method: "HEAD" });
-    if (response.ok) return true;
-    response = await fetch(url, {
-      method: "GET",
-      headers: { Range: "bytes=0-1000" }
-    });
-    return response.ok || response.status === 206;
-  } catch {
-    return false;
+
+  for (let attempt = 1; attempt <= config.ftp.publicUrlRetries; attempt += 1) {
+    try {
+      const cacheBustUrl = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+      let response = await fetch(cacheBustUrl, { method: "HEAD", cache: "no-store" });
+      if (response.ok) return true;
+      response = await fetch(cacheBustUrl, {
+        method: "GET",
+        cache: "no-store",
+        headers: { Range: "bytes=0-1000" }
+      });
+      if (response.ok || response.status === 206) return true;
+    } catch {
+      // Public hosting can lag a few seconds after FTP upload.
+    }
+    if (attempt < config.ftp.publicUrlRetries) await sleep(config.ftp.publicUrlRetryDelayMs);
   }
+
+  return false;
 }
 
 export async function fileExists(filePath) {

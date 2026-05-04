@@ -799,6 +799,12 @@ FTP_PORT=21
 FTP_USER=
 FTP_PASSWORD=
 FTP_REMOTE_DIR=/public_html/ig-generated
+FTP_TIMEOUT_SECONDS=300
+FTP_STATE_TIMEOUT_SECONDS=90
+FTP_PRECHECK_RETRIES=3
+FTP_UPLOAD_RETRIES=3
+FTP_PUBLIC_URL_RETRIES=8
+FTP_PUBLIC_URL_RETRY_DELAY_MS=2500
 
 DEPLOY_REMOTE_DIR=/public_html
 DEPLOY_CLEAN_REMOTE=false
@@ -937,6 +943,30 @@ Password FTP.
 #### `FTP_REMOTE_DIR`
 
 Folder remote tujuan upload.
+
+#### `FTP_TIMEOUT_SECONDS`
+
+Timeout per koneksi/upload FTP. Default: `300`.
+
+#### `FTP_STATE_TIMEOUT_SECONDS`
+
+Timeout FTP untuk sinkronisasi state dashboard. Default: `90`.
+
+#### `FTP_PRECHECK_RETRIES`
+
+Jumlah retry untuk preflight FTP sebelum workflow jalan. Default: `3`.
+
+#### `FTP_UPLOAD_RETRIES`
+
+Jumlah retry upload FTP dengan koneksi baru. Default: `3`.
+
+#### `FTP_PUBLIC_URL_RETRIES`
+
+Jumlah retry cek URL publik setelah file selesai di-upload. Default: `8`.
+
+#### `FTP_PUBLIC_URL_RETRY_DELAY_MS`
+
+Jeda antar cek URL publik setelah upload. Default: `2500`.
 
 #### `DEPLOY_REMOTE_DIR`
 

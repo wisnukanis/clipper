@@ -104,21 +104,24 @@ export async function uploadStateFile(file, data) {
     throw new Error(`FTP env belum lengkap untuk update state: ${missing.join(", ")}`);
   }
 
-  const client = new Client(45000);
   const raw = `${JSON.stringify(data, null, 2)}\n`;
-  try {
-    await client.access({
-      host: cfg.host,
-      port: cfg.port,
-      user: cfg.user,
-      password: cfg.password,
-      secure: false
-    });
-    await client.ensureDir(path.posix.join(cfg.remoteDir, "state"));
-    await client.uploadFrom(Readable.from([Buffer.from(raw, "utf8")]), file);
-  } finally {
-    client.close();
-  }
+
+  await withFtpRetry(async () => {
+    const client = new Client(Number(process.env.FTP_STATE_TIMEOUT_SECONDS || 45) * 1000);
+    try {
+      await client.access({
+        host: cfg.host,
+        port: cfg.port,
+        user: cfg.user,
+        password: cfg.password,
+        secure: false
+      });
+      await client.ensureDir(path.posix.join(cfg.remoteDir, "state"));
+      await client.uploadFrom(Readable.from([Buffer.from(raw, "utf8")]), file);
+    } finally {
+      client.close();
+    }
+  });
 }
 
 export function configSummary() {
@@ -328,6 +331,24 @@ function ftpConfig() {
     password: process.env.FTP_PASSWORD || "",
     remoteDir: clean(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated")
   };
+}
+
+async function withFtpRetry(task) {
+  const attempts = Math.max(1, Number(process.env.FTP_UPLOAD_RETRIES || 3));
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      const message = String(error?.message || error || "");
+      const retriable = !/\b(530|550|553)\b/.test(message)
+        && /timeout|timed out|closed|socket|econn|etimedout|econnreset|econnrefused|epipe|no control connection|421|425|426|450|451/i.test(message);
+      if (attempt >= attempts || !retriable) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(30000, 1500 * attempt)));
+    }
+  }
+  throw lastError;
 }
 
 function githubRepo() {

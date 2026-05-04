@@ -166,7 +166,10 @@ function buildConfig() {
       password: process.env.FTP_PASSWORD || "",
       remoteDir: cleanText(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated"),
       timeoutMs: numberEnv("FTP_TIMEOUT_SECONDS", 300) * 1000,
-      stateTimeoutMs: numberEnv("FTP_STATE_TIMEOUT_SECONDS", 45) * 1000
+      stateTimeoutMs: numberEnv("FTP_STATE_TIMEOUT_SECONDS", 45) * 1000,
+      retries: Math.max(1, numberEnv("FTP_UPLOAD_RETRIES", 3)),
+      publicUrlRetries: Math.max(1, numberEnv("FTP_PUBLIC_URL_RETRIES", 8)),
+      publicUrlRetryDelayMs: Math.max(250, numberEnv("FTP_PUBLIC_URL_RETRY_DELAY_MS", 2500))
     },
     clipper: {
       rootDir: path.resolve(rootDir, cleanText(process.env.CLIPPER_ROOT || "clipper")),

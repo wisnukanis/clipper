@@ -42,6 +42,7 @@ jobs:
       FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
       FTP_TIMEOUT_SECONDS: ${{ secrets.FTP_TIMEOUT_SECONDS || '300' }}
       FTP_STATE_TIMEOUT_SECONDS: ${{ secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
+      FTP_UPLOAD_RETRIES: ${{ secrets.FTP_UPLOAD_RETRIES || '3' }}
       FTP_CLEANUP_DAYS: ${{ github.event.inputs.days || '14' }}
       FTP_CLEANUP_SUBDIRS: ${{ github.event.inputs.subdirs || '' }}
 

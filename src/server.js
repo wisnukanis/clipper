@@ -67,7 +67,10 @@ const envGroups = [
       field("FTP_USER", "User"),
       field("FTP_PASSWORD", "Password", true),
       field("FTP_REMOTE_DIR", "Remote dir"),
-      field("FTP_TIMEOUT_SECONDS", "Timeout seconds")
+      field("FTP_TIMEOUT_SECONDS", "Timeout seconds"),
+      field("FTP_UPLOAD_RETRIES", "Upload retries"),
+      field("FTP_PUBLIC_URL_RETRIES", "Public URL retries"),
+      field("FTP_PUBLIC_URL_RETRY_DELAY_MS", "Public URL retry delay ms")
     ]
   },
   {
