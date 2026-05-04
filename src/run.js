@@ -17,6 +17,7 @@ const options = {
   theme: argValue("--theme", process.env.THEME || config.defaultTheme),
   url: argValue("--url", ""),
   range: argValue("--range", ""),
+  aiProvider: argValue("--ai-provider", process.env.AI_PROVIDER || ""),
   qualityProfile: argValue("--quality", process.env.VIDEO_QUALITY_PROFILE || "standard"),
   subtitleFont: argValue("--subtitle-font", process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
   subtitleFontSize: Number(argValue("--subtitle-font-size", process.env.SUBTITLE_FONT_SIZE || "46")),

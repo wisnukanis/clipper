@@ -51,6 +51,10 @@ on:
         description: How many clips to render from the source video
         required: false
         default: "1"
+      ai_provider:
+        description: "Caption/thumbnail AI provider: gemini or openai"
+        required: false
+        default: "gemini"
 
   schedule:
     # GitHub schedule uses UTC.
@@ -149,6 +153,10 @@ jobs:
       GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
       GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
       GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-flash-latest' }}
+      AI_PROVIDER: ${{ github.event.inputs.ai_provider || secrets.AI_PROVIDER || 'gemini' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-5-nano' }}
+      OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE || '0.45' }}
       CLOD_API_KEY: ${{ secrets.CLOD_API_KEY }}
       CLOD_BASE_URL: ${{ secrets.CLOD_BASE_URL || 'https://api.clod.io/v1' }}
       CLOD_MODEL: ${{ secrets.CLOD_MODEL || 'DeepSeek V3' }}
@@ -334,6 +342,10 @@ jobs:
 
           if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ] && [ -z "$CLOD_API_KEY" ]; then
             echo "::error::Minimal satu Gemini key atau CLOD_API_KEY harus diisi"
+            missing=1
+          fi
+          if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi"
             missing=1
           fi
 
@@ -741,6 +753,10 @@ jobs:
             echo "::error::Minimal satu Gemini key atau CLOD_API_KEY harus diisi"
             missing=1
           fi
+          if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi"
+            missing=1
+          fi
 
           if [ "$DEEPGRAM_ENABLED" != "1" ]; then
             echo "::error::DEEPGRAM_ENABLED harus 1. Workflow ini hanya memakai Deepgram untuk transkripsi."
@@ -775,6 +791,13 @@ jobs:
           echo "THREADS_USER_ID=$THREADS_USER_ID"
           echo "THREADS_API_VERSION=$THREADS_API_VERSION"
           echo "DEEPGRAM_ENABLED=$DEEPGRAM_ENABLED"
+          echo "AI_PROVIDER=$AI_PROVIDER"
+          echo "OPENAI_MODEL=$OPENAI_MODEL"
+          if [ -n "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY=configured"
+          else
+            echo "OPENAI_API_KEY=not_set"
+          fi
           echo "AUTO_DISCOVER_QUERY=$AUTO_DISCOVER_QUERY"
           echo "AUTO_DISCOVER_MIN_VIEWS=$AUTO_DISCOVER_MIN_VIEWS"
           echo "AUTO_DISCOVER_MIN_VIEWS_PER_HOUR=$AUTO_DISCOVER_MIN_VIEWS_PER_HOUR"
@@ -871,6 +894,7 @@ jobs:
           fi
 
           args+=(--quality "$VIDEO_QUALITY_PROFILE")
+          args+=(--ai-provider "$AI_PROVIDER")
           args+=(--subtitle-font "$SUBTITLE_FONT_FAMILY")
           args+=(--subtitle-font-size "$SUBTITLE_FONT_SIZE")
           args+=(--subtitle-margin-v "$SUBTITLE_MARGIN_V")

@@ -5,6 +5,49 @@ function endpoint(key) {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
 }
 
+function outputTextFromOpenAi(data) {
+  if (data?.output_text) return String(data.output_text).trim();
+  const texts = [];
+  for (const item of data?.output || []) {
+    for (const part of item?.content || []) {
+      if (part?.text) texts.push(part.text);
+    }
+  }
+  return texts.join("").trim();
+}
+
+async function generateOpenAiText(prompt, options = {}) {
+  if (!config.openai.apiKey) return "";
+
+  const body = {
+    model: options.model || config.openai.model,
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: prompt }]
+      }
+    ],
+    max_output_tokens: options.maxOutputTokens || 900
+  };
+  if (!String(body.model).startsWith("gpt-5")) {
+    body.temperature = options.temperature ?? config.openai.temperature;
+  }
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.openai.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `OpenAI request failed: ${response.status}`);
+  }
+  return outputTextFromOpenAi(data);
+}
+
 async function generateClodText(prompt, options = {}) {
   if (!config.clod.apiKey) return "";
 
@@ -78,4 +121,18 @@ export async function generateGeminiText(prompt, options = {}) {
 
   if (options.throwOnError && lastError) throw lastError;
   return "";
+}
+
+export async function generateAiText(prompt, options = {}) {
+  const provider = String(options.provider || config.ai.provider || "gemini").toLowerCase();
+  if (provider === "openai") {
+    try {
+      const text = await generateOpenAiText(prompt, options);
+      if (text) return text;
+    } catch (error) {
+      if (options.throwOnError) throw error;
+      console.warn(`OpenAI AI provider gagal, fallback ke Gemini: ${error.message}`);
+    }
+  }
+  return generateGeminiText(prompt, options);
 }

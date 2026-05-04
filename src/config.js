@@ -45,6 +45,7 @@ function encodePathSegment(value) {
 
 function buildConfig() {
   const geminiApiKeys = listEnv("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS");
+  const aiProvider = cleanText(process.env.AI_PROVIDER || "gemini").toLowerCase();
   const deepgramApiKeys = cleanText(process.env.DEEPGRAM_API_KEYS)
     ? listEnv("DEEPGRAM_API_KEYS")
     : listEnv("DEEPGRAM_API_KEY");
@@ -135,6 +136,14 @@ function buildConfig() {
       apiKeys: geminiApiKeys,
       model: cleanText(process.env.GEMINI_MODEL || "gemini-flash-latest"),
       temperature: numberEnv("GEMINI_TEMPERATURE", 0.75)
+    },
+    ai: {
+      provider: ["gemini", "openai"].includes(aiProvider) ? aiProvider : "gemini"
+    },
+    openai: {
+      apiKey: process.env.OPENAI_API_KEY || "",
+      model: cleanText(process.env.OPENAI_MODEL || "gpt-5-nano"),
+      temperature: numberEnv("OPENAI_TEMPERATURE", 0.45)
     },
     clod: {
       apiKey: process.env.CLOD_API_KEY || "",

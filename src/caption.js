@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateGeminiText } from "./gemini.js";
+import { generateAiText } from "./gemini.js";
 
 async function readClipContext(clipperRoot, output) {
   const parts = [output.title, output.hook, output.caption, output.reason].filter(Boolean);
@@ -40,7 +40,7 @@ function collectText(value, texts) {
   }
 }
 
-export async function generateCaption({ job, output, promptTemplate, clipperRoot }) {
+export async function generateCaption({ job, output, promptTemplate, clipperRoot, aiProvider = "" }) {
   const quickHashtags = buildDynamicHashtags({ job, output, promptTemplate });
   if (hasStrategyCaption(output)) {
     return ensureCaptionHashtags(output.caption, output, promptTemplate, quickHashtags);
@@ -71,11 +71,11 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
     "Tulis caption final saja tanpa markdown."
   ].join("\n");
 
-  const text = await generateGeminiText(prompt, { maxOutputTokens: 700 });
+  const text = await generateAiText(prompt, { maxOutputTokens: 700, provider: aiProvider });
   return ensureCaptionHashtags(text || fallback, output, promptTemplate, dynamicHashtags);
 }
 
-export async function generateThumbnailText({ job, output, promptTemplate }) {
+export async function generateThumbnailText({ job, output, promptTemplate, aiProvider = "" }) {
   const existing = output.thumbnailText ? normalizeThumbnailText(output.thumbnailText, "") : "";
   const fallback = fallbackThumbnailText(output);
   const prompt = [
@@ -94,7 +94,7 @@ export async function generateThumbnailText({ job, output, promptTemplate }) {
     `Transkrip singkat: ${String(output.clipTranscript || output.caption || "").slice(0, 900)}`,
     "Balas hanya teks thumbnail."
   ].join("\n");
-  const text = await generateGeminiText(prompt, { maxOutputTokens: 80, temperature: 0.65 });
+  const text = await generateAiText(prompt, { maxOutputTokens: 80, temperature: 0.65, provider: aiProvider });
   const generated = text ? normalizeThumbnailText(text, "") : "";
   return isStrongThumbnailText(generated) ? generated : fallback;
 }

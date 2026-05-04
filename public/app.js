@@ -168,6 +168,7 @@ async function refresh() {
     `YT ${cfg.youtubeEnabled ? "on" : "off"}`,
     `TT ${cfg.tiktokEnabled ? "on" : "off"}`,
     `TH ${cfg.threadsEnabled ? "on" : "off"}`,
+    `AI ${cfg.aiProvider || "gemini"}`,
     cfg.timezone
   ].filter(Boolean).join(" · ");
 
@@ -647,6 +648,7 @@ els.videoForm.addEventListener("submit", async (event) => {
     els.videoForm.elements.theme.value = "podcast artis";
     els.videoForm.elements.priority.value = "1";
     els.videoForm.elements.quality_profile.value = "standard";
+    if (els.videoForm.elements.ai_provider) els.videoForm.elements.ai_provider.value = "gemini";
     if (els.videoForm.elements.scene_mode) els.videoForm.elements.scene_mode.value = "podcast";
     if (els.videoForm.elements.clip_count) els.videoForm.elements.clip_count.value = "1";
     await refresh();

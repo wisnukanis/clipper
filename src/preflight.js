@@ -222,11 +222,40 @@ async function checkClod(online, required = false) {
   }
 }
 
+async function checkOpenAi(online, required = false) {
+  if (!config.openai.apiKey) {
+    return checkResult("OpenAI API", false, "OPENAI_API_KEY belum diisi", required);
+  }
+
+  if (!online) {
+    return checkResult("OpenAI API", true, `key terkonfigurasi, model ${config.openai.model}`, required);
+  }
+
+  try {
+    await fetchJson("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.openai.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: config.openai.model,
+        input: "Balas OK saja.",
+        max_output_tokens: 4
+      })
+    });
+    return checkResult("OpenAI API", true, `model ${config.openai.model}`, required);
+  } catch (error) {
+    return checkResult("OpenAI API", false, error.message, required);
+  }
+}
+
 async function aiChecks(online) {
   const hasClod = Boolean(config.clod.apiKey);
   const gemini = await checkGemini(online, !hasClod);
   const clod = await checkClod(online, !gemini.ok);
-  return [gemini, clod];
+  const openai = await checkOpenAi(online, config.ai.provider === "openai");
+  return [gemini, clod, openai];
 }
 
 async function checkFtp(online) {

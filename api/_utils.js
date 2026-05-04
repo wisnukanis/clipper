@@ -135,6 +135,8 @@ export function configSummary() {
     youtubeEnabled: boolEnv("YOUTUBE_UPLOAD_ENABLED", true),
     tiktokEnabled: boolEnv("TIKTOK_UPLOAD_ENABLED", false),
     threadsEnabled: boolEnv("THREADS_UPLOAD_ENABLED", false),
+    aiProvider: clean(process.env.AI_PROVIDER || "gemini"),
+    openaiModel: clean(process.env.OPENAI_MODEL || "gpt-5-nano"),
     subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "550"),
     vercelDashboard: true
@@ -246,6 +248,7 @@ export function buildVideo(input) {
     notes: clean(input.notes || "Ditambahkan dari dashboard Vercel"),
     manual_range: clean(input.manual_range || ""),
     quality_profile: clean(input.quality_profile || "standard"),
+    ai_provider: clean(input.ai_provider || process.env.AI_PROVIDER || "gemini"),
     scene_mode: clean(input.scene_mode || process.env.SCENE_MODE || "podcast"),
     clip_count: Number(input.clip_count || process.env.CLIP_COUNT || 1),
     subtitle_font: clean(input.subtitle_font || process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),

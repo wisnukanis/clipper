@@ -148,14 +148,15 @@ export async function runWorkflow(options = {}) {
       job,
       output,
       promptTemplate: prompt,
-      clipperRoot: clipperResult.clipperRoot
+      clipperRoot: clipperResult.clipperRoot,
+      aiProvider: options.aiProvider
     });
     await updateJob(job.job_id, {
       caption_status: "done",
       caption
     });
 
-    const thumbnailText = await generateThumbnailText({ job, output, promptTemplate: prompt });
+    const thumbnailText = await generateThumbnailText({ job, output, promptTemplate: prompt, aiProvider: options.aiProvider });
     const thumbnail = await generateThumbnail({
       job,
       videoPath: output.finalAbsPath,

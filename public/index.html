@@ -143,6 +143,13 @@
                   <option value="ultra">Ultra</option>
                 </select>
               </label>
+              <label class="field">
+                <span>AI Caption</span>
+                <select name="ai_provider">
+                  <option value="gemini" selected>Gemini</option>
+                  <option value="openai">OpenAI nano</option>
+                </select>
+              </label>
               <label class="field check">
                 <input name="publish" type="checkbox">
                 <span>Publish</span>
@@ -206,6 +213,7 @@
                   <option value="ultra">Ultra</option>
                 </select>
               </label>
+              <input name="ai_provider" type="hidden" value="gemini">
               <input name="manual_range" type="hidden">
               <input name="notes" type="hidden">
               <input name="subtitle_font" type="hidden" value="Segoe UI Semibold">

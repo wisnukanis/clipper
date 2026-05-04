@@ -19,6 +19,7 @@ export default async function handler(req, res) {
       url: clean(body.url || ""),
       range: clean(body.range || ""),
       force_reprocess: body.force_reprocess === true || body.force_reprocess === "true" ? "true" : "false",
+      ai_provider: clean(body.ai_provider || process.env.AI_PROVIDER || "gemini"),
       quality_profile: clean(body.quality_profile || "standard"),
       deepgram_enabled: "1",
       scene_mode: clean(body.scene_mode || process.env.SCENE_MODE || "podcast"),

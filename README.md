@@ -785,6 +785,9 @@ GEMINI_API_KEY_3=
 GEMINI_API_KEYS=
 GEMINI_MODEL=gemini-flash-latest
 GEMINI_TEMPERATURE=0.85
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5-nano
+OPENAI_TEMPERATURE=0.45
 CLOD_API_KEY=
 CLOD_BASE_URL=https://api.clod.io/v1
 CLOD_MODEL=DeepSeek V3
@@ -864,7 +867,15 @@ ftp
 
 #### `AI_PROVIDER`
 
-Provider AI untuk caption, hook, dan teks pendukung.
+Provider AI untuk caption dan teks thumbnail: `gemini` atau `openai`. Analisis transkrip/highlight di clipper tetap memakai Gemini.
+
+#### `OPENAI_API_KEY`
+
+API key OpenAI untuk opsi `AI_PROVIDER=openai`.
+
+#### `OPENAI_MODEL`
+
+Model OpenAI untuk caption/thumbnail. Default: `gpt-5-nano`.
 
 #### `GEMINI_API_KEY`
 
