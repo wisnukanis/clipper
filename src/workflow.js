@@ -43,9 +43,9 @@ export async function runWorkflow(options = {}) {
   });
 
   if (options.scheduled && options.publish) {
-    const dailyLimit = Math.max(1, Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY) || 3);
-    const postedToday = await publishedCountToday();
-    if (postedToday >= dailyLimit) {
+    const dailyLimit = Math.max(0, Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY) || 0);
+    const postedToday = dailyLimit > 0 ? await publishedCountToday() : 0;
+    if (dailyLimit > 0 && postedToday >= dailyLimit) {
       await appendLog("scheduled_skip", {
         reason: "daily_limit_reached",
         posted_today: postedToday,
@@ -60,16 +60,36 @@ export async function runWorkflow(options = {}) {
     }
   }
 
-  let selection = options.url
-    ? await createManualSelection(options)
-    : await selectNextVideo({ theme: options.theme || config.defaultTheme });
+  let selection = null;
+  let discoveryResult = null;
 
-  if (!selection && !options.url) {
-    await discoverAndQueueVideos({
-      theme: options.theme || config.defaultTheme,
-      targetDate: todayDate()
-    });
-    selection = await selectNextVideo({ theme: options.theme || config.defaultTheme });
+  if (options.url) {
+    selection = await createManualSelection(options);
+  } else {
+    try {
+      discoveryResult = await discoverAndQueueVideos({
+        theme: options.theme || config.defaultTheme,
+        targetDate: todayDate()
+      });
+    } catch (error) {
+      console.warn(`Auto discovery gagal, fallback ke antrean lama: ${error.message}`);
+      await appendLog("discovery_failed", { error: error.message });
+    }
+
+    const discoveredVideoIds = (discoveryResult?.added || [])
+      .map((video) => video.id)
+      .filter(Boolean);
+
+    if (discoveredVideoIds.length) {
+      selection = await selectNextVideo({
+        theme: options.theme || config.defaultTheme,
+        preferredVideoIds: discoveredVideoIds
+      });
+    }
+
+    if (!selection) {
+      selection = await selectNextVideo({ theme: options.theme || config.defaultTheme });
+    }
   }
 
   if (!selection) {

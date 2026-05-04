@@ -13,6 +13,7 @@ export async function selectNextVideo(options = {}) {
 
   const activeThemes = themes.filter((theme) => theme.status === "active");
   const requestedTheme = options.theme && options.theme !== "auto" ? options.theme : "";
+  const preferredVideoIds = new Set((options.preferredVideoIds || []).filter(Boolean));
 
   let candidates = videos
     .map(normalizeVideo)
@@ -22,6 +23,11 @@ export async function selectNextVideo(options = {}) {
 
   const todayCandidates = candidates.filter((video) => video.target_date === date);
   if (todayCandidates.length) candidates = todayCandidates;
+
+  const preferredCandidates = preferredVideoIds.size
+    ? candidates.filter((video) => preferredVideoIds.has(video.id))
+    : [];
+  if (preferredCandidates.length) candidates = preferredCandidates;
 
   candidates.sort((a, b) => {
     const priority = Number(a.priority || 100) - Number(b.priority || 100);
@@ -66,6 +72,16 @@ export async function addVideo(input) {
     subtitle_margin_v: Number(input.subtitle_margin_v || 550),
     subtitle_margin_h: Number(input.subtitle_margin_h || 180),
     force_reprocess: input.force_reprocess === true,
+    source_title: input.source_title || "",
+    channel_title: input.channel_title || "",
+    published_at_source: input.published_at_source || "",
+    discovery_source: input.discovery_source || "",
+    discovery_query: input.discovery_query || "",
+    discovery_score: Number(input.discovery_score || 0),
+    discovery_views: Number(input.discovery_views || 0),
+    discovery_likes: Number(input.discovery_likes || 0),
+    discovery_comments: Number(input.discovery_comments || 0),
+    discovery_views_per_hour: Number(input.discovery_views_per_hour || 0),
     created_at: input.created_at || now,
     updated_at: now
   });

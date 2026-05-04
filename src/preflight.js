@@ -43,6 +43,12 @@ function numberEnv(name, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function boolEnv(name, fallback = false) {
+  const value = process.env[name];
+  if (value === undefined || value === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
 async function fetchJson(url, options = {}, timeoutMs = config.apiCheckTimeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -340,6 +346,46 @@ async function checkYoutube(online, required = canPublish()) {
   }
 }
 
+async function checkYoutubeDiscovery(online) {
+  if (!boolEnv("AUTO_DISCOVER_VIDEOS", true)) {
+    return checkResult("YouTube Discovery API", true, "AUTO_DISCOVER_VIDEOS=false", false);
+  }
+
+  const key = String(
+    process.env.YOUTUBE_API_KEY ||
+    process.env.YOUTUBE_DATA_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    ""
+  ).trim();
+
+  if (!key) {
+    return checkResult(
+      "YouTube Discovery API",
+      false,
+      "YOUTUBE_API_KEY belum diisi; fallback ke yt-dlp search",
+      false
+    );
+  }
+
+  if (!online) {
+    return checkResult("YouTube Discovery API", true, "API key terkonfigurasi", false);
+  }
+
+  try {
+    const url = new URL("https://www.googleapis.com/youtube/v3/search");
+    url.searchParams.set("part", "snippet");
+    url.searchParams.set("type", "video");
+    url.searchParams.set("q", "podcast artis indonesia");
+    url.searchParams.set("maxResults", "1");
+    url.searchParams.set("regionCode", "ID");
+    url.searchParams.set("key", key);
+    await fetchJson(url);
+    return checkResult("YouTube Discovery API", true, "API key valid", false);
+  } catch (error) {
+    return checkResult("YouTube Discovery API", false, error.message, false);
+  }
+}
+
 async function checkThreads(online, required = false) {
   if (!config.threads.enabled) {
     return checkResult("Threads API", true, "THREADS_UPLOAD_ENABLED=false", false);
@@ -417,6 +463,7 @@ export async function runPreflight(options = {}) {
     await checkInstagram(socialOnline, socialPublishRequired),
     await checkFacebook(socialOnline, socialPublishRequired),
     await checkYoutube(youtubeOnline, publishRequired),
+    await checkYoutubeDiscovery(youtubeOnline),
     await checkTikTok(socialOnline, socialPublishRequired),
     await checkThreads(socialOnline, socialPublishRequired)
   ];

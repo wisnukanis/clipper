@@ -155,7 +155,7 @@ jobs:
       CLOD_TEMPERATURE: ${{ secrets.CLOD_TEMPERATURE || '0.45' }}
 
       TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
-      MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '3' }}
+      MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '0' }}
       DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '1' }}
       DEEPGRAM_API_KEYS: ${{ secrets.DEEPGRAM_API_KEYS }}
       DEEPGRAM_MODEL: ${{ secrets.DEEPGRAM_MODEL || 'nova-3' }}
@@ -171,12 +171,19 @@ jobs:
       AUTO_REFRESH_INSTAGRAM_TOKEN: ${{ secrets.AUTO_REFRESH_INSTAGRAM_TOKEN || 'true' }}
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
       AUTO_DISCOVER_VIDEOS: ${{ secrets.AUTO_DISCOVER_VIDEOS || 'true' }}
-      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'podcast artis indonesia viral|podcast artis indonesia terbaru|podcast deddy corbuzier artis terbaru|podcast raditya dika artis|podcast vindes artis terbaru' }}
-      AUTO_DISCOVER_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_MAX_RESULTS || '8' }}
-      AUTO_DISCOVER_ADD_COUNT: ${{ secrets.AUTO_DISCOVER_ADD_COUNT || '3' }}
-      AUTO_DISCOVER_MIN_DURATION_SECONDS: ${{ secrets.AUTO_DISCOVER_MIN_DURATION_SECONDS || '900' }}
+      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'podcast artis indonesia terbaru|podcast artis indonesia viral|deddy corbuzier artis terbaru|vindes artis terbaru|politik indonesia terbaru podcast|komedi indonesia podcast komika' }}
+      AUTO_DISCOVER_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_MAX_RESULTS || '10' }}
+      AUTO_DISCOVER_ADD_COUNT: ${{ secrets.AUTO_DISCOVER_ADD_COUNT || '5' }}
+      AUTO_DISCOVER_MIN_DURATION_SECONDS: ${{ secrets.AUTO_DISCOVER_MIN_DURATION_SECONDS || '600' }}
       AUTO_DISCOVER_MAX_DURATION_SECONDS: ${{ secrets.AUTO_DISCOVER_MAX_DURATION_SECONDS || '10800' }}
+      AUTO_DISCOVER_MIN_VIEWS: ${{ secrets.AUTO_DISCOVER_MIN_VIEWS || '25000' }}
+      AUTO_DISCOVER_MIN_VIEWS_PER_HOUR: ${{ secrets.AUTO_DISCOVER_MIN_VIEWS_PER_HOUR || '500' }}
+      AUTO_DISCOVER_PUBLISHED_AFTER_DAYS: ${{ secrets.AUTO_DISCOVER_PUBLISHED_AFTER_DAYS || '14' }}
+      AUTO_DISCOVER_REGION_CODE: ${{ secrets.AUTO_DISCOVER_REGION_CODE || 'ID' }}
+      AUTO_DISCOVER_RELEVANCE_LANGUAGE: ${{ secrets.AUTO_DISCOVER_RELEVANCE_LANGUAGE || 'id' }}
+      AUTO_DISCOVER_CHANNEL_IDS: ${{ secrets.AUTO_DISCOVER_CHANNEL_IDS }}
 
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY || secrets.YOUTUBE_DATA_API_KEY || secrets.GOOGLE_API_KEY }}
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
       YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
       YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
@@ -755,6 +762,11 @@ jobs:
           echo "INSTAGRAM_UPLOAD_ENABLED=$INSTAGRAM_UPLOAD_ENABLED"
           echo "INSTAGRAM_REEL_UPLOAD_METHOD=$INSTAGRAM_REEL_UPLOAD_METHOD"
           echo "YOUTUBE_UPLOAD_ENABLED=$YOUTUBE_UPLOAD_ENABLED"
+          if [ -n "$YOUTUBE_API_KEY" ]; then
+            echo "YOUTUBE_API_KEY=configured"
+          else
+            echo "YOUTUBE_API_KEY=not_set"
+          fi
           echo "TIKTOK_UPLOAD_ENABLED=$TIKTOK_UPLOAD_ENABLED"
           echo "TIKTOK_PUBLISH_MODE=$TIKTOK_PUBLISH_MODE"
           echo "TIKTOK_PRIVACY_LEVEL=$TIKTOK_PRIVACY_LEVEL"
@@ -762,6 +774,10 @@ jobs:
           echo "THREADS_USER_ID=$THREADS_USER_ID"
           echo "THREADS_API_VERSION=$THREADS_API_VERSION"
           echo "DEEPGRAM_ENABLED=$DEEPGRAM_ENABLED"
+          echo "AUTO_DISCOVER_QUERY=$AUTO_DISCOVER_QUERY"
+          echo "AUTO_DISCOVER_MIN_VIEWS=$AUTO_DISCOVER_MIN_VIEWS"
+          echo "AUTO_DISCOVER_MIN_VIEWS_PER_HOUR=$AUTO_DISCOVER_MIN_VIEWS_PER_HOUR"
+          echo "AUTO_DISCOVER_PUBLISHED_AFTER_DAYS=$AUTO_DISCOVER_PUBLISHED_AFTER_DAYS"
           if [ -n "$CLOD_API_KEY" ]; then
             echo "CLOD_API_KEY=configured"
           else
