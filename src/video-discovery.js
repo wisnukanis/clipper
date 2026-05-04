@@ -17,6 +17,19 @@ const DEFAULT_QUERIES = [
   "komedi indonesia podcast komika"
 ];
 
+const FALLBACK_QUERIES = [
+  "podcast indonesia terbaru",
+  "podcast indonesia viral",
+  "podcast artis indonesia full",
+  "podcast selebriti indonesia terbaru",
+  "deddy corbuzier terbaru",
+  "raditya dika podcast terbaru",
+  "vindes terbaru",
+  "komika indonesia podcast terbaru",
+  "politik indonesia terbaru",
+  "podcast politik indonesia"
+];
+
 const TOPIC_RE = /podcast|podhub|podkesmas|vindes|deddy|corbuzier|raditya|artis|aktor|aktris|penyanyi|komika|komedi|stand\s*up|lucu|politik|pilpres|dpr|presiden|menteri|prabowo|jokowi|anies|ganjar/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 
@@ -44,6 +57,10 @@ function listEnv(name, fallback = []) {
 function listEnvMany(names, fallback = []) {
   const values = names.flatMap((name) => listEnv(name, []));
   return values.length ? [...new Set(values)] : fallback;
+}
+
+function uniqueList(items) {
+  return [...new Set(items.map((item) => String(item || "").trim()).filter(Boolean))];
 }
 
 function videoUrl(id) {
@@ -137,6 +154,17 @@ function isViralCandidate(item, options) {
   const isFastGrowing = stats.viewsPerHour >= options.minViewsPerHour;
   const hasEnoughViews = stats.views >= options.minViews;
   if (!isFastGrowing && !hasEnoughViews) return false;
+
+  return TOPIC_RE.test(candidateText(item));
+}
+
+function isTopicCandidate(item, options) {
+  const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
+  if (!id) return false;
+
+  const duration = numberValue(item.duration);
+  if (duration && duration < options.minDuration) return false;
+  if (duration && duration > options.maxDuration) return false;
 
   return TOPIC_RE.test(candidateText(item));
 }
@@ -362,6 +390,83 @@ async function discoverWithYtDlp({ queries, knownIds, options }) {
   return [...candidates.values()];
 }
 
+async function loadRawCandidates({ queries, knownIds, options }) {
+  let rawCandidates = null;
+  try {
+    rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options });
+  } catch (error) {
+    console.warn(`YouTube API discovery dilewati: ${error.message}`);
+  }
+
+  if (!rawCandidates) {
+    rawCandidates = await discoverWithYtDlp({ queries, knownIds, options });
+  }
+
+  return rawCandidates || [];
+}
+
+function selectDiscoveredCandidates(rawCandidates, options, addCount, mode) {
+  const filter = mode === "best_available" ? isTopicCandidate : isViralCandidate;
+  return rawCandidates
+    .filter((item) => filter(item, options))
+    .map((item) => ({
+      ...item,
+      discovery_score: scoreCandidate(item),
+      discovery_stats: viralStats(item),
+      discovery_fallback_mode: mode
+    }))
+    .sort((a, b) => b.discovery_score - a.discovery_score)
+    .slice(0, addCount);
+}
+
+function fallbackPasses(baseQueries, baseOptions) {
+  const fallbackQueries = uniqueList([...baseQueries, ...FALLBACK_QUERIES]);
+  const fallbackMaxResults = numberEnv("AUTO_DISCOVER_FALLBACK_MAX_RESULTS", 25, baseOptions.maxResults, 50);
+
+  return [
+    {
+      mode: "strict",
+      queries: baseQueries,
+      options: baseOptions
+    },
+    {
+      mode: "wide_search",
+      queries: fallbackQueries,
+      options: {
+        ...baseOptions,
+        maxResults: fallbackMaxResults,
+        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 30),
+        minViews: Math.max(10000, Math.floor(baseOptions.minViews * 0.5)),
+        minViewsPerHour: Math.max(250, Math.floor(baseOptions.minViewsPerHour * 0.5))
+      }
+    },
+    {
+      mode: "relaxed_viral",
+      queries: fallbackQueries,
+      options: {
+        ...baseOptions,
+        maxResults: fallbackMaxResults,
+        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 60),
+        minDuration: Math.min(baseOptions.minDuration, 300),
+        minViews: Math.max(5000, Math.floor(baseOptions.minViews * 0.25)),
+        minViewsPerHour: Math.max(100, Math.floor(baseOptions.minViewsPerHour * 0.2))
+      }
+    },
+    {
+      mode: "best_available",
+      queries: fallbackQueries,
+      options: {
+        ...baseOptions,
+        maxResults: fallbackMaxResults,
+        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 90),
+        minDuration: Math.min(baseOptions.minDuration, 300),
+        minViews: 0,
+        minViewsPerHour: 0
+      }
+    }
+  ];
+}
+
 export async function discoverAndQueueVideos(options = {}) {
   if (!boolEnv("AUTO_DISCOVER_VIDEOS", true)) {
     return { skipped: true, reason: "AUTO_DISCOVER_VIDEOS=false", added: [] };
@@ -394,26 +499,23 @@ export async function discoverAndQueueVideos(options = {}) {
   const history = await readJson("history", []);
   const knownIds = knownVideoIds(videos, history);
 
-  let rawCandidates = null;
-  try {
-    rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options: discoveryOptions });
-  } catch (error) {
-    console.warn(`YouTube API discovery dilewati: ${error.message}`);
+  let selected = [];
+  let selectedPass = "";
+  for (const pass of fallbackPasses(queries, discoveryOptions)) {
+    console.log(`AUTO DISCOVERY pass=${pass.mode}, queries=${pass.queries.length}, maxResults=${pass.options.maxResults}, days=${pass.options.publishedAfterDays}`);
+    const rawCandidates = await loadRawCandidates({
+      queries: pass.queries,
+      knownIds,
+      options: pass.options
+    });
+    selected = selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
+    if (selected.length) {
+      selectedPass = pass.mode;
+      console.log(`AUTO DISCOVERY pass=${pass.mode} memilih ${selected.length} kandidat.`);
+      break;
+    }
+    console.log(`AUTO DISCOVERY pass=${pass.mode} kosong; lanjut fallback.`);
   }
-
-  if (!rawCandidates) {
-    rawCandidates = await discoverWithYtDlp({ queries, knownIds, options: discoveryOptions });
-  }
-
-  const selected = rawCandidates
-    .filter((item) => isViralCandidate(item, discoveryOptions))
-    .map((item) => ({
-      ...item,
-      discovery_score: scoreCandidate(item),
-      discovery_stats: viralStats(item)
-    }))
-    .sort((a, b) => b.discovery_score - a.discovery_score)
-    .slice(0, addCount);
 
   const added = [];
   for (const [index, item] of selected.entries()) {
@@ -433,6 +535,7 @@ export async function discoverAndQueueVideos(options = {}) {
       notes: [
         `Auto discovery: ${item.discovery_query || "unknown"}`,
         `source=${item.discovery_source || "unknown"}`,
+        `fallback=${item.discovery_fallback_mode || selectedPass || "strict"}`,
         `score=${item.discovery_score}`,
         item.channel ? `channel=${item.channel}` : "",
         stats.views ? `views=${stats.views}` : "",
@@ -443,6 +546,7 @@ export async function discoverAndQueueVideos(options = {}) {
       published_at_source: item.publishedAt || "",
       discovery_source: item.discovery_source || "",
       discovery_query: item.discovery_query || "",
+      discovery_fallback_mode: item.discovery_fallback_mode || selectedPass || "strict",
       discovery_score: item.discovery_score || 0,
       discovery_views: stats.views || 0,
       discovery_likes: stats.likes || 0,

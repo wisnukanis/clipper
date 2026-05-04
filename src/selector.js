@@ -77,6 +77,7 @@ export async function addVideo(input) {
     published_at_source: input.published_at_source || "",
     discovery_source: input.discovery_source || "",
     discovery_query: input.discovery_query || "",
+    discovery_fallback_mode: input.discovery_fallback_mode || "",
     discovery_score: Number(input.discovery_score || 0),
     discovery_views: Number(input.discovery_views || 0),
     discovery_likes: Number(input.discovery_likes || 0),

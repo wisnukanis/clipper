@@ -71,6 +71,12 @@ export async function runWorkflow(options = {}) {
         theme: options.theme || config.defaultTheme,
         targetDate: todayDate()
       });
+      await appendLog("discovery_result", {
+        skipped: Boolean(discoveryResult?.skipped),
+        reason: discoveryResult?.reason || "",
+        added_count: discoveryResult?.added?.length || 0,
+        added_video_ids: (discoveryResult?.added || []).map((video) => video.id)
+      });
     } catch (error) {
       console.warn(`Auto discovery gagal, fallback ke antrean lama: ${error.message}`);
       await appendLog("discovery_failed", { error: error.message });
@@ -93,8 +99,17 @@ export async function runWorkflow(options = {}) {
   }
 
   if (!selection) {
-    await appendLog("no_video_selected");
-    return { status: "no_video_selected" };
+    await appendLog("no_video_selected", {
+      discovery_added_count: discoveryResult?.added?.length || 0,
+      discovery_skipped: Boolean(discoveryResult?.skipped),
+      discovery_reason: discoveryResult?.reason || ""
+    });
+    return {
+      status: "no_video_selected",
+      discovery_added_count: discoveryResult?.added?.length || 0,
+      discovery_skipped: Boolean(discoveryResult?.skipped),
+      discovery_reason: discoveryResult?.reason || ""
+    };
   }
 
   const { video, theme, prompt } = selection;
