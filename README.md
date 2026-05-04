@@ -788,6 +788,7 @@ GEMINI_TEMPERATURE=0.85
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5-nano
 OPENAI_TEMPERATURE=0.45
+OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 CLOD_API_KEY=
 CLOD_BASE_URL=https://api.clod.io/v1
 CLOD_MODEL=DeepSeek V3
@@ -876,6 +877,10 @@ API key OpenAI untuk opsi `AI_PROVIDER=openai`.
 #### `OPENAI_MODEL`
 
 Model OpenAI untuk caption/thumbnail. Default: `gpt-5-nano`.
+
+#### `OPENAI_TRANSCRIBE_MODEL`
+
+Fallback transkripsi OpenAI jika semua key Deepgram gagal. Default: `gpt-4o-mini-transcribe`.
 
 #### `GEMINI_API_KEY`
 

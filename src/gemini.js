@@ -48,41 +48,10 @@ async function generateOpenAiText(prompt, options = {}) {
   return outputTextFromOpenAi(data);
 }
 
-async function generateClodText(prompt, options = {}) {
-  if (!config.clod.apiKey) return "";
-
-  const response = await fetch(`${config.clod.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.clod.apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: config.clod.model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: options.temperature ?? config.clod.temperature,
-      max_completion_tokens: options.maxOutputTokens || 900
-    })
-  });
-
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    throw new Error(data?.error?.message || data?.message || `CLōD request failed: ${response.status}`);
-  }
-
-  return String(data?.choices?.[0]?.message?.content || "").trim();
-}
-
 export async function generateGeminiText(prompt, options = {}) {
   const keys = config.gemini.apiKeys;
-
   let lastError = null;
+
   for (const key of keys) {
     try {
       const response = await fetch(endpoint(key), {
@@ -112,19 +81,13 @@ export async function generateGeminiText(prompt, options = {}) {
     }
   }
 
-  try {
-    const clodText = await generateClodText(prompt, options);
-    if (clodText) return clodText;
-  } catch (error) {
-    lastError = error;
-  }
-
   if (options.throwOnError && lastError) throw lastError;
   return "";
 }
 
 export async function generateAiText(prompt, options = {}) {
   const provider = String(options.provider || config.ai.provider || "gemini").toLowerCase();
+
   if (provider === "openai") {
     try {
       const text = await generateOpenAiText(prompt, options);
@@ -133,6 +96,17 @@ export async function generateAiText(prompt, options = {}) {
       if (options.throwOnError) throw error;
       console.warn(`OpenAI AI provider gagal, fallback ke Gemini: ${error.message}`);
     }
+    return generateGeminiText(prompt, options);
   }
-  return generateGeminiText(prompt, options);
+
+  const geminiText = await generateGeminiText(prompt, options);
+  if (geminiText) return geminiText;
+
+  try {
+    return await generateOpenAiText(prompt, options);
+  } catch (error) {
+    if (options.throwOnError) throw error;
+    console.warn(`Gemini AI provider gagal, fallback OpenAI juga gagal: ${error.message}`);
+    return "";
+  }
 }

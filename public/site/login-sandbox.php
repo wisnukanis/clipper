@@ -94,16 +94,23 @@ function curl_json($url, $token, $payload) {
   return $data;
 }
 
-function upload_chunks($uploadUrl, $filePath, $fileSize, $chunkSize) {
+function tiktok_chunk_info($fileSize) {
+  $defaultChunkSize = 10 * 1000 * 1000;
+  $chunkSize = $fileSize <= 64 * 1000 * 1000 ? $fileSize : $defaultChunkSize;
+  $totalChunkCount = $fileSize <= $chunkSize ? 1 : (int) floor($fileSize / $chunkSize);
+  return [$chunkSize, max(1, $totalChunkCount)];
+}
+
+function upload_chunks($uploadUrl, $filePath, $fileSize, $chunkSize, $totalChunkCount) {
   $handle = fopen($filePath, 'rb');
   if (!$handle) throw new Exception('Tidak bisa membaca file video demo.');
-  $start = 0;
   try {
-    while ($start < $fileSize) {
-      $length = min($chunkSize, $fileSize - $start);
+    for ($index = 0; $index < $totalChunkCount; $index++) {
+      $start = $index * $chunkSize;
+      $end = $index === $totalChunkCount - 1 ? $fileSize - 1 : min($start + $chunkSize, $fileSize) - 1;
+      $length = $end - $start + 1;
       fseek($handle, $start);
       $chunk = fread($handle, $length);
-      $end = $start + strlen($chunk) - 1;
       $ch = curl_init($uploadUrl);
       curl_setopt_array($ch, [
         CURLOPT_CUSTOMREQUEST => 'PUT',
@@ -123,7 +130,6 @@ function upload_chunks($uploadUrl, $filePath, $fileSize, $chunkSize) {
       if ($raw === false || $status < 200 || $status >= 300) {
         throw new Exception('TikTok upload chunk failed: ' . ($curlError ?: $raw));
       }
-      $start = $end + 1;
     }
   } finally {
     fclose($handle);
@@ -166,18 +172,18 @@ function publish_to_tiktok($token, $video) {
   $videoPath = local_video_path($video['url']);
   if ($videoPath && is_file($videoPath)) {
     $fileSize = filesize($videoPath);
-    $chunkSize = min($fileSize, 10 * 1024 * 1024);
+    [$chunkSize, $totalChunkCount] = tiktok_chunk_info($fileSize);
     $init = curl_json('https://open.tiktokapis.com/v2/post/publish/inbox/video/init/', $token, [
       'source_info' => [
         'source' => 'FILE_UPLOAD',
         'video_size' => $fileSize,
         'chunk_size' => $chunkSize,
-        'total_chunk_count' => (int) ceil($fileSize / $chunkSize),
+        'total_chunk_count' => $totalChunkCount,
       ],
     ]);
     $uploadUrl = $init['data']['upload_url'] ?? '';
     if (!$uploadUrl) throw new Exception('TikTok tidak mengembalikan upload_url.');
-    upload_chunks($uploadUrl, $videoPath, $fileSize, $chunkSize);
+    upload_chunks($uploadUrl, $videoPath, $fileSize, $chunkSize, $totalChunkCount);
     return [
       'publish_id' => $init['data']['publish_id'] ?? '',
       'source' => 'FILE_UPLOAD',

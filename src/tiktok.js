@@ -156,22 +156,23 @@ function pickPrivacyLevel(options = []) {
 }
 
 function fileUploadSourceInfo(stat) {
-  const defaultChunkSize = 10 * 1024 * 1024;
-  const chunkSize = stat.size <= defaultChunkSize ? stat.size : defaultChunkSize;
+  const defaultChunkSize = 10 * 1000 * 1000;
+  const chunkSize = stat.size <= 64 * 1000 * 1000 ? stat.size : defaultChunkSize;
+  const totalChunkCount = stat.size <= chunkSize ? 1 : Math.floor(stat.size / chunkSize);
   return {
     source: "FILE_UPLOAD",
     video_size: stat.size,
     chunk_size: chunkSize,
-    total_chunk_count: Math.ceil(stat.size / chunkSize)
+    total_chunk_count: totalChunkCount
   };
 }
 
 async function uploadVideoFile(uploadUrl, videoPath, stat) {
-  const chunkSize = stat.size <= 10 * 1024 * 1024 ? stat.size : 10 * 1024 * 1024;
-  let start = 0;
+  const { chunk_size: chunkSize, total_chunk_count: totalChunkCount } = fileUploadSourceInfo(stat);
 
-  while (start < stat.size) {
-    const end = Math.min(start + chunkSize, stat.size) - 1;
+  for (let index = 0; index < totalChunkCount; index += 1) {
+    const start = index * chunkSize;
+    const end = index === totalChunkCount - 1 ? stat.size - 1 : Math.min(start + chunkSize, stat.size) - 1;
     await axios.put(uploadUrl, fs.createReadStream(videoPath, { start, end }), {
       headers: {
         "Content-Type": "video/mp4",
@@ -184,7 +185,6 @@ async function uploadVideoFile(uploadUrl, videoPath, stat) {
     }).catch((error) => {
       throw wrapTikTokError(error, "TikTok file upload failed");
     });
-    start = end + 1;
   }
 }
 

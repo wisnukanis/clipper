@@ -110,7 +110,7 @@ async function checkDeepgram(online) {
     return checkResult(
       "Deepgram",
       false,
-      "DEEPGRAM_ENABLED harus 1; transkripsi hanya memakai Deepgram",
+      "DEEPGRAM_ENABLED harus 1; Deepgram tetap primary untuk transkripsi",
       true
     );
   }
@@ -193,35 +193,6 @@ async function checkGemini(online, required = true) {
   return checkResult("Gemini", true, detail, required);
 }
 
-async function checkClod(online, required = false) {
-  if (!config.clod.apiKey) {
-    return checkResult("CLOD API", false, "CLOD_API_KEY belum diisi", required);
-  }
-
-  if (!online) {
-    return checkResult("CLOD API", true, `key terkonfigurasi, model ${config.clod.model}`, required);
-  }
-
-  try {
-    await fetchJson(`${config.clod.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.clod.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: config.clod.model,
-        messages: [{ role: "user", content: "Balas OK saja." }],
-        temperature: 0,
-        max_completion_tokens: 4
-      })
-    });
-    return checkResult("CLOD API", true, `model ${config.clod.model}`, required);
-  } catch (error) {
-    return checkResult("CLOD API", false, error.message, required);
-  }
-}
-
 async function checkOpenAi(online, required = false) {
   if (!config.openai.apiKey) {
     return checkResult("OpenAI API", false, "OPENAI_API_KEY belum diisi", required);
@@ -251,11 +222,9 @@ async function checkOpenAi(online, required = false) {
 }
 
 async function aiChecks(online) {
-  const hasClod = Boolean(config.clod.apiKey);
-  const gemini = await checkGemini(online, !hasClod);
-  const clod = await checkClod(online, !gemini.ok);
+  const gemini = await checkGemini(online, true);
   const openai = await checkOpenAi(online, config.ai.provider === "openai");
-  return [gemini, clod, openai];
+  return [gemini, openai];
 }
 
 async function checkFtp(online) {

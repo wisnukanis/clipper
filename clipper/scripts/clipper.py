@@ -88,6 +88,8 @@ def cfg():
     return {
         "gemini_keys": parse_keys(os.environ.get("GEMINI_API_KEYS") or os.environ.get("GEMINI_API_KEY")),
         "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
+        "ai_provider": os.environ.get("AI_PROVIDER", "gemini").strip().lower(),
+        "openai_model": os.environ.get("OPENAI_MODEL", "gpt-5-nano"),
         "ai_clip_selection": parse_int(os.environ.get("AI_CLIP_SELECTION_ENABLED"), 1),
         "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 5),
         "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 4000),
@@ -151,6 +153,9 @@ def cfg():
         "deepgram_model": os.environ.get("DEEPGRAM_MODEL", "nova-3"),
         "deepgram_language": os.environ.get("DEEPGRAM_LANGUAGE") or os.environ.get("VIDEO_LANGUAGE", "id"),
         "deepgram_timeout": parse_int(os.environ.get("DEEPGRAM_TIMEOUT_SECONDS"), 900),
+        "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
+        "openai_transcribe_model": os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe"),
+        "openai_transcribe_timeout": parse_int(os.environ.get("OPENAI_TRANSCRIBE_TIMEOUT_SECONDS"), 900),
         "offline_model": os.environ.get("OFFLINE_TRANSCRIBE_MODEL", "small"),
         "offline_device": os.environ.get("OFFLINE_TRANSCRIBE_DEVICE", "cpu"),
         "offline_compute": os.environ.get("OFFLINE_TRANSCRIBE_COMPUTE_TYPE", "int8"),
@@ -759,6 +764,117 @@ def normalize_deepgram_words(words):
     return dedupe_segments(result)
 
 
+def audio_duration_seconds(audio_path):
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(audio_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return max(0.0, float((result.stdout or "0").strip() or 0))
+    except Exception:
+        return 0.0
+
+
+def multipart_form(fields, files):
+    boundary = f"----clipper-openai-{hashlib.sha1(os.urandom(16)).hexdigest()}"
+    body = bytearray()
+    for name, value in fields.items():
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        body.extend(str(value).encode("utf-8"))
+        body.extend(b"\r\n")
+    for name, file_path in files.items():
+        file_path = Path(file_path)
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(
+            (
+                f'Content-Disposition: form-data; name="{name}"; filename="{file_path.name}"\r\n'
+                f"Content-Type: {audio_content_type(file_path)}\r\n\r\n"
+            ).encode("utf-8")
+        )
+        body.extend(file_path.read_bytes())
+        body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    return bytes(body), boundary
+
+
+def normalize_openai_segments(data, audio_path):
+    result = []
+    for item in data.get("segments") or []:
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        try:
+            start = float(item.get("start") or 0)
+            end = float(item.get("end") or start)
+        except (TypeError, ValueError):
+            continue
+        if end <= start:
+            end = start + 0.75
+        result.append({"start": start, "end": end, "text": text})
+    if result:
+        return dedupe_segments(result)
+
+    text = str(data.get("text") or "").strip()
+    if text:
+        duration = audio_duration_seconds(audio_path)
+        return [{"start": 0.0, "end": max(duration, 1.0), "text": text}]
+    return []
+
+
+def transcribe_openai(audio_path, job_id, config):
+    api_key = str(config.get("openai_api_key") or "").strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY belum diisi.")
+
+    model = str(config.get("openai_transcribe_model") or "gpt-4o-mini-transcribe").strip()
+    log_step(f"Fallback transkripsi dengan OpenAI {model}.")
+    fields = {
+        "model": model,
+        "language": config.get("deepgram_language") or config.get("language", "id"),
+        "response_format": "verbose_json",
+        "timestamp_granularities[]": "segment",
+    }
+    body, boundary = multipart_form(fields, {"file": audio_path})
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/audio/transcriptions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Content-Length": str(len(body)),
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=int(config.get("openai_transcribe_timeout", 900))) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"OpenAI transcription HTTP {exc.code}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"OpenAI transcription connection error: {exc}") from exc
+
+    transcript_path = ROOT / "temp" / f"{job_id}-openai-transcript.json"
+    transcript_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    result = normalize_openai_segments(data, audio_path)
+    if not result:
+        raise RuntimeError("OpenAI transcription berhasil merespons, tetapi segment transkrip kosong.")
+    log_info(f"OpenAI menghasilkan {len(result)} segment transkrip.")
+    return result
+
+
 def transcribe_audio(audio_path, job_id, config):
     provider = str(config.get("transcribe_provider", "offline")).lower()
 
@@ -772,11 +888,19 @@ def transcribe_audio(audio_path, job_id, config):
                 return transcribe_deepgram(audio_path, job_id, config)
             except Exception as exc:
                 log_warn(f"Deepgram gagal total: {exc}")
-                if provider == "deepgram":
-                    log_warn("Fallback tetap memakai faster-whisper agar proses lokal tidak putus.")
-                log_step("Fallback transkripsi offline dengan faster-whisper.")
+                try:
+                    return transcribe_openai(audio_path, job_id, config)
+                except Exception as openai_exc:
+                    log_warn(f"OpenAI transcription fallback gagal: {openai_exc}")
+                    if provider == "deepgram":
+                        log_warn("Fallback tetap memakai faster-whisper agar proses lokal tidak putus.")
+                    log_step("Fallback transkripsi offline dengan faster-whisper.")
         else:
-            log_warn("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi. Pakai faster-whisper offline.")
+            log_warn("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi.")
+            try:
+                return transcribe_openai(audio_path, job_id, config)
+            except Exception as openai_exc:
+                log_warn(f"OpenAI transcription fallback gagal: {openai_exc}")
     elif provider == "deepgram":
         log_warn("TRANSCRIBE_PROVIDER=deepgram tetapi DEEPGRAM_ENABLED=0. Pakai faster-whisper offline.")
     else:
@@ -915,6 +1039,85 @@ def call_gemini(prompt, api_key, model):
 
     parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
     return "".join(part.get("text", "") for part in parts)
+
+
+def openai_output_text(data):
+    if data.get("output_text"):
+        return str(data.get("output_text")).strip()
+    texts = []
+    for item in data.get("output") or []:
+        for part in item.get("content") or []:
+            if part.get("text"):
+                texts.append(str(part.get("text")))
+    return "".join(texts).strip()
+
+
+def call_openai_text(prompt, config):
+    api_key = str(config.get("openai_api_key") or "").strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY belum diisi.")
+
+    model = str(config.get("openai_model") or "gpt-5-nano").strip()
+    body = {
+        "model": model,
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        "max_output_tokens": 1600,
+    }
+    payload = json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"OpenAI HTTP {exc.code}: {detail}") from exc
+    return openai_output_text(data)
+
+
+def call_json_with_ai_fallback(prompt, config, label):
+    provider = str(config.get("ai_provider") or "gemini").lower()
+    last_error = None
+
+    def try_gemini():
+        nonlocal last_error
+        for index, key in enumerate(config.get("gemini_keys") or []):
+            try:
+                log_info(f"{label} memakai Gemini key {index + 1}/{len(config.get('gemini_keys') or [])}")
+                return extract_json(call_gemini(prompt, key, config["gemini_model"]))
+            except Exception as exc:
+                last_error = exc
+                log_warn(f"Gemini gagal: {exc}")
+        return None
+
+    def try_openai():
+        nonlocal last_error
+        if not str(config.get("openai_api_key") or "").strip():
+            return None
+        try:
+            log_info(f"{label} fallback OpenAI {config.get('openai_model', 'gpt-5-nano')}")
+            return extract_json(call_openai_text(prompt, config))
+        except Exception as exc:
+            last_error = exc
+            log_warn(f"OpenAI gagal: {exc}")
+            return None
+
+    result = try_openai() if provider == "openai" else try_gemini()
+    if result is not None:
+        return result
+
+    result = try_gemini() if provider == "openai" else try_openai()
+    if result is not None:
+        return result
+
+    raise RuntimeError(str(last_error or "Semua AI provider gagal."))
 
 
 def segment_text_window(segments, start, end, max_chars=180):
@@ -1116,13 +1319,13 @@ def find_important_clips(segments, config):
         log_warn("AI_CLIP_SELECTION_ENABLED=0. Pakai kandidat lokal offline.")
         return validate_clips(local_clips, segments, config)
 
-    if not config["gemini_keys"]:
-        log_warn("GEMINI_API_KEYS kosong. Pakai fallback analisis lokal offline.")
+    if not config["gemini_keys"] and not config.get("openai_api_key"):
+        log_warn("GEMINI_API_KEYS dan OPENAI_API_KEY kosong. Pakai fallback analisis lokal offline.")
         return validate_clips(local_clips, segments, config)
 
     log_info(
         f"Candidate clip lokal: {len(candidates)} kandidat. "
-        f"Gemini hanya menerima potongan kandidat <= {config.get('ai_candidate_max_chars', 4000)} karakter."
+        f"AI hanya menerima potongan kandidat <= {config.get('ai_candidate_max_chars', 4000)} karakter."
     )
 
     prompt = f"""
@@ -1160,17 +1363,11 @@ Candidate clips:
 {json.dumps(candidates, ensure_ascii=False, indent=2)}
 """
 
-    last_error = None
-    for index, key in enumerate(config["gemini_keys"]):
-        try:
-            log_info(f"Analisis bagian penting memakai Gemini key {index + 1}/{len(config['gemini_keys'])}")
-            clips = extract_json(call_gemini(prompt, key, config["gemini_model"]))
-            return validate_clips(clips, segments, config)
-        except Exception as exc:
-            last_error = exc
-            log_warn(f"Gemini key gagal: {exc}")
-
-    log_warn(f"Semua Gemini key gagal. Pakai fallback analisis lokal offline: {last_error}")
+    try:
+        clips = call_json_with_ai_fallback(prompt, config, "Analisis bagian penting")
+        return validate_clips(clips, segments, config)
+    except Exception as exc:
+        log_warn(f"Semua AI provider gagal. Pakai fallback analisis lokal offline: {exc}")
     return validate_clips(local_clips, segments, config)
 
 
@@ -1222,8 +1419,8 @@ def review_clip_transcript_segments(segments, clip, config, job_id, index):
     if int(config.get("transcript_review", 1)) != 1:
         return segments, None
 
-    if not config.get("gemini_keys"):
-        log_warn("Transcript review dilewati: GEMINI_API_KEYS kosong.")
+    if not config.get("gemini_keys") and not config.get("openai_api_key"):
+        log_warn("Transcript review dilewati: GEMINI_API_KEYS dan OPENAI_API_KEY kosong.")
         return segments, None
 
     clip_start = float(clip["start"])
@@ -1241,7 +1438,7 @@ def review_clip_transcript_segments(segments, clip, config, job_id, index):
     batch_size = max(20, int(config.get("transcript_review_batch", 80)))
     corrections = []
 
-    log_step(f"Gemini review subtitle clip {index + 1}.")
+    log_step(f"AI review subtitle clip {index + 1}.")
 
     for offset in range(0, len(target_indexes), batch_size):
         batch_indexes = target_indexes[offset : offset + batch_size]
@@ -1325,18 +1522,11 @@ Segmen subtitle:
 
 
 def call_gemini_for_transcript_review(prompt, config):
-    last_error = None
-
-    for index, key in enumerate(config["gemini_keys"]):
-        try:
-            log_info(f"Review subtitle memakai Gemini key {index + 1}/{len(config['gemini_keys'])}")
-            data = extract_json(call_gemini(prompt, key, config["gemini_model"]))
-            return data if isinstance(data, list) else []
-        except Exception as exc:
-            last_error = exc
-            log_warn(f"Gemini transcript review gagal: {exc}")
-
-    log_warn(f"Transcript review dilewati: {last_error}")
+    try:
+        data = call_json_with_ai_fallback(prompt, config, "Review subtitle")
+        return data if isinstance(data, list) else []
+    except Exception as exc:
+        log_warn(f"Transcript review dilewati: {exc}")
     return []
 
 

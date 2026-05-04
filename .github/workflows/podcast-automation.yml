@@ -157,11 +157,7 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-5-nano' }}
       OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE || '0.45' }}
-      CLOD_API_KEY: ${{ secrets.CLOD_API_KEY }}
-      CLOD_BASE_URL: ${{ secrets.CLOD_BASE_URL || 'https://api.clod.io/v1' }}
-      CLOD_MODEL: ${{ secrets.CLOD_MODEL || 'DeepSeek V3' }}
-      CLOD_TEMPERATURE: ${{ secrets.CLOD_TEMPERATURE || '0.45' }}
-
+      OPENAI_TRANSCRIBE_MODEL: ${{ secrets.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe' }}
       TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
       MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '0' }}
       DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '1' }}
@@ -340,8 +336,8 @@ jobs:
             echo "::warning::THREADS_ACCESS_TOKEN belum diisi. Threads akan dilewati; workflow tetap fokus YouTube."
           fi
 
-          if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ] && [ -z "$CLOD_API_KEY" ]; then
-            echo "::error::Minimal satu Gemini key atau CLOD_API_KEY harus diisi"
+          if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ]; then
+            echo "::error::Minimal satu Gemini key harus diisi untuk analisis transkrip"
             missing=1
           fi
           if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
@@ -749,8 +745,8 @@ jobs:
             echo "::warning::THREADS_ACCESS_TOKEN belum diisi. Threads akan dilewati; workflow tetap fokus YouTube."
           fi
 
-          if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ] && [ -z "$CLOD_API_KEY" ]; then
-            echo "::error::Minimal satu Gemini key atau CLOD_API_KEY harus diisi"
+          if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ]; then
+            echo "::error::Minimal satu Gemini key harus diisi untuk analisis transkrip"
             missing=1
           fi
           if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
@@ -759,7 +755,7 @@ jobs:
           fi
 
           if [ "$DEEPGRAM_ENABLED" != "1" ]; then
-            echo "::error::DEEPGRAM_ENABLED harus 1. Workflow ini hanya memakai Deepgram untuk transkripsi."
+            echo "::error::DEEPGRAM_ENABLED harus 1. Deepgram tetap primary untuk transkripsi."
             missing=1
           fi
 
@@ -793,6 +789,7 @@ jobs:
           echo "DEEPGRAM_ENABLED=$DEEPGRAM_ENABLED"
           echo "AI_PROVIDER=$AI_PROVIDER"
           echo "OPENAI_MODEL=$OPENAI_MODEL"
+          echo "OPENAI_TRANSCRIBE_MODEL=$OPENAI_TRANSCRIBE_MODEL"
           if [ -n "$OPENAI_API_KEY" ]; then
             echo "OPENAI_API_KEY=configured"
           else
@@ -803,12 +800,6 @@ jobs:
           echo "AUTO_DISCOVER_MIN_VIEWS_PER_HOUR=$AUTO_DISCOVER_MIN_VIEWS_PER_HOUR"
           echo "AUTO_DISCOVER_PUBLISHED_AFTER_DAYS=$AUTO_DISCOVER_PUBLISHED_AFTER_DAYS"
           echo "AUTO_DISCOVER_FALLBACK_MAX_RESULTS=$AUTO_DISCOVER_FALLBACK_MAX_RESULTS"
-          if [ -n "$CLOD_API_KEY" ]; then
-            echo "CLOD_API_KEY=configured"
-          else
-            echo "CLOD_API_KEY=not_set"
-          fi
-          echo "CLOD_MODEL=$CLOD_MODEL"
           echo "VIDEO_QUALITY_PROFILE=$VIDEO_QUALITY_PROFILE"
           echo "SUBTITLE_FONT_FAMILY=$SUBTITLE_FONT_FAMILY"
           echo "SUBTITLE_FONT_SIZE=$SUBTITLE_FONT_SIZE"
