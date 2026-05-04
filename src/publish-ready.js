@@ -5,7 +5,8 @@ import { appendHistory } from "./history.js";
 import { publishReel } from "./instagram.js";
 import { appendLog } from "./logger.js";
 import { patchItem, readJson, writeJson } from "./storage.js";
-import { buildYoutubeMetadata, publishToYoutube, setYoutubeThumbnail } from "./youtube-publisher.js";
+import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
+import { buildYoutubeMetadata, isYoutubeQuotaError, publishToYoutube, setYoutubeThumbnail } from "./youtube-publisher.js";
 import { publishToTikTok } from "./tiktok.js";
 import { publishToThreads } from "./threads.js";
 
@@ -17,7 +18,17 @@ function argValue(name, fallback = "") {
 
 function latestReadyJob(jobs) {
   return jobs
-    .filter((job) => job.status === "ready_to_publish" || job.publish_status === "ready_to_publish")
+    .filter((job) => {
+      const needsPlatform = [
+        config.youtube.enabled && !job.youtube_url && !job.youtube_video_id,
+        config.instagram.enabled && !job.instagram_media_id,
+        config.tiktok.enabled && !job.tiktok_publish_id,
+        config.threads.enabled && !job.threads_media_id
+      ].some(Boolean);
+      if (!needsPlatform) return false;
+      return [job.status, job.publish_status, job.youtube_status]
+        .some((status) => ["ready_to_publish", "publish_failed", "failed_publish", "youtube_quota_exceeded", "quota_exceeded"].includes(status));
+    })
     .sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")))[0] || null;
 }
 
@@ -56,10 +67,40 @@ async function resolveThumbnailPath(job) {
   }
 }
 
+async function resolveVideoPath(job) {
+  const videoPath = job.final_video_path || "";
+  if (videoPath) {
+    try {
+      const stat = await fs.stat(videoPath);
+      if (stat.size) return videoPath;
+    } catch {
+      // GitHub runner baru biasanya tidak punya file lokal; ambil lagi dari FTP public URL.
+    }
+  }
+
+  if (!job.public_video_url) return videoPath;
+
+  await fs.mkdir(path.join(config.generatedDir, "ready-videos"), { recursive: true });
+  const target = path.join(config.generatedDir, "ready-videos", `${job.job_id}.mp4`);
+  const response = await fetch(job.public_video_url);
+  if (!response.ok) {
+    throw new Error(`Gagal download ulang video ready dari FTP: HTTP ${response.status}`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) throw new Error("Video ready dari FTP kosong.");
+  await fs.writeFile(target, buffer);
+  return target;
+}
+
 const jobId = argValue("--job", "");
 const forceYoutube = process.argv.includes("--force-youtube");
 const onlyYoutubeThumbnail = process.argv.includes("--only-youtube-thumbnail");
 const forceThumbnail = onlyYoutubeThumbnail || process.argv.includes("--force-thumbnail") || process.argv.includes("--set-youtube-thumbnail");
+
+await downloadStateFromRemote().catch((error) => {
+  console.warn(`State remote dilewati: ${error.message}`);
+});
+
 const jobs = await readJson("jobs", []);
 const job = jobId ? jobs.find((item) => item.job_id === jobId) : latestReadyJob(jobs);
 
@@ -73,8 +114,8 @@ if (!config.youtube.enabled && !config.instagram.enabled && !config.tiktok.enabl
   process.exit(1);
 }
 
-if (!job.final_video_path) {
-  console.error(`Job ${job.job_id} tidak punya final_video_path.`);
+if (!job.final_video_path && !job.public_video_url) {
+  console.error(`Job ${job.job_id} tidak punya final_video_path/public_video_url.`);
   process.exit(1);
 }
 
@@ -124,10 +165,11 @@ let threads = job.threads_media_id ? {
 
 try {
   const thumbnailPath = await resolveThumbnailPath(job);
+  const videoPath = await resolveVideoPath(job);
   const output = {
     title: job.source_title,
     hook: job.source_title,
-    finalAbsPath: job.final_video_path,
+    finalAbsPath: videoPath,
     caption: job.caption || "",
     clipTranscript: job.clipTranscript || "",
     selectedAngle: job.selectedAngle || ""
@@ -140,7 +182,7 @@ try {
       caption: job.caption || ""
     });
     youtube = await publishToYoutube({
-      videoPath: job.final_video_path,
+      videoPath,
       thumbnailPath,
       ...metadata
     });
@@ -170,6 +212,7 @@ try {
       youtube_video_id: youtube?.videoId || "",
       error: youtube?.thumbnailError || ""
     });
+    await uploadStateToRemote().catch(() => {});
     console.log(JSON.stringify({
       status: thumbnailOk ? "thumbnail_set" : "thumbnail_failed",
       job_id: job.job_id,
@@ -190,7 +233,7 @@ try {
     if (!job.public_video_url) throw new Error("public_video_url kosong, TikTok butuh URL video publik dari FTP.");
     tiktok = await publishToTikTok({
       videoUrl: job.public_video_url,
-      videoPath: job.final_video_path,
+      videoPath,
       caption: job.caption || ""
     });
   }
@@ -264,6 +307,7 @@ try {
     youtube_url: youtube?.url || "",
     threads_media_id: threads?.mediaId || ""
   });
+  await uploadStateToRemote().catch(() => {});
   console.log(JSON.stringify({
     status: "published",
     job_id: job.job_id,
@@ -276,6 +320,27 @@ try {
   const hasYoutube = Boolean(youtube?.url || youtube?.videoId || job.youtube_url || job.youtube_video_id);
   const hasTikTok = Boolean(tiktok?.publishId || job.tiktok_publish_id);
   const hasThreads = Boolean(threads?.mediaId || job.threads_media_id);
+  if (isYoutubeQuotaError(error)) {
+    await patchItem("jobs", job.job_id, {
+      status: "ready_to_publish",
+      publish_status: "youtube_quota_exceeded",
+      youtube_status: hasYoutube ? "published" : "quota_exceeded",
+      youtube_video_id: youtube?.videoId || job.youtube_video_id || "",
+      youtube_url: youtube?.url || job.youtube_url || "",
+      error_message: "Quota YouTube habis; siap retry tanpa render ulang."
+    });
+    await appendLog("youtube_quota_exceeded", {
+      job_id: job.job_id,
+      error: error.message
+    });
+    await uploadStateToRemote().catch(() => {});
+    console.log(JSON.stringify({
+      status: "youtube_quota_exceeded",
+      job_id: job.job_id,
+      error: error.message
+    }, null, 2));
+    process.exit(0);
+  }
   await patchItem("jobs", job.job_id, {
     status: "failed_publish",
     publish_status: "failed_publish",
@@ -294,5 +359,6 @@ try {
     job_id: job.job_id,
     error: error.message
   });
+  await uploadStateToRemote().catch(() => {});
   throw error;
 }

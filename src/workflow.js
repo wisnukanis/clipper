@@ -12,7 +12,7 @@ import { fileExists, uploadHistoryFile, uploadJobFiles, validatePublicUrl } from
 import { publishReel } from "./instagram.js";
 import { prepareInstagramVideo } from "./instagram-video.js";
 import { publishToFacebook } from "./facebook.js";
-import { buildYoutubeMetadata, publishToYoutube } from "./youtube-publisher.js";
+import { buildYoutubeMetadata, isYoutubeQuotaError, publishToYoutube } from "./youtube-publisher.js";
 import { publishToTikTok } from "./tiktok.js";
 import { publishToThreads } from "./threads.js";
 import { todayDate } from "./job-id.js";
@@ -360,9 +360,10 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     });
     const youtubePrimary = config.youtube.enabled;
     const primaryPublished = youtubePrimary ? Boolean(platformResults.youtube) : platformResults.hasAnySuccess;
+    const youtubeQuotaExceeded = Boolean(platformResults.quotaExceeded?.youtube);
     const publishStatus = primaryPublished
       ? platformResults.hasErrors ? "published_with_warnings" : "published"
-      : "publish_failed";
+      : youtubeQuotaExceeded ? "youtube_quota_exceeded" : "publish_failed";
     const now = new Date().toISOString();
 
     await updateJob(job.job_id, {
@@ -384,7 +385,7 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
       threads_media_id: platformResults.threads?.mediaId || "",
       threads_url: platformResults.threads?.url || "",
       threads_error: platformResults.errors.threads || "",
-      youtube_status: platformResults.youtube ? "published" : config.youtube.enabled ? "failed" : "disabled",
+      youtube_status: platformResults.youtube ? "published" : config.youtube.enabled ? youtubeQuotaExceeded ? "quota_exceeded" : "failed" : "disabled",
       youtube_video_id: platformResults.youtube?.videoId || "",
       youtube_url: platformResults.youtube?.url || "",
       youtube_error: platformResults.errors.youtube || "",
@@ -401,7 +402,7 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
       output,
       upload,
       platformResults,
-      status: primaryPublished ? "published" : "publish_failed",
+      status: primaryPublished ? "published" : publishStatus,
       clipIndex,
       clipTotal: total
     });
@@ -456,7 +457,10 @@ function summarizeClipResult(result) {
     instagram_media_id: result.platformResults?.instagram?.mediaId || "",
     facebook_video_id: result.platformResults?.facebook?.videoId || "",
     tiktok_publish_id: result.platformResults?.tiktok?.publishId || "",
-    threads_media_id: result.platformResults?.threads?.mediaId || ""
+    threads_media_id: result.platformResults?.threads?.mediaId || "",
+    final_video_path: result.output?.finalAbsPath || "",
+    caption: result.caption || "",
+    youtube_error: result.platformResults?.errors?.youtube || ""
   };
 }
 
@@ -465,6 +469,7 @@ function finalStatusFromClipResults(clipResults, publishEnabled) {
   const failedClips = clipResults.filter((item) => !item.ok).length;
   const publishedClips = clipResults.filter((item) => item.primaryPublished).length;
   const hasPlatformErrors = clipResults.some((item) => item.platformResults?.hasErrors);
+  const hasYoutubeQuotaExceeded = clipResults.some((item) => item.platformResults?.quotaExceeded?.youtube);
   const total = clipResults.length;
 
   if (!publishEnabled) {
@@ -508,13 +513,15 @@ function finalStatusFromClipResults(clipResults, publishEnabled) {
 
   return {
     status: "ready_to_publish",
-    publishStatus: "publish_failed",
+    publishStatus: hasYoutubeQuotaExceeded ? "youtube_quota_exceeded" : "publish_failed",
     videoStatus: "ready_to_publish",
-    event: "publish_failed",
+    event: hasYoutubeQuotaExceeded ? "youtube_quota_exceeded" : "publish_failed",
     successfulClips,
     failedClips,
     publishedClips,
-    errorMessage: "Publish platform gagal; siap retry."
+    errorMessage: hasYoutubeQuotaExceeded
+      ? "Quota YouTube habis; clip sudah siap retry tanpa render ulang."
+      : "Publish platform gagal; siap retry."
   };
 }
 
@@ -530,6 +537,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
     youtube: null,
     threads: null,
     errors: {},
+    quotaExceeded: {},
     hasAnySuccess: false,
     hasErrors: false
   };
@@ -611,10 +619,14 @@ async function publishPlatform(name, platformResults, jobId, callback) {
   } catch (error) {
     platformResults.hasErrors = true;
     platformResults.errors[name] = error.message;
+    if (name === "youtube" && isYoutubeQuotaError(error)) {
+      platformResults.quotaExceeded.youtube = true;
+    }
     await appendLog("platform_publish_failed", {
       job_id: jobId,
       platform: name,
-      error: error.message
+      error: error.message,
+      quota_exceeded: name === "youtube" && isYoutubeQuotaError(error)
     });
     console.warn(`${name} publish gagal, workflow lanjut: ${error.message}`);
     return null;

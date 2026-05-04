@@ -456,11 +456,32 @@ function normalizePrivacyStatus(value) {
   return ["private", "unlisted", "public"].includes(status) ? status : "private";
 }
 
+export function isYoutubeQuotaError(error) {
+  const text = [
+    error?.message,
+    error?.reason,
+    error?.code,
+    error?.response?.data?.error?.message,
+    error?.response?.data?.error?.status,
+    ...(error?.response?.data?.error?.errors || []).map((item) => item.reason || item.message)
+  ].filter(Boolean).join(" ");
+  return /quota|quotaExceeded|dailyLimitExceeded|exceeded your/i.test(text);
+}
+
 function wrapGoogleError(error, prefix) {
   const detail = error.response?.data?.error;
+  const reason = detail?.errors?.[0]?.reason || detail?.status || "";
+  const status = error.response?.status || 0;
+  let message = error.message;
   if (detail) {
-    const message = typeof detail === "string" ? detail : detail.message || JSON.stringify(detail);
-    return new Error(`${prefix}: ${message}`);
+    message = typeof detail === "string" ? detail : detail.message || JSON.stringify(detail);
   }
-  return new Error(`${prefix}: ${error.message}`);
+  const wrapped = new Error(`${prefix}: ${message}`);
+  wrapped.reason = reason;
+  wrapped.status = status;
+  if (isYoutubeQuotaError(wrapped) || isYoutubeQuotaError(error) || isYoutubeQuotaError({ message, reason })) {
+    wrapped.code = "YOUTUBE_QUOTA_EXCEEDED";
+    wrapped.quotaExceeded = true;
+  }
+  return wrapped;
 }

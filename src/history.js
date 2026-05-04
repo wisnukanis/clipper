@@ -16,7 +16,7 @@ export async function hasProcessedVideo(video) {
   const targetKeys = new Set(videoKeys(video));
   if (!targetKeys.size) return false;
   return history.some((entry) => {
-    if (!["published", "ready_to_publish", "clipper_done"].includes(entry.status)) return false;
+    if (!["published", "ready_to_publish", "clipper_done", "youtube_quota_exceeded"].includes(entry.status)) return false;
     return videoKeys(entry).some((key) => targetKeys.has(key));
   });
 }

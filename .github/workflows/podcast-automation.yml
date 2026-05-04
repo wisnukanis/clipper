@@ -55,6 +55,10 @@ on:
         description: "Caption/thumbnail AI provider: gemini or openai"
         required: false
         default: "gemini"
+      retry_ready_only:
+        description: "Only retry ready YouTube upload without rendering: true/false"
+        required: false
+        default: "false"
 
   schedule:
     # GitHub schedule uses UTC.
@@ -870,7 +874,14 @@ jobs:
           URL: ${{ github.event.inputs.url || '' }}
           RANGE: ${{ github.event.inputs.range || '' }}
           FORCE_REPROCESS: ${{ github.event.inputs.force_reprocess || 'false' }}
+          RETRY_READY_ONLY: ${{ github.event.inputs.retry_ready_only || 'false' }}
         run: |
+          if [ "$RETRY_READY_ONLY" = "true" ] || [ "$RETRY_READY_ONLY" = "1" ]; then
+            echo "Retrying latest ready YouTube upload only."
+            node src/publish-ready.js --force-youtube
+            exit 0
+          fi
+
           args=(--publish --theme "$THEME")
 
           # Pakai --scheduled hanya saat trigger dari cron schedule.
