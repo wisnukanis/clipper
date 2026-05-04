@@ -28,9 +28,6 @@ let videoLimit = ROW_LIMIT_DEFAULT;
 let jobLimit = ROW_LIMIT_DEFAULT;
 let cachedVideos = [];
 let cachedJobs = [];
-const initialParams = new URLSearchParams(window.location.search);
-let pendingTikTokCode = initialParams.get("tiktok_code") || "";
-let tiktokExchangeAttempted = false;
 
 if (dashboardPin) {
   window.sessionStorage.setItem("dashboardPin", dashboardPin);
@@ -70,12 +67,6 @@ const els = {
   authPin: document.querySelector("#authPin"),
   authError: document.querySelector("#authError"),
   logoutBtn: document.querySelector("#logoutBtn")
-  ,
-  tiktokStatusBadge: document.querySelector("#tiktokStatusBadge"),
-  tiktokDemoText: document.querySelector("#tiktokDemoText"),
-  tiktokDemoLog: document.querySelector("#tiktokDemoLog"),
-  connectTikTokBtn: document.querySelector("#connectTikTokBtn"),
-  publishTikTokBtn: document.querySelector("#publishTikTokBtn")
 };
 
 class ApiError extends Error {
@@ -186,26 +177,8 @@ async function refresh() {
   renderConsole(state.activeRun);
   renderVideos(state.videos || []);
   renderJobs(state.jobs || []);
-  await maybeExchangeTikTokCode();
-  await refreshTikTokDemoStatus();
 
   lastRunStatus = state.activeRun?.status === "running" ? "running" : "idle";
-}
-
-async function maybeExchangeTikTokCode() {
-  if (!pendingTikTokCode || tiktokExchangeAttempted) return;
-  tiktokExchangeAttempted = true;
-  setTikTokLog("Menyelesaikan koneksi TikTok Sandbox...");
-  const result = await api("/api/tiktok/exchange", {
-    method: "POST",
-    body: JSON.stringify({ code: pendingTikTokCode })
-  });
-  setTikTokLog(`TikTok connected. Scope: ${result.scope || "-"}`);
-  pendingTikTokCode = "";
-  const cleanUrl = new URL(window.location.href);
-  cleanUrl.searchParams.delete("tiktok_code");
-  cleanUrl.searchParams.delete("tiktok_state");
-  window.history.replaceState({}, "", cleanUrl);
 }
 
 async function refreshTikTokDemoStatus() {
@@ -659,37 +632,6 @@ els.preflightBtn.addEventListener("click", async () => {
     els.consoleMeta.textContent = `${(report.checks || []).length} check`;
   } catch (error) {
     handleApiError(error);
-  }
-});
-
-els.connectTikTokBtn?.addEventListener("click", async () => {
-  setTikTokLog("Membuat TikTok Sandbox authorization URL...");
-  try {
-    const result = await api("/api/tiktok/auth-url");
-    window.location.href = result.url;
-  } catch (error) {
-    handleApiError(error, els.tiktokDemoText);
-    setTikTokLog(error.message);
-  }
-});
-
-els.publishTikTokBtn?.addEventListener("click", async () => {
-  els.publishTikTokBtn.disabled = true;
-  setTikTokLog("Mengupload video demo ke TikTok Sandbox...");
-  try {
-    const result = await api("/api/tiktok/demo-publish", { method: "POST", body: "{}" });
-    setTikTokLog([
-      "TikTok Sandbox upload submitted.",
-      `Job: ${result.job_id || "-"}`,
-      `Publish ID: ${result.result?.publishId || "-"}`,
-      `Mode: ${result.result?.mode || "-"}`
-    ].join("\n"));
-    await refreshTikTokDemoStatus();
-    await refresh();
-  } catch (error) {
-    els.publishTikTokBtn.disabled = false;
-    handleApiError(error, els.tiktokDemoText);
-    setTikTokLog(error.message);
   }
 });
 
