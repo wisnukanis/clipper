@@ -386,6 +386,96 @@ h2 {
   overflow: hidden;
 }
 
+.tiktokReviewPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.tiktokReviewGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 12px;
+}
+
+.tiktokSteps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reviewStep {
+  min-height: 82px;
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+}
+
+.reviewStep span {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.reviewStep strong {
+  font-size: 12px;
+}
+
+.reviewStep small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.reviewStep.done {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.reviewStep.active {
+  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.09);
+}
+
+.reviewStep.done span,
+.reviewStep.active span {
+  background: var(--gradient);
+  color: #050813;
+}
+
+.tiktokActions {
+  display: grid;
+  gap: 10px;
+}
+
+.buttonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.miniConsole {
+  min-height: 72px;
+  margin: 0;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.36);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #cbd6f0;
+  font-family: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .heroHead {
   display: flex;
   align-items: flex-start;
@@ -1035,6 +1125,12 @@ td a:hover {
   letter-spacing: 0.06em;
 }
 
+.badge.success {
+  background: var(--green-soft);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: var(--green);
+}
+
 .panelFooter {
   display: flex;
   justify-content: center;
@@ -1111,6 +1207,11 @@ td a:hover {
 
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tiktokReviewGrid,
+  .tiktokSteps {
+    grid-template-columns: 1fr;
   }
 
   .heroHead {

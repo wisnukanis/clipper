@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { config, reloadConfigFromEnv } from "./config.js";
@@ -8,6 +9,7 @@ import { runWorkflow } from "./workflow.js";
 import { makeId } from "./job-id.js";
 import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { runPreflight } from "./preflight.js";
+import { exchangeTikTokCode, publishToTikTok } from "./tiktok.js";
 
 await ensureProjectDirs();
 await downloadStateFromRemote().catch(() => {});
@@ -271,6 +273,80 @@ app.post("/api/preflight", async (_req, res) => {
   }
 });
 
+app.get("/api/tiktok/auth-url", (_req, res) => {
+  try {
+    res.json({
+      url: buildTikTokAuthUrl(),
+      redirectUri: config.tiktok.redirectUri,
+      scopes: tiktokScopes()
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get("/api/tiktok/demo-status", async (_req, res) => {
+  const latestJob = await latestTikTokDemoJob();
+  res.json({
+    configured: Boolean(config.tiktok.clientKey && config.tiktok.clientSecret && config.tiktok.redirectUri),
+    connected: Boolean(config.tiktok.accessToken || config.tiktok.refreshToken),
+    uploadEnabled: config.tiktok.enabled,
+    publishMode: config.tiktok.publishMode,
+    privacyLevel: config.tiktok.privacyLevel,
+    redirectUri: config.tiktok.redirectUri,
+    scopes: tiktokScopes(),
+    latestJob: latestJob ? {
+      job_id: latestJob.job_id,
+      title: latestJob.source_title || latestJob.job_id,
+      public_video_url: latestJob.public_video_url,
+      tiktok_status: latestJob.tiktok_status || "",
+      tiktok_publish_id: latestJob.tiktok_publish_id || "",
+      tiktok_mode: latestJob.tiktok_mode || ""
+    } : null
+  });
+});
+
+app.post("/api/tiktok/exchange", async (req, res) => {
+  try {
+    const code = String(req.body?.code || "").trim();
+    if (!code) throw new Error("TikTok authorization code kosong.");
+    const token = await exchangeTikTokCode({ code, redirectUri: config.tiktok.redirectUri });
+    await persistTikTokTokens();
+    res.json({
+      ok: true,
+      connected: true,
+      openId: token.open_id ? "configured" : "",
+      scope: token.scope || "",
+      redirectUri: config.tiktok.redirectUri
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message, apiCode: error.apiCode || "" });
+  }
+});
+
+app.post("/api/tiktok/demo-publish", async (req, res) => {
+  try {
+    const job = await latestTikTokDemoJob(String(req.body?.job_id || "").trim());
+    if (!job) throw new Error("Belum ada video dengan public_video_url untuk demo TikTok.");
+    const result = await publishToTikTok({
+      videoUrl: job.public_video_url,
+      videoPath: job.final_video_path || "",
+      caption: job.caption || "Clipper Emsa Pro TikTok Sandbox demo"
+    });
+    await patchItem("jobs", job.job_id, {
+      tiktok_status: result?.publishId ? "submitted" : "failed",
+      tiktok_publish_id: result?.publishId || "",
+      tiktok_mode: result?.mode || config.tiktok.publishMode,
+      tiktok_error: "",
+      publish_status: job.publish_status || "ready"
+    });
+    await syncState();
+    res.json({ ok: true, job_id: job.job_id, result });
+  } catch (error) {
+    res.status(400).json({ error: error.message, apiCode: error.apiCode || "" });
+  }
+});
+
 app.post("/api/videos", async (req, res) => {
   try {
     const video = await addVideo(req.body || {});
@@ -427,6 +503,58 @@ async function syncState() {
   } catch (error) {
     console.warn(`State FTP sync dilewati: ${error.message}`);
   }
+}
+
+function tiktokScopes() {
+  return (process.env.TIKTOK_AUTH_SCOPES || "user.info.basic,video.upload,video.publish")
+    .split(/[\s,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildTikTokAuthUrl() {
+  if (!config.tiktok.clientKey) throw new Error("TIKTOK_CLIENT_KEY belum diisi.");
+  if (!config.tiktok.redirectUri) throw new Error("TIKTOK_REDIRECT_URI belum diisi.");
+
+  const url = new URL("https://www.tiktok.com/v2/auth/authorize/");
+  url.searchParams.set("client_key", config.tiktok.clientKey);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", tiktokScopes().join(","));
+  url.searchParams.set("redirect_uri", config.tiktok.redirectUri);
+  url.searchParams.set("state", crypto.randomBytes(16).toString("hex"));
+  return url.toString();
+}
+
+async function latestTikTokDemoJob(jobId = "") {
+  const jobs = await readJson("jobs", []);
+  if (jobId) return jobs.find((job) => job.job_id === jobId && job.public_video_url) || null;
+  return [...jobs]
+    .filter((job) => job.public_video_url)
+    .sort((a, b) => {
+      const left = String(a.updated_at || a.published_at || a.created_at || "");
+      const right = String(b.updated_at || b.published_at || b.created_at || "");
+      return right.localeCompare(left);
+    })[0] || null;
+}
+
+async function persistTikTokTokens() {
+  const updates = {
+    TIKTOK_ACCESS_TOKEN: config.tiktok.accessToken,
+    TIKTOK_REFRESH_TOKEN: config.tiktok.refreshToken,
+    TIKTOK_OPEN_ID: config.tiktok.openId,
+    TIKTOK_SCOPE: config.tiktok.scope
+  };
+  const filtered = Object.fromEntries(Object.entries(updates).filter(([, value]) => value));
+  if (!Object.keys(filtered).length) return;
+
+  let raw = "";
+  try {
+    raw = await fs.readFile(envFilePath, "utf8");
+  } catch {
+    raw = "";
+  }
+
+  await fs.writeFile(envFilePath, updateEnvContent(raw, filtered), "utf8");
 }
 
 function field(key, label, sensitive = false) {
