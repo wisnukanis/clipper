@@ -9,6 +9,11 @@ $continueUrl = $code
   ? $dashboardUrl . '?tiktok_code=' . rawurlencode($code) . ($state ? '&tiktok_state=' . rawurlencode($state) : '')
   : $dashboardUrl;
 
+if ($code && !$error) {
+  header('Location: ' . $continueUrl, true, 302);
+  exit;
+}
+
 function e($value) {
   return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
