@@ -29,7 +29,7 @@ def normalize_brand(value):
 def clean_title(value):
     text = clean_text(value, "BAGIAN INI BIKIN PENONTON DIAM").upper()
     words = text.split()
-    return " ".join(words[:8]) or "BAGIAN INI BIKIN PENONTON DIAM"
+    return " ".join(words[:9]) or "BAGIAN INI BIKIN PENONTON DIAM"
 
 
 def clean_quote(value):
@@ -135,7 +135,7 @@ def wrap_text(draw, text, font, max_width, max_lines=2):
     return kept
 
 
-def fit_title_layout(draw, title, rect, max_width, max_size=126, min_size=44):
+def fit_title_layout(draw, title, rect, max_width, max_size=92, min_size=42):
     max_height = (rect[3] - rect[1]) - 80
     for max_lines in (2, 3):
         size = max_size
@@ -176,8 +176,8 @@ def draw_panel(draw, rect, radius, fill_alpha=232):
     draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(*GOLD, 130), width=2)
 
 
-def draw_transparent_panel(draw, rect, radius):
-    draw.rounded_rectangle(rect, radius=radius, outline=(*GOLD, 225), width=4)
+def draw_transparent_panel(draw, rect, radius, fill_alpha=82):
+    draw.rounded_rectangle(rect, radius=radius, fill=(*BLACK, fill_alpha), outline=(*GOLD, 225), width=4)
     inset = 16
     inner = (rect[0] + inset, rect[1] + inset, rect[2] - inset, rect[3] - inset)
     draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(255, 255, 255, 90), width=2)
@@ -234,7 +234,7 @@ def render_thumbnail(args):
 
     rect = (130, 880, 950, 1174)
     add_glow(canvas, rect, 42, GOLD, 135)
-    draw_transparent_panel(draw, rect, 42)
+    draw_transparent_panel(draw, rect, 42, 82)
     draw_highlight(canvas, rect)
 
     max_text_width = (rect[2] - rect[0]) - 118
@@ -248,7 +248,7 @@ def render_thumbnail(args):
             line,
             font=font,
             fill=color,
-            stroke_width=6,
+            stroke_width=5,
             stroke_fill=(0, 0, 0, 235),
         )
         y += height + line_gap

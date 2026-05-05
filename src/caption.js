@@ -80,8 +80,8 @@ export async function generateThumbnailText({ job, output, promptTemplate, aiPro
   const fallback = fallbackThumbnailText(output);
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
-    "Aturan: 3 sampai 10 kata, ideal 4 sampai 6 kata, huruf besar, kuat, mudah dibaca, tidak clickbait menyesatkan.",
-    "- Jangan jawab satu kata.",
+    "Aturan: 4 sampai 9 kata, ideal 5 sampai 7 kata, huruf besar, kuat, mudah dibaca, tidak clickbait menyesatkan.",
+    "- Jangan jawab satu atau dua kata.",
     "- Jangan ambil potongan transkrip mentah yang tidak jelas.",
     "- Buat seperti judul cover video, bukan subtitle.",
     "- Wajib mengandung hook: konflik, rahasia, alasan mengejutkan, pertanyaan, atau momen paling bikin penasaran.",
@@ -485,7 +485,7 @@ function normalizeThumbnailText(value, fallback = "CERITA YANG JARANG DIBUKA") {
 function isStrongThumbnailText(value) {
   const cleaned = String(value || "").trim();
   const words = cleaned.split(/\s+/).filter(Boolean);
-  if (words.length < 3 || words.length > 10) return false;
+  if (words.length < 4 || words.length > 10) return false;
   if (/[,:;]$/.test(cleaned)) return false;
   const meaningfulCount = words.filter((word) => !STOPWORDS.has(word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""))).length;
   return words.join("").length >= 10 && meaningfulCount >= 2;
@@ -516,6 +516,6 @@ function buildTranscriptThumbnailText(value) {
     .replace(/[^\p{L}\p{N}\s?]/gu, " ")
     .split(/\s+/)
     .filter((word) => word.length >= 3 && !STOPWORDS.has(word.toLowerCase()))
-    .slice(0, 6);
+    .slice(0, 7);
   return normalizeThumbnailText(words.join(" "), "");
 }
