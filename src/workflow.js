@@ -19,6 +19,7 @@ import { todayDate } from "./job-id.js";
 import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflight.js";
 import { discoverAndQueueVideos } from "./video-discovery.js";
+import { applyVideoEffects } from "./video-effects.js";
 
 export async function runWorkflow(options = {}) {
   await ensureProjectDirs();
@@ -208,6 +209,9 @@ export async function runWorkflow(options = {}) {
       failed_clip_count: final.failedClips,
       published_clip_count: final.publishedClips,
       clip_results: clipResults.map(summarizeClipResult),
+      final_video_path: firstSuccess?.output?.finalAbsPath || "",
+      original_final_video_path: firstSuccess?.output?.originalFinalAbsPath || "",
+      video_effects: firstSuccess?.output?.videoEffects || null,
       public_video_url: firstSuccess?.upload?.videoUrl || "",
       public_thumbnail_url: firstSuccess?.upload?.thumbnailUrl || "",
       public_metadata_url: firstSuccess?.upload?.metadataUrl || "",
@@ -270,6 +274,9 @@ async function createManualSelection(options) {
     subtitle_font_size: options.subtitleFontSize || 46,
     subtitle_margin_v: options.subtitleMarginV || 550,
     subtitle_margin_h: options.subtitleMarginH || 180,
+    use_frame: options.useFrame,
+    use_filter: options.useFilter,
+    use_watermark: options.useWatermark,
     force_reprocess: options.forceReprocess === true,
     notes: "Ditambahkan dari CLI/manual run"
   });
@@ -284,6 +291,14 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
   const clipIndex = index + 1;
   const storageJob = buildClipStorageJob(job, index, total);
   const aiProvider = options.aiProvider || video.ai_provider || "";
+  const effectsResult = await applyVideoEffects({ job: storageJob, video, output, options });
+  output = { ...effectsResult.output, videoEffects: effectsResult.effects };
+
+  await updateJob(job.job_id, {
+    final_video_path: output.finalAbsPath,
+    original_final_video_path: output.originalFinalAbsPath || "",
+    video_effects: effectsResult.effects
+  });
 
   const caption = await generateCaption({
     job: storageJob,
@@ -320,7 +335,8 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     caption,
     thumbnail,
     clipIndex,
-    clipTotal: total
+    clipTotal: total,
+    videoEffects: effectsResult.effects
   });
   const metadataPath = await saveGeneratedJson("metadata", `${storageJob.job_id}.json`, metadata);
 
@@ -459,6 +475,8 @@ function summarizeClipResult(result) {
     tiktok_publish_id: result.platformResults?.tiktok?.publishId || "",
     threads_media_id: result.platformResults?.threads?.mediaId || "",
     final_video_path: result.output?.finalAbsPath || "",
+    original_final_video_path: result.output?.originalFinalAbsPath || "",
+    video_effects: result.output?.videoEffects || null,
     caption: result.caption || "",
     youtube_error: result.platformResults?.errors?.youtube || ""
   };
@@ -633,7 +651,7 @@ async function publishPlatform(name, platformResults, jobId, callback) {
   }
 }
 
-function buildMetadata({ job, video, theme, prompt, output, clipperResult, caption, thumbnail, clipIndex = 1, clipTotal = 1 }) {
+function buildMetadata({ job, video, theme, prompt, output, clipperResult, caption, thumbnail, clipIndex = 1, clipTotal = 1, videoEffects = null }) {
   return {
     job_id: job.job_id,
     clip_index: clipIndex,
@@ -647,6 +665,8 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     status: "done",
     transcriptSource: output.transcriptSource || "",
     finalPath: output.finalAbsPath,
+    originalFinalPath: output.originalFinalAbsPath || "",
+    videoEffects,
     transcriptPath: output.transcriptReviewAbsPath || "",
     subtitlePath: output.subtitleAbsPath || "",
     thumbnailPath: thumbnail.path,
@@ -677,6 +697,8 @@ async function appendHistoryEntry({ job, video, caption, output, upload, platfor
     status,
     publish_date: status === "published" ? todayDate() : "",
     final_video_path: output.finalAbsPath,
+    original_final_video_path: output.originalFinalAbsPath || "",
+    video_effects: output.videoEffects || "",
     public_video_url: upload.videoUrl || "",
     public_thumbnail_url: upload.thumbnailUrl || "",
     caption,

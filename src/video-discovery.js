@@ -912,6 +912,9 @@ export async function discoverAndQueueVideos(options = {}) {
       subtitle_font_size: Number(process.env.SUBTITLE_FONT_SIZE || 46),
       subtitle_margin_v: Number(process.env.SUBTITLE_MARGIN_V || 550),
       subtitle_margin_h: Number(process.env.SUBTITLE_MARGIN_H || 180),
+      use_frame: boolEnv("VIDEO_FRAME_ENABLED", false),
+      use_filter: boolEnv("VIDEO_FILTER_ENABLED", false),
+      use_watermark: boolEnv("VIDEO_WATERMARK_ENABLED", false),
       notes: [
         `Auto discovery: ${item.discovery_query || "unknown"}`,
         `source=${item.discovery_source || "unknown"}`,

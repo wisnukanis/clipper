@@ -87,6 +87,7 @@ function buildConfig() {
     publicDir: path.join(rootDir, "public"),
     dataDir: path.join(rootDir, "data"),
     generatedDir: path.join(rootDir, "generated"),
+    generatedVideoDir: path.join(rootDir, "generated", "videos"),
     thumbnailDir: path.join(rootDir, "generated", "thumbnails"),
     metadataDir: path.join(rootDir, "generated", "metadata"),
     logDir: path.join(rootDir, "generated", "logs"),
@@ -97,6 +98,15 @@ function buildConfig() {
     dryRun: boolEnv("DRY_RUN", true),
     autoPublish: boolEnv("AUTO_PUBLISH", false),
     cleanupLocalAfterPublish: boolEnv("CLEANUP_LOCAL_AFTER_PUBLISH", false),
+    videoEffects: {
+      frameEnabled: boolEnv("VIDEO_FRAME_ENABLED", false),
+      filterEnabled: boolEnv("VIDEO_FILTER_ENABLED", false),
+      watermarkEnabled: boolEnv("VIDEO_WATERMARK_ENABLED", false),
+      frameAssetPath: path.resolve(rootDir, cleanText(process.env.VIDEO_FRAME_ASSET || "assets/branding/frame-1080x1920.png")),
+      watermarkAssetPath: path.resolve(rootDir, cleanText(process.env.VIDEO_WATERMARK_ASSET || "assets/branding/logo.png")),
+      crf: numberEnv("VIDEO_EFFECT_CRF", numberEnv("FINAL_RENDER_CRF", 27)),
+      preset: cleanText(process.env.VIDEO_EFFECT_PRESET || "veryfast")
+    },
     defaultTheme: cleanText(process.env.DEFAULT_THEME || "auto"),
     postCron: cleanText(process.env.POST_CRON || "7 5 * * *"),
     dashboardPin: cleanText(process.env.AUTO_DASHBOARD_PIN),

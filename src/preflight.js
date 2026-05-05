@@ -102,6 +102,10 @@ async function localChecks() {
     exists(path.join(config.dataDir, "themes.json")).then((ok) => checkResult("data/themes.json", ok)),
     exists(path.join(config.dataDir, "videos.json")).then((ok) => checkResult("data/videos.json", ok))
   ]);
+  checks.push(
+    await exists(config.videoEffects.frameAssetPath).then((ok) => checkResult("Video frame asset", ok, config.videoEffects.frameAssetPath, false)),
+    await exists(config.videoEffects.watermarkAssetPath).then((ok) => checkResult("Video watermark asset", ok, config.videoEffects.watermarkAssetPath, false))
+  );
   return checks;
 }
 

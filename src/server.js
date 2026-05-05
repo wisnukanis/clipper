@@ -114,6 +114,19 @@ const envGroups = [
     ]
   },
   {
+    id: "branding",
+    title: "Video Branding",
+    fields: [
+      field("VIDEO_FRAME_ENABLED", "Frame default"),
+      field("VIDEO_FILTER_ENABLED", "Filter default"),
+      field("VIDEO_WATERMARK_ENABLED", "Watermark default"),
+      field("VIDEO_FRAME_ASSET", "Frame asset"),
+      field("VIDEO_WATERMARK_ASSET", "Watermark asset"),
+      field("VIDEO_EFFECT_CRF", "Effect CRF"),
+      field("VIDEO_EFFECT_PRESET", "Effect preset")
+    ]
+  },
+  {
     id: "instagram",
     title: "Instagram",
     fields: [
@@ -267,6 +280,9 @@ app.get("/api/state", async (_req, res) => {
     youtubeEnabled: config.youtube.enabled,
     tiktokEnabled: config.tiktok.enabled,
     threadsEnabled: config.threads.enabled,
+    videoFrameEnabled: config.videoEffects.frameEnabled,
+    videoFilterEnabled: config.videoEffects.filterEnabled,
+    videoWatermarkEnabled: config.videoEffects.watermarkEnabled,
     aiProvider: config.ai.provider,
     subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
     subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "550"
@@ -484,9 +500,13 @@ app.post("/api/run", async (req, res) => {
     range: body.range || "",
     aiProvider: body.ai_provider || process.env.AI_PROVIDER || "",
     qualityProfile: body.quality_profile || "standard",
+    useFrame: body.use_frame === true || body.use_frame === "true",
+    useFilter: body.use_filter === true || body.use_filter === "true",
+    useWatermark: body.use_watermark === true || body.use_watermark === "true",
     subtitleFont: body.subtitle_font || "Segoe UI Semibold",
     subtitleFontSize: Number(body.subtitle_font_size || 46),
-    subtitleMarginV: Number(body.subtitle_margin_v || 550)
+    subtitleMarginV: Number(body.subtitle_margin_v || 550),
+    subtitleMarginH: Number(body.subtitle_margin_h || 180)
   }))
     .then((result) => {
       activeRun = {

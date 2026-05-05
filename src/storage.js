@@ -13,6 +13,7 @@ const dataFiles = {
 export async function ensureProjectDirs() {
   await fs.mkdir(config.dataDir, { recursive: true });
   await fs.mkdir(config.generatedDir, { recursive: true });
+  await fs.mkdir(config.generatedVideoDir, { recursive: true });
   await fs.mkdir(config.thumbnailDir, { recursive: true });
   await fs.mkdir(config.metadataDir, { recursive: true });
   await fs.mkdir(config.logDir, { recursive: true });

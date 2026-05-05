@@ -816,6 +816,14 @@ SFTP_CLEANUP_DELETE_ALL=false
 SFTP_CLEANUP_SUBDIRS=videos,thumbnails,metadata,history
 SFTP_CLEANUP_MATCH=
 
+VIDEO_FRAME_ENABLED=false
+VIDEO_FILTER_ENABLED=false
+VIDEO_WATERMARK_ENABLED=false
+VIDEO_FRAME_ASSET=assets/branding/frame-1080x1920.png
+VIDEO_WATERMARK_ASSET=assets/branding/logo.png
+VIDEO_EFFECT_CRF=27
+VIDEO_EFFECT_PRESET=veryfast
+
 DEPLOY_REMOTE_DIR=/public_html
 DEPLOY_CLEAN_REMOTE=false
 
@@ -908,6 +916,26 @@ Private key SSH opsional. Jika diisi, `SFTP_PASSWORD` boleh kosong.
 #### `SFTP_REMOTE_DIR`
 
 Folder remote absolut tujuan upload, contoh `/home/u123456789/domains/domain.tld/public_html/ig-generated`.
+
+#### `VIDEO_FRAME_ENABLED`
+
+Default global untuk memakai frame visual 1080x1920. Dashboard tetap bisa memilih per run/queue.
+
+#### `VIDEO_FILTER_ENABLED`
+
+Default global untuk filter ringan yang sedikit mengubah brightness, contrast, saturation, hue, dan noise halus.
+
+#### `VIDEO_WATERMARK_ENABLED`
+
+Default global untuk watermark logo transparan.
+
+#### `VIDEO_FRAME_ASSET`
+
+Path frame PNG dengan transparent hole. Default: `assets/branding/frame-1080x1920.png`.
+
+#### `VIDEO_WATERMARK_ASSET`
+
+Path logo watermark. Default: `assets/branding/logo.png`.
 
 #### `AI_PROVIDER`
 

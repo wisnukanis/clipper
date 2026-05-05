@@ -164,6 +164,9 @@ export function configSummary() {
     threadsEnabled: boolEnv("THREADS_UPLOAD_ENABLED", false),
     aiProvider: clean(process.env.AI_PROVIDER || "gemini"),
     openaiModel: clean(process.env.OPENAI_MODEL || "gpt-5-nano"),
+    videoFrameEnabled: boolEnv("VIDEO_FRAME_ENABLED", false),
+    videoFilterEnabled: boolEnv("VIDEO_FILTER_ENABLED", false),
+    videoWatermarkEnabled: boolEnv("VIDEO_WATERMARK_ENABLED", false),
     subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "550"),
     vercelDashboard: true
@@ -282,6 +285,9 @@ export function buildVideo(input) {
     subtitle_font_size: Number(input.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || 46),
     subtitle_margin_v: Number(input.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || 550),
     subtitle_margin_h: Number(input.subtitle_margin_h || process.env.SUBTITLE_MARGIN_H || 180),
+    use_frame: boolInput(input.use_frame, boolEnv("VIDEO_FRAME_ENABLED", false)),
+    use_filter: boolInput(input.use_filter, boolEnv("VIDEO_FILTER_ENABLED", false)),
+    use_watermark: boolInput(input.use_watermark, boolEnv("VIDEO_WATERMARK_ENABLED", false)),
     force_reprocess: input.force_reprocess === true,
     created_at: input.created_at || now,
     updated_at: now
@@ -332,6 +338,12 @@ export function check(name, ok, detail = "", required = true) {
 export function boolEnv(name, fallback = false) {
   const value = process.env[name];
   if (value === undefined || value === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+export function boolInput(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
   return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
 }
 

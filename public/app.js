@@ -6,6 +6,7 @@ const ROW_LIMIT_EXPANDED = 18;
 const FALLBACK_PIPELINE = [
   { label: "Queue" },
   { label: "Clipper" },
+  { label: "Branding" },
   { label: "Caption" },
   { label: "Thumbnail" },
   { label: "SFTP" },
@@ -28,6 +29,8 @@ let videoLimit = ROW_LIMIT_DEFAULT;
 let jobLimit = ROW_LIMIT_DEFAULT;
 let cachedVideos = [];
 let cachedJobs = [];
+let effectDefaults = { use_frame: false, use_filter: false, use_watermark: false };
+let effectDefaultsApplied = false;
 
 if (dashboardPin) {
   window.sessionStorage.setItem("dashboardPin", dashboardPin);
@@ -169,10 +172,12 @@ async function refresh() {
     `TT ${cfg.tiktokEnabled ? "on" : "off"}`,
     `TH ${cfg.threadsEnabled ? "on" : "off"}`,
     `Storage ${(cfg.uploadDriver || "local").toUpperCase()}`,
+    `FX ${effectSummary(cfg)}`,
     `AI ${cfg.aiProvider || "gemini"}`,
     cfg.timezone
   ].filter(Boolean).join(" · ");
 
+  applyEffectDefaults(cfg);
   renderMetrics(state);
   renderHero(state);
   renderWorkflow(state);
@@ -181,6 +186,44 @@ async function refresh() {
   renderJobs(state.jobs || []);
 
   lastRunStatus = state.activeRun?.status === "running" ? "running" : "idle";
+}
+
+function effectSummary(cfg) {
+  const items = [];
+  if (cfg.videoFrameEnabled) items.push("frame");
+  if (cfg.videoFilterEnabled) items.push("filter");
+  if (cfg.videoWatermarkEnabled) items.push("wm");
+  return items.length ? items.join("+") : "manual";
+}
+
+function applyEffectDefaults(cfg) {
+  effectDefaults = {
+    use_frame: Boolean(cfg.videoFrameEnabled),
+    use_filter: Boolean(cfg.videoFilterEnabled),
+    use_watermark: Boolean(cfg.videoWatermarkEnabled)
+  };
+  if (effectDefaultsApplied) return;
+  for (const form of [els.runForm, els.videoForm]) {
+    if (!form) continue;
+    for (const [key, value] of Object.entries(effectDefaults)) {
+      if (form.elements[key]) form.elements[key].checked = value;
+    }
+  }
+  effectDefaultsApplied = true;
+}
+
+function readEffectOptions(form) {
+  return {
+    use_frame: Boolean(form.elements.use_frame?.checked),
+    use_filter: Boolean(form.elements.use_filter?.checked),
+    use_watermark: Boolean(form.elements.use_watermark?.checked)
+  };
+}
+
+function resetEffectOptions(form) {
+  for (const [key, value] of Object.entries(effectDefaults)) {
+    if (form.elements[key]) form.elements[key].checked = value;
+  }
 }
 
 async function refreshTikTokDemoStatus() {
@@ -309,6 +352,8 @@ function buildPipelineSteps(stateData) {
 
   const failed = isFailed(job.status) || Boolean(job.error_message);
   const clipperDone = job.clipper_status === "done" || Boolean(job.final_video_path);
+  const brandingRequested = Boolean(job.use_frame || job.use_filter || job.use_watermark || job.video_effects?.applied);
+  const brandingDone = !brandingRequested || Boolean(job.video_effects);
   const captionDone = job.caption_status === "done" || Boolean(job.caption);
   const thumbnailDone = job.thumbnail_status === "done" || Boolean(job.thumbnail_path);
   const ftpDone = Boolean(job.public_video_url);
@@ -328,6 +373,18 @@ function buildPipelineSteps(stateData) {
         done: clipperDone
       }),
       stageText(job.clipper_status, clipperDone ? "MP4 siap" : "Render video")
+    ),
+    mkStep(
+      "Branding",
+      stageState({
+        failed: failed && clipperDone && !brandingDone,
+        active: clipperDone && brandingRequested && !brandingDone && !failed,
+        done: brandingRequested && brandingDone,
+        muted: !brandingRequested
+      }),
+      brandingRequested
+        ? job.video_effects?.applied ? effectDetail(job.video_effects) : "Frame/filter/watermark"
+        : "Opsional"
     ),
     mkStep(
       "Caption",
@@ -371,6 +428,14 @@ function buildPipelineSteps(stateData) {
       published ? "Published" : job.publish_status || job.status || "Menunggu"
     )
   ];
+}
+
+function effectDetail(effects) {
+  const items = [];
+  if (effects?.frame) items.push("frame");
+  if (effects?.filter) items.push("filter");
+  if (effects?.watermark) items.push("wm");
+  return items.length ? items.join(" + ") : "Selesai";
 }
 
 function storageStepLabel(driver) {
@@ -652,6 +717,7 @@ els.videoForm.addEventListener("submit", async (event) => {
     const payload = formData(els.videoForm);
     payload.priority = Number(payload.priority || 1);
     payload.clip_count = Number(payload.clip_count || 1);
+    Object.assign(payload, readEffectOptions(els.videoForm));
     await api("/api/videos", { method: "POST", body: JSON.stringify(payload) });
     els.videoForm.reset();
     els.videoForm.elements.theme.value = "podcast artis";
@@ -660,6 +726,7 @@ els.videoForm.addEventListener("submit", async (event) => {
     if (els.videoForm.elements.ai_provider) els.videoForm.elements.ai_provider.value = "gemini";
     if (els.videoForm.elements.scene_mode) els.videoForm.elements.scene_mode.value = "podcast";
     if (els.videoForm.elements.clip_count) els.videoForm.elements.clip_count.value = "1";
+    resetEffectOptions(els.videoForm);
     await refresh();
   } catch (error) {
     setSubmittersDisabled(false);
@@ -674,6 +741,7 @@ els.runForm.addEventListener("submit", async (event) => {
     const payload = formData(els.runForm);
     payload.publish = els.runForm.elements.publish.checked;
     payload.clip_count = Number(payload.clip_count || 1);
+    Object.assign(payload, readEffectOptions(els.runForm));
     await api("/api/run", { method: "POST", body: JSON.stringify(payload) });
     await refresh();
   } catch (error) {

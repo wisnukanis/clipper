@@ -5,6 +5,12 @@ import { hasProcessedVideo } from "./history.js";
 
 const selectableStatuses = new Set(["queued", "failed", "retry"]);
 
+function boolInput(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
 export async function selectNextVideo(options = {}) {
   const date = options.targetDate || todayDate();
   const videos = await readJson("videos", []);
@@ -74,6 +80,9 @@ export async function addVideo(input) {
     subtitle_font_size: Number(input.subtitle_font_size || 46),
     subtitle_margin_v: Number(input.subtitle_margin_v || 550),
     subtitle_margin_h: Number(input.subtitle_margin_h || 180),
+    use_frame: boolInput(input.use_frame, boolInput(process.env.VIDEO_FRAME_ENABLED, false)),
+    use_filter: boolInput(input.use_filter, boolInput(process.env.VIDEO_FILTER_ENABLED, false)),
+    use_watermark: boolInput(input.use_watermark, boolInput(process.env.VIDEO_WATERMARK_ENABLED, false)),
     force_reprocess: input.force_reprocess === true,
     source_title: input.source_title || "",
     channel_title: input.channel_title || "",
@@ -145,6 +154,9 @@ export async function createJobRecord({ video, theme, prompt }) {
     youtube_url: "",
     youtube_error: "",
     youtube_published_at: "",
+    use_frame: video.use_frame,
+    use_filter: video.use_filter,
+    use_watermark: video.use_watermark,
     created_at: now,
     updated_at: now,
     published_at: "",
@@ -174,6 +186,9 @@ export function normalizeVideo(video) {
     subtitle_font_size: Number(video.subtitle_font_size || 46),
     subtitle_margin_v: Number(video.subtitle_margin_v || 550),
     subtitle_margin_h: Number(video.subtitle_margin_h || 180),
+    use_frame: boolInput(video.use_frame, boolInput(process.env.VIDEO_FRAME_ENABLED, false)),
+    use_filter: boolInput(video.use_filter, boolInput(process.env.VIDEO_FILTER_ENABLED, false)),
+    use_watermark: boolInput(video.use_watermark, boolInput(process.env.VIDEO_WATERMARK_ENABLED, false)),
     force_reprocess: video.force_reprocess === true,
     active: video.active !== false,
     status: video.status || "queued"

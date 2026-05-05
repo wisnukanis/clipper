@@ -39,7 +39,10 @@ export default async function handler(req, res) {
         subtitle_font: video.subtitle_font || "Segoe UI Semibold",
         subtitle_font_size: String(video.subtitle_font_size || 46),
         subtitle_margin_v: String(video.subtitle_margin_v || 550),
-        subtitle_margin_h: String(video.subtitle_margin_h || 180)
+        subtitle_margin_h: String(video.subtitle_margin_h || 180),
+        use_frame: video.use_frame ? "true" : "false",
+        use_filter: video.use_filter ? "true" : "false",
+        use_watermark: video.use_watermark ? "true" : "false"
       });
     }
 

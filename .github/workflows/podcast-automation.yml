@@ -51,6 +51,18 @@ on:
         description: How many clips to render from the source video
         required: false
         default: "2"
+      use_frame:
+        description: "Apply Emsa frame: true/false"
+        required: false
+        default: "false"
+      use_filter:
+        description: "Apply light uniqueness filter: true/false"
+        required: false
+        default: "false"
+      use_watermark:
+        description: "Apply transparent logo watermark: true/false"
+        required: false
+        default: "false"
       ai_provider:
         description: "Caption/thumbnail AI provider: gemini or openai"
         required: false
@@ -231,6 +243,13 @@ jobs:
       DOWNLOAD_COMPRESS_CRF: "22"
       FINAL_RENDER_CRF: "20"
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
+      VIDEO_FRAME_ENABLED: ${{ github.event.inputs.use_frame || secrets.VIDEO_FRAME_ENABLED || 'false' }}
+      VIDEO_FILTER_ENABLED: ${{ github.event.inputs.use_filter || secrets.VIDEO_FILTER_ENABLED || 'false' }}
+      VIDEO_WATERMARK_ENABLED: ${{ github.event.inputs.use_watermark || secrets.VIDEO_WATERMARK_ENABLED || 'false' }}
+      VIDEO_FRAME_ASSET: ${{ secrets.VIDEO_FRAME_ASSET || 'assets/branding/frame-1080x1920.png' }}
+      VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
+      VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}
+      VIDEO_EFFECT_PRESET: ${{ secrets.VIDEO_EFFECT_PRESET || 'veryfast' }}
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
       SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik Semibold,Selawik,DejaVu Sans' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
@@ -834,6 +853,9 @@ jobs:
           echo "AUTO_DISCOVER_PUBLISHED_AFTER_DAYS=$AUTO_DISCOVER_PUBLISHED_AFTER_DAYS"
           echo "AUTO_DISCOVER_FALLBACK_MAX_RESULTS=$AUTO_DISCOVER_FALLBACK_MAX_RESULTS"
           echo "VIDEO_QUALITY_PROFILE=$VIDEO_QUALITY_PROFILE"
+          echo "VIDEO_FRAME_ENABLED=$VIDEO_FRAME_ENABLED"
+          echo "VIDEO_FILTER_ENABLED=$VIDEO_FILTER_ENABLED"
+          echo "VIDEO_WATERMARK_ENABLED=$VIDEO_WATERMARK_ENABLED"
           echo "SUBTITLE_FONT_FAMILY=$SUBTITLE_FONT_FAMILY"
           echo "SUBTITLE_FONT_SIZE=$SUBTITLE_FONT_SIZE"
           echo "SUBTITLE_MARGIN_V=$SUBTITLE_MARGIN_V"
@@ -927,6 +949,9 @@ jobs:
           args+=(--quality "$VIDEO_QUALITY_PROFILE")
           args+=(--clip-count "$CLIP_COUNT")
           args+=(--ai-provider "$AI_PROVIDER")
+          args+=(--use-frame "$VIDEO_FRAME_ENABLED")
+          args+=(--use-filter "$VIDEO_FILTER_ENABLED")
+          args+=(--use-watermark "$VIDEO_WATERMARK_ENABLED")
           args+=(--subtitle-font "$SUBTITLE_FONT_FAMILY")
           args+=(--subtitle-font-size "$SUBTITLE_FONT_SIZE")
           args+=(--subtitle-margin-v "$SUBTITLE_MARGIN_V")

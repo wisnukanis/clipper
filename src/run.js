@@ -11,6 +11,14 @@ function hasArg(name) {
   return process.argv.includes(name);
 }
 
+function optionalBoolArg(name) {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return undefined;
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith("--")) return true;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
 const options = {
   publish: hasArg("--publish"),
   scheduled: hasArg("--scheduled"),
@@ -24,6 +32,9 @@ const options = {
   subtitleFontSize: Number(argValue("--subtitle-font-size", process.env.SUBTITLE_FONT_SIZE || "46")),
   subtitleMarginV: Number(argValue("--subtitle-margin-v", process.env.SUBTITLE_MARGIN_V || "550")),
   subtitleMarginH: Number(argValue("--subtitle-margin-h", process.env.SUBTITLE_MARGIN_H || "180")),
+  useFrame: optionalBoolArg("--use-frame"),
+  useFilter: optionalBoolArg("--use-filter"),
+  useWatermark: optionalBoolArg("--use-watermark"),
   forceReprocess: hasArg("--force-reprocess")
 };
 
