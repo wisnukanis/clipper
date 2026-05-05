@@ -150,7 +150,7 @@ async function publishContainer(containerId) {
 
 export async function publishToThreads({ videoUrl, caption }) {
   if (!videoUrl) {
-    throw new Error("videoUrl kosong, Threads butuh URL video publik dari FTP.");
+    throw new Error("videoUrl kosong, Threads butuh URL video publik dari remote storage.");
   }
 
   await ensureFreshThreadsToken();

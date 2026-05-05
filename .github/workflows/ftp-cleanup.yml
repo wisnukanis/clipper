@@ -1,4 +1,4 @@
-name: FTP Cleanup
+name: SFTP Cleanup
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ on:
     - cron: "30 16 * * *"
 
 concurrency:
-  group: ftp-cleanup
+  group: sftp-cleanup
   cancel-in-progress: false
 
 permissions:
@@ -41,21 +41,23 @@ jobs:
     timeout-minutes: 20
 
     env:
-      UPLOAD_DRIVER: ftp
+      UPLOAD_DRIVER: sftp
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
-      FTP_HOST: ${{ secrets.FTP_HOST }}
-      FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
-      FTP_USER: ${{ secrets.FTP_USER }}
-      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
-      FTP_TIMEOUT_SECONDS: ${{ secrets.FTP_TIMEOUT_SECONDS || '300' }}
-      FTP_CLEANUP_TIMEOUT_SECONDS: ${{ secrets.FTP_CLEANUP_TIMEOUT_SECONDS || '600' }}
-      FTP_STATE_TIMEOUT_SECONDS: ${{ secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
-      FTP_UPLOAD_RETRIES: ${{ secrets.FTP_UPLOAD_RETRIES || '2' }}
-      FTP_CLEANUP_DAYS: ${{ github.event.inputs.days || secrets.FTP_CLEANUP_DAYS || '1' }}
-      FTP_CLEANUP_DELETE_ALL: ${{ github.event.inputs.delete_all || 'false' }}
-      FTP_CLEANUP_SUBDIRS: ${{ github.event.inputs.subdirs || '' }}
-      FTP_CLEANUP_MATCH: ${{ github.event.inputs.match || '' }}
+      SFTP_HOST: ${{ secrets.SFTP_HOST || secrets.FTP_HOST }}
+      SFTP_PORT: ${{ secrets.SFTP_PORT || '65002' }}
+      SFTP_USER: ${{ secrets.SFTP_USER }}
+      SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD || secrets.FTP_PASSWORD }}
+      SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+      SFTP_PASSPHRASE: ${{ secrets.SFTP_PASSPHRASE }}
+      SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
+      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '300' }}
+      SFTP_CLEANUP_TIMEOUT_SECONDS: ${{ secrets.SFTP_CLEANUP_TIMEOUT_SECONDS || secrets.FTP_CLEANUP_TIMEOUT_SECONDS || '600' }}
+      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
+      SFTP_UPLOAD_RETRIES: ${{ secrets.SFTP_UPLOAD_RETRIES || secrets.FTP_UPLOAD_RETRIES || '2' }}
+      SFTP_CLEANUP_DAYS: ${{ github.event.inputs.days || secrets.SFTP_CLEANUP_DAYS || secrets.FTP_CLEANUP_DAYS || '1' }}
+      SFTP_CLEANUP_DELETE_ALL: ${{ github.event.inputs.delete_all || 'false' }}
+      SFTP_CLEANUP_SUBDIRS: ${{ github.event.inputs.subdirs || '' }}
+      SFTP_CLEANUP_MATCH: ${{ github.event.inputs.match || '' }}
 
     steps:
       - name: Checkout
@@ -68,27 +70,31 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Validate FTP secrets
+      - name: Validate SFTP secrets
         shell: bash
         run: |
           missing=0
-          for key in FTP_HOST FTP_USER FTP_PASSWORD FTP_REMOTE_DIR
+          for key in SFTP_HOST SFTP_USER SFTP_REMOTE_DIR
           do
             if [ -z "${!key}" ]; then
               echo "::error::$key belum diisi di GitHub Secrets"
               missing=1
             fi
           done
+          if [ -z "$SFTP_PASSWORD" ] && [ -z "$SFTP_PRIVATE_KEY" ]; then
+            echo "::error::SFTP_PASSWORD atau SFTP_PRIVATE_KEY belum diisi di GitHub Secrets"
+            missing=1
+          fi
           exit "$missing"
 
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Run FTP cleanup
+      - name: Run SFTP cleanup
         shell: bash
         run: |
           args=()
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             args+=(--dry-run)
           fi
-          node src/cleanup-ftp.js "${args[@]}"
+          npm run remote:cleanup -- "${args[@]}"

@@ -8,7 +8,7 @@ const FALLBACK_PIPELINE = [
   { label: "Clipper" },
   { label: "Caption" },
   { label: "Thumbnail" },
-  { label: "FTP" },
+  { label: "SFTP" },
   { label: "Instagram" },
   { label: "Facebook" },
   { label: "YouTube" },
@@ -168,6 +168,7 @@ async function refresh() {
     `YT ${cfg.youtubeEnabled ? "on" : "off"}`,
     `TT ${cfg.tiktokEnabled ? "on" : "off"}`,
     `TH ${cfg.threadsEnabled ? "on" : "off"}`,
+    `Storage ${(cfg.uploadDriver || "local").toUpperCase()}`,
     `AI ${cfg.aiProvider || "gemini"}`,
     cfg.timezone
   ].filter(Boolean).join(" · ");
@@ -311,6 +312,7 @@ function buildPipelineSteps(stateData) {
   const captionDone = job.caption_status === "done" || Boolean(job.caption);
   const thumbnailDone = job.thumbnail_status === "done" || Boolean(job.thumbnail_path);
   const ftpDone = Boolean(job.public_video_url);
+  const remoteLabel = storageStepLabel(stateData.config?.uploadDriver);
   const published =
     job.status === "published" ||
     job.publish_status === "published" ||
@@ -346,7 +348,7 @@ function buildPipelineSteps(stateData) {
       stageText(job.thumbnail_status, thumbnailDone ? "Thumbnail siap" : "Buat thumbnail")
     ),
     mkStep(
-      "FTP",
+      remoteLabel,
       stageState({
         failed: failed && thumbnailDone && !ftpDone,
         active: thumbnailDone && !ftpDone && !failed,
@@ -369,6 +371,13 @@ function buildPipelineSteps(stateData) {
       published ? "Published" : job.publish_status || job.status || "Menunggu"
     )
   ];
+}
+
+function storageStepLabel(driver) {
+  const normalized = String(driver || "sftp").toLowerCase();
+  if (normalized === "ftp") return "FTP";
+  if (normalized === "sftp") return "SFTP";
+  return "Storage";
 }
 
 function platformStep(label, status, hasResult, ftpDone, failed) {
@@ -620,7 +629,7 @@ els.jobsMore?.addEventListener("click", () => {
 
 els.preflightBtn.addEventListener("click", async () => {
   els.runStatus.textContent = "preflight";
-  els.runDetail.textContent = "Cek FTP, token platform, dan workflow engine.";
+  els.runDetail.textContent = "Cek SFTP, token platform, dan workflow engine.";
   try {
     const report = await api("/api/preflight", { method: "POST", body: "{}" });
     const failed = (report.checks || []).filter((item) => !item.ok && item.required);

@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { config, shouldUploadToFtp } from "./config.js";
+import { config, shouldUploadToRemote } from "./config.js";
 import { ensureProjectDirs } from "./storage.js";
-import { withFtpClient } from "./uploader.js";
+import { withRemoteClient } from "./uploader.js";
 
 const stateFiles = [
   "themes.json",
@@ -18,11 +18,11 @@ function remoteStateDir() {
 }
 
 export async function downloadStateFromRemote() {
-  if (!shouldUploadToFtp()) return { skipped: true };
+  if (!shouldUploadToRemote()) return { skipped: true };
   await ensureProjectDirs();
   const downloaded = [];
 
-  await withFtpClient(async (client) => {
+  await withRemoteClient(async (client) => {
     await client.ensureDir(remoteStateDir());
     const items = await client.list();
     const names = new Set(items.filter((item) => item.isFile).map((item) => item.name));
@@ -37,11 +37,11 @@ export async function downloadStateFromRemote() {
 }
 
 export async function uploadStateToRemote() {
-  if (!shouldUploadToFtp()) return { skipped: true };
+  if (!shouldUploadToRemote()) return { skipped: true };
   await ensureProjectDirs();
   const uploaded = [];
 
-  await withFtpClient(async (client) => {
+  await withRemoteClient(async (client) => {
     await client.ensureDir(remoteStateDir());
     for (const file of stateFiles) {
       const localPath = path.join(config.dataDir, file);

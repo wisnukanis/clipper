@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Automation pipeline for YouTube podcast clips, FTP storage, and Instagram Reels publishing.",
+  "description": "Automation pipeline for YouTube podcast clips, SFTP storage, and social publishing.",
   "scripts": {
     "check": "node src/check.js",
     "dashboard": "node src/server.js",
@@ -23,6 +23,8 @@
     "tiktok:token": "node src/tiktok-token-fastcheck.js --persist-local",
     "threads:check": "node src/threads-check.js",
     "threads:token": "node src/threads-token-fastcheck.js --persist-local",
+    "remote:cleanup": "node src/cleanup-ftp.js",
+    "remote:cleanup:dry": "node src/cleanup-ftp.js --dry-run",
     "ftp:cleanup": "node src/cleanup-ftp.js",
     "ftp:cleanup:dry": "node src/cleanup-ftp.js --dry-run",
     "clipper:setup": "python -m pip install -r clipper/requirements.txt"
@@ -32,6 +34,7 @@
     "basic-ftp": "^5.3.1",
     "dotenv": "^16.4.7",
     "express": "^5.2.1",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "ssh2-sftp-client": "^12.1.1"
   }
 }

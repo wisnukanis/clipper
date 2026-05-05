@@ -98,7 +98,7 @@ jobs:
       APP_TIMEZONE: Asia/Jakarta
 
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
-      UPLOAD_DRIVER: ftp
+      UPLOAD_DRIVER: sftp
       DRY_RUN: "false"
       AUTO_PUBLISH: "true"
       DEFAULT_THEME: auto
@@ -143,19 +143,21 @@ jobs:
       THREADS_TOKEN_ISSUED_AT: ${{ secrets.THREADS_TOKEN_ISSUED_AT }}
       THREADS_APP_SECRET: ${{ secrets.THREADS_APP_SECRET }}
 
-      FTP_HOST: ${{ secrets.FTP_HOST }}
-      FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
-      FTP_USER: ${{ secrets.FTP_USER }}
-      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
-      FTP_TIMEOUT_SECONDS: ${{ secrets.FTP_TIMEOUT_SECONDS || '300' }}
-      FTP_UPLOAD_TIMEOUT_SECONDS: ${{ secrets.FTP_UPLOAD_TIMEOUT_SECONDS || '1800' }}
-      FTP_CLEANUP_TIMEOUT_SECONDS: ${{ secrets.FTP_CLEANUP_TIMEOUT_SECONDS || '600' }}
-      FTP_STATE_TIMEOUT_SECONDS: ${{ secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
-      FTP_PRECHECK_RETRIES: ${{ secrets.FTP_PRECHECK_RETRIES || '3' }}
-      FTP_UPLOAD_RETRIES: ${{ secrets.FTP_UPLOAD_RETRIES || '2' }}
-      FTP_PUBLIC_URL_RETRIES: ${{ secrets.FTP_PUBLIC_URL_RETRIES || '8' }}
-      FTP_PUBLIC_URL_RETRY_DELAY_MS: ${{ secrets.FTP_PUBLIC_URL_RETRY_DELAY_MS || '2500' }}
+      SFTP_HOST: ${{ secrets.SFTP_HOST || secrets.FTP_HOST }}
+      SFTP_PORT: ${{ secrets.SFTP_PORT || '65002' }}
+      SFTP_USER: ${{ secrets.SFTP_USER }}
+      SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD || secrets.FTP_PASSWORD }}
+      SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+      SFTP_PASSPHRASE: ${{ secrets.SFTP_PASSPHRASE }}
+      SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
+      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '300' }}
+      SFTP_UPLOAD_TIMEOUT_SECONDS: ${{ secrets.SFTP_UPLOAD_TIMEOUT_SECONDS || secrets.FTP_UPLOAD_TIMEOUT_SECONDS || '1800' }}
+      SFTP_CLEANUP_TIMEOUT_SECONDS: ${{ secrets.SFTP_CLEANUP_TIMEOUT_SECONDS || secrets.FTP_CLEANUP_TIMEOUT_SECONDS || '600' }}
+      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
+      SFTP_PRECHECK_RETRIES: ${{ secrets.SFTP_PRECHECK_RETRIES || secrets.FTP_PRECHECK_RETRIES || '3' }}
+      SFTP_UPLOAD_RETRIES: ${{ secrets.SFTP_UPLOAD_RETRIES || secrets.FTP_UPLOAD_RETRIES || '2' }}
+      SFTP_PUBLIC_URL_RETRIES: ${{ secrets.SFTP_PUBLIC_URL_RETRIES || secrets.FTP_PUBLIC_URL_RETRIES || '8' }}
+      SFTP_PUBLIC_URL_RETRY_DELAY_MS: ${{ secrets.SFTP_PUBLIC_URL_RETRY_DELAY_MS || secrets.FTP_PUBLIC_URL_RETRY_DELAY_MS || '2500' }}
 
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
@@ -293,13 +295,17 @@ jobs:
         run: |
           missing=0
 
-          for key in PUBLIC_BASE_URL FTP_HOST FTP_USER FTP_PASSWORD FTP_REMOTE_DIR
+          for key in PUBLIC_BASE_URL SFTP_HOST SFTP_USER SFTP_REMOTE_DIR
           do
             if [ -z "${!key}" ]; then
               echo "::error::$key belum diisi di GitHub Secrets"
               missing=1
             fi
           done
+          if [ -z "$SFTP_PASSWORD" ] && [ -z "$SFTP_PRIVATE_KEY" ]; then
+            echo "::error::SFTP_PASSWORD atau SFTP_PRIVATE_KEY belum diisi di GitHub Secrets"
+            missing=1
+          fi
 
           if [ "$INSTAGRAM_UPLOAD_ENABLED" = "true" ]; then
             for key in INSTAGRAM_IG_USER_ID INSTAGRAM_ACCESS_TOKEN
@@ -697,16 +703,19 @@ jobs:
 
           for key in \
             PUBLIC_BASE_URL \
-            FTP_HOST \
-            FTP_USER \
-            FTP_PASSWORD \
-            FTP_REMOTE_DIR
+            SFTP_HOST \
+            SFTP_USER \
+            SFTP_REMOTE_DIR
           do
             if [ -z "${!key}" ]; then
               echo "::error::$key belum diisi di GitHub Secrets"
               missing=1
             fi
           done
+          if [ -z "$SFTP_PASSWORD" ] && [ -z "$SFTP_PRIVATE_KEY" ]; then
+            echo "::error::SFTP_PASSWORD atau SFTP_PRIVATE_KEY belum diisi di GitHub Secrets"
+            missing=1
+          fi
 
           if [ "$INSTAGRAM_UPLOAD_ENABLED" = "true" ]; then
             for key in INSTAGRAM_IG_USER_ID INSTAGRAM_ACCESS_TOKEN
@@ -787,7 +796,8 @@ jobs:
         run: |
           echo "GRAPH_API_VERSION=$GRAPH_API_VERSION"
           echo "PUBLIC_BASE_URL=$PUBLIC_BASE_URL"
-          echo "FTP_REMOTE_DIR=$FTP_REMOTE_DIR"
+          echo "UPLOAD_DRIVER=$UPLOAD_DRIVER"
+          echo "SFTP_REMOTE_DIR=$SFTP_REMOTE_DIR"
           echo "INSTAGRAM_UPLOAD_ENABLED=$INSTAGRAM_UPLOAD_ENABLED"
           echo "INSTAGRAM_REEL_UPLOAD_METHOD=$INSTAGRAM_REEL_UPLOAD_METHOD"
           echo "YOUTUBE_UPLOAD_ENABLED=$YOUTUBE_UPLOAD_ENABLED"

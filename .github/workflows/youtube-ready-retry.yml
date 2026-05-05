@@ -29,15 +29,17 @@ jobs:
 
     env:
       APP_TIMEZONE: Asia/Jakarta
-      UPLOAD_DRIVER: ftp
+      UPLOAD_DRIVER: sftp
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
-      FTP_HOST: ${{ secrets.FTP_HOST }}
-      FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
-      FTP_USER: ${{ secrets.FTP_USER }}
-      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
-      FTP_TIMEOUT_SECONDS: ${{ secrets.FTP_TIMEOUT_SECONDS || '300' }}
-      FTP_STATE_TIMEOUT_SECONDS: ${{ secrets.FTP_STATE_TIMEOUT_SECONDS || '180' }}
+      SFTP_HOST: ${{ secrets.SFTP_HOST || secrets.FTP_HOST }}
+      SFTP_PORT: ${{ secrets.SFTP_PORT || '65002' }}
+      SFTP_USER: ${{ secrets.SFTP_USER }}
+      SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD || secrets.FTP_PASSWORD }}
+      SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+      SFTP_PASSPHRASE: ${{ secrets.SFTP_PASSPHRASE }}
+      SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
+      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '300' }}
+      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '180' }}
 
       YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'true' }}
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}

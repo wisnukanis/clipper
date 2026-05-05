@@ -1,33 +1,39 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { Client } from "basic-ftp";
+import { Client as FtpClient } from "basic-ftp";
+import SftpClient from "ssh2-sftp-client";
 import {
   config,
   publicMetadataUrl,
   publicThumbnailUrl,
   publicVideoUrl,
-  shouldUploadToFtp
+  shouldUploadToRemote
 } from "./config.js";
 
-function requireFtpConfig() {
+function remoteLabel() {
+  return config.ftp.label || "Remote";
+}
+
+function requireRemoteConfig() {
+  const prefix = config.ftp.envPrefix || "FTP";
   const missing = [];
-  if (!config.ftp.host) missing.push("FTP_HOST");
-  if (!config.ftp.user) missing.push("FTP_USER");
-  if (!config.ftp.password) missing.push("FTP_PASSWORD");
-  if (!config.ftp.remoteDir) missing.push("FTP_REMOTE_DIR");
-  if (missing.length) throw new Error(`FTP config belum lengkap: ${missing.join(", ")}`);
+  if (!config.ftp.host) missing.push(`${prefix}_HOST`);
+  if (!config.ftp.user) missing.push(`${prefix}_USER`);
+  if (!config.ftp.password && !config.ftp.privateKey) missing.push(`${prefix}_PASSWORD`);
+  if (!config.ftp.remoteDir) missing.push(`${prefix}_REMOTE_DIR`);
+  if (missing.length) throw new Error(`${remoteLabel()} config belum lengkap: ${missing.join(", ")}`);
 }
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isRetriableFtpError(error) {
+function isRetriableRemoteError(error) {
   const code = String(error?.code || "");
   const message = String(error?.message || error || "");
   const text = `${code} ${message}`;
-  if (/\b(530|550|553)\b/.test(text)) return false;
-  return /timeout|timed out|closed|socket|econn|etimedout|econnreset|econnrefused|epipe|no control connection|421|425|426|450|451/i.test(text);
+  if (/\b(530|550|553)\b|auth|authentication|permission denied|login incorrect/i.test(text)) return false;
+  return /timeout|timed out|closed|socket|econn|etimedout|econnreset|econnrefused|epipe|no control connection|connection lost|421|425|426|450|451/i.test(text);
 }
 
 function retryDelayMs(attempt) {
@@ -49,7 +55,7 @@ async function remoteSize(client, remoteName) {
 
 async function remoteFileMatches(fullRemotePath, expectedSize) {
   try {
-    return await withFtpClient(async (client) => {
+    return await withRemoteClient(async (client) => {
       return await remoteSize(client, fullRemotePath) === expectedSize;
     }, { timeoutMs: config.ftp.stateTimeoutMs, retries: 1 });
   } catch {
@@ -62,49 +68,138 @@ async function uploadFromVerified(client, localPath, remoteName, remoteDir) {
   const fullRemotePath = path.posix.join(remoteDir, remoteName);
 
   if (await remoteSize(client, remoteName) === expectedSize) {
-    console.log(`FTP skip, remote sudah lengkap: ${fullRemotePath}`);
+    console.log(`${remoteLabel()} skip, remote sudah lengkap: ${fullRemotePath}`);
     return;
   }
 
   try {
     await client.uploadFrom(localPath, remoteName);
   } catch (error) {
-    if (isRetriableFtpError(error) && await remoteFileMatches(fullRemotePath, expectedSize)) {
-      console.warn(`FTP upload timeout, tapi file remote lengkap. Lanjut: ${fullRemotePath}`);
+    if (isRetriableRemoteError(error) && await remoteFileMatches(fullRemotePath, expectedSize)) {
+      console.warn(`${remoteLabel()} upload timeout, tapi file remote lengkap. Lanjut: ${fullRemotePath}`);
       return;
     }
     throw error;
   }
 }
 
-export async function withFtpClient(callback, options = {}) {
-  requireFtpConfig();
+class SftpRemoteClient {
+  constructor(client) {
+    this.client = client;
+    this.cwd = "/";
+  }
+
+  resolve(remotePath = ".") {
+    const target = String(remotePath || ".");
+    if (target === ".") return this.cwd;
+    return path.posix.isAbsolute(target) ? target : path.posix.join(this.cwd, target);
+  }
+
+  async ensureDir(remoteDir) {
+    const dir = this.resolve(remoteDir);
+    await this.client.mkdir(dir, true);
+    this.cwd = dir;
+  }
+
+  async cd(remoteDir) {
+    const dir = this.resolve(remoteDir);
+    const stat = await this.client.stat(dir);
+    if (stat.type && stat.type !== "d") throw new Error(`${dir} bukan direktori`);
+    if (stat.isDirectory === false) throw new Error(`${dir} bukan direktori`);
+    this.cwd = dir;
+  }
+
+  async list(remoteDir = ".") {
+    const items = await this.client.list(this.resolve(remoteDir));
+    return items.map((item) => ({
+      name: item.name,
+      isFile: item.type === "-" || item.type === "f" || item.isFile === true,
+      size: item.size || 0,
+      modifiedAt: item.modifyTime ? new Date(item.modifyTime) : null
+    }));
+  }
+
+  async uploadFrom(source, remoteName) {
+    await this.client.put(source, this.resolve(remoteName));
+  }
+
+  async downloadTo(localPath, remoteName) {
+    await this.client.fastGet(this.resolve(remoteName), localPath);
+  }
+
+  async size(remoteName) {
+    const stat = await this.client.stat(this.resolve(remoteName));
+    return stat.size || 0;
+  }
+
+  async remove(remoteName) {
+    await this.client.delete(this.resolve(remoteName));
+  }
+
+  async close() {
+    await this.client.end();
+  }
+}
+
+async function connectRemoteClient(timeoutMs) {
+  if (config.uploadDriver === "sftp") {
+    const client = new SftpClient();
+    await client.connect({
+      host: config.ftp.host,
+      port: config.ftp.port,
+      username: config.ftp.user,
+      password: config.ftp.password || undefined,
+      privateKey: config.ftp.privateKey || undefined,
+      passphrase: config.ftp.passphrase || undefined,
+      readyTimeout: timeoutMs || config.ftp.timeoutMs
+    });
+    return new SftpRemoteClient(client);
+  }
+
+  const client = new FtpClient(timeoutMs || config.ftp.timeoutMs);
+  await client.access({
+    host: config.ftp.host,
+    port: config.ftp.port,
+    user: config.ftp.user,
+    password: config.ftp.password,
+    secure: false
+  });
+  return client;
+}
+
+async function closeRemoteClient(client) {
+  if (!client) return;
+  if (typeof client.close === "function") {
+    await client.close();
+  }
+}
+
+export async function withRemoteClient(callback, options = {}) {
+  requireRemoteConfig();
   const maxAttempts = Math.max(1, Number(options.retries || config.ftp.retries || 3));
   let lastError;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const client = new Client(options.timeoutMs || config.ftp.timeoutMs);
+    let client = null;
     try {
-      await client.access({
-        host: config.ftp.host,
-        port: config.ftp.port,
-        user: config.ftp.user,
-        password: config.ftp.password,
-        secure: false
-      });
+      client = await connectRemoteClient(options.timeoutMs || config.ftp.timeoutMs);
       return await callback(client, attempt);
     } catch (error) {
       lastError = error;
-      const canRetry = attempt < maxAttempts && isRetriableFtpError(error);
+      const canRetry = attempt < maxAttempts && isRetriableRemoteError(error);
       if (!canRetry) throw error;
-      console.warn(`FTP gagal attempt ${attempt}/${maxAttempts}, reconnect lalu retry: ${error.message || error}`);
+      console.warn(`${remoteLabel()} gagal attempt ${attempt}/${maxAttempts}, reconnect lalu retry: ${error.message || error}`);
       await sleep(retryDelayMs(attempt));
     } finally {
-      client.close();
+      await closeRemoteClient(client);
     }
   }
 
   throw lastError;
+}
+
+export async function withFtpClient(callback, options = {}) {
+  return withRemoteClient(callback, options);
 }
 
 export async function uploadJobFiles({ job, videoPath, thumbnailPath, metadataPath }) {
@@ -112,7 +207,7 @@ export async function uploadJobFiles({ job, videoPath, thumbnailPath, metadataPa
   const thumbnailName = `${job.job_id}-thumbnail.jpg`;
   const metadataName = `${job.job_id}.json`;
 
-  if (!shouldUploadToFtp()) {
+  if (!shouldUploadToRemote()) {
     return {
       videoUrl: "",
       thumbnailUrl: "",
@@ -123,7 +218,7 @@ export async function uploadJobFiles({ job, videoPath, thumbnailPath, metadataPa
     };
   }
 
-  await withFtpClient(async (client) => {
+  await withRemoteClient(async (client) => {
     const videosDir = path.posix.join(config.ftp.remoteDir, "videos");
     const thumbnailsDir = path.posix.join(config.ftp.remoteDir, "thumbnails");
     const metadataDir = path.posix.join(config.ftp.remoteDir, "metadata");
@@ -149,9 +244,9 @@ export async function uploadJobFiles({ job, videoPath, thumbnailPath, metadataPa
 }
 
 export async function uploadVideoFile({ videoPath, videoName }) {
-  if (!shouldUploadToFtp()) return "";
+  if (!shouldUploadToRemote()) return "";
 
-  await withFtpClient(async (client) => {
+  await withRemoteClient(async (client) => {
     const videosDir = path.posix.join(config.ftp.remoteDir, "videos");
     await client.ensureDir(videosDir);
     await uploadFromVerified(client, videoPath, videoName, videosDir);
@@ -161,8 +256,8 @@ export async function uploadVideoFile({ videoPath, videoName }) {
 }
 
 export async function uploadHistoryFile(historyFile) {
-  if (!shouldUploadToFtp()) return "";
-  await withFtpClient(async (client) => {
+  if (!shouldUploadToRemote()) return "";
+  await withRemoteClient(async (client) => {
     await client.ensureDir(path.posix.join(config.ftp.remoteDir, "history"));
     await client.uploadFrom(historyFile, path.basename(historyFile));
   }, { timeoutMs: config.ftp.stateTimeoutMs });
@@ -184,7 +279,7 @@ export async function validatePublicUrl(url) {
       });
       if (response.ok || response.status === 206) return true;
     } catch {
-      // Public hosting can lag a few seconds after FTP upload.
+      // Public hosting can lag a few seconds after remote upload.
     }
     if (attempt < config.ftp.publicUrlRetries) await sleep(config.ftp.publicUrlRetryDelayMs);
   }

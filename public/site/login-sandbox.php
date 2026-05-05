@@ -412,7 +412,7 @@ if (isset($_GET['published'])) $message = 'Video sandbox berhasil dikirim ke Tik
           <p class="muted">Job: <code><?= e($video['job_id']) ?></code></p>
           <p><a href="<?= e($video['url']) ?>" target="_blank" rel="noreferrer">Buka video publik</a></p>
         <?php else: ?>
-          <p class="muted">Belum ada video di <code>ig-generated/state/jobs.json</code>. Jalankan workflow sampai FTP upload selesai.</p>
+          <p class="muted">Belum ada video di <code>ig-generated/state/jobs.json</code>. Jalankan workflow sampai SFTP upload selesai.</p>
         <?php endif; ?>
       </div>
 

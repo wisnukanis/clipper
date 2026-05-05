@@ -1,8 +1,8 @@
 # Podcast Clipper Automation System
 
-README ini menjelaskan rancangan sistem otomasi konten podcast berbasis **link video YouTube**. Sistem ini berjalan otomatis atau manual dari GitHub Actions, mengambil link video yang sudah dimasukkan melalui dashboard atau workflow input, memprosesnya menjadi clip pendek 9:16, membuat caption dan thumbnail dengan AI, menyimpan output ke FTP hosting, lalu mempublikasikannya ke YouTube Shorts, Facebook Page/Reels, dan Instagram Reels.
+README ini menjelaskan rancangan sistem otomasi konten podcast berbasis **link video YouTube**. Sistem ini berjalan otomatis atau manual dari GitHub Actions, mengambil link video yang sudah dimasukkan melalui dashboard atau workflow input, memprosesnya menjadi clip pendek 9:16, membuat caption dan thumbnail dengan AI, menyimpan output ke SFTP hosting, lalu mempublikasikannya ke YouTube Shorts, Facebook Page/Reels, dan Instagram Reels.
 
-> Catatan keamanan: jangan menyimpan `.env`, API key, token, password FTP, cookies YouTube, atau credential lain di repository. Gunakan `.env` lokal untuk development dan secrets untuk deployment.
+> Catatan keamanan: jangan menyimpan `.env`, API key, token, password SFTP/FTP, cookies YouTube, atau credential lain di repository. Gunakan `.env` lokal untuk development dan secrets untuk deployment.
 
 ---
 
@@ -662,9 +662,9 @@ pakai cookies hanya untuk konten yang boleh diproses
 
 ---
 
-## 10. FTP Hosting sebagai Media Penyimpanan
+## 10. SFTP Hosting sebagai Media Penyimpanan
 
-FTP hosting adalah storage persisten utama.
+SFTP hosting adalah storage persisten utama. FTP lama masih didukung sebagai fallback, tetapi deployment utama memakai `UPLOAD_DRIVER=sftp`.
 
 Contoh struktur:
 
@@ -776,7 +776,7 @@ Contoh `.env.example`:
 ```env
 LOCAL_PORT=8787
 PUBLIC_BASE_URL=https://www.example.com/ig-generated
-UPLOAD_DRIVER=ftp
+UPLOAD_DRIVER=sftp
 AI_PROVIDER=gemini
 
 GEMINI_API_KEY=
@@ -796,23 +796,25 @@ CLOD_BASE_URL=https://api.clod.io/v1
 CLOD_MODEL=DeepSeek V3
 CLOD_TEMPERATURE=0.45
 
-FTP_HOST=
-FTP_PORT=21
-FTP_USER=
-FTP_PASSWORD=
-FTP_REMOTE_DIR=/public_html/ig-generated
-FTP_TIMEOUT_SECONDS=300
-FTP_UPLOAD_TIMEOUT_SECONDS=1800
-FTP_CLEANUP_TIMEOUT_SECONDS=600
-FTP_STATE_TIMEOUT_SECONDS=90
-FTP_PRECHECK_RETRIES=3
-FTP_UPLOAD_RETRIES=2
-FTP_PUBLIC_URL_RETRIES=8
-FTP_PUBLIC_URL_RETRY_DELAY_MS=2500
-FTP_CLEANUP_DAYS=1
-FTP_CLEANUP_DELETE_ALL=false
-FTP_CLEANUP_SUBDIRS=videos,thumbnails,metadata,history
-FTP_CLEANUP_MATCH=
+SFTP_HOST=
+SFTP_PORT=65002
+SFTP_USER=
+SFTP_PASSWORD=
+SFTP_PRIVATE_KEY=
+SFTP_PASSPHRASE=
+SFTP_REMOTE_DIR=/home/u123456789/domains/domain.tld/public_html/ig-generated
+SFTP_TIMEOUT_SECONDS=300
+SFTP_UPLOAD_TIMEOUT_SECONDS=1800
+SFTP_CLEANUP_TIMEOUT_SECONDS=600
+SFTP_STATE_TIMEOUT_SECONDS=90
+SFTP_PRECHECK_RETRIES=3
+SFTP_UPLOAD_RETRIES=2
+SFTP_PUBLIC_URL_RETRIES=8
+SFTP_PUBLIC_URL_RETRY_DELAY_MS=2500
+SFTP_CLEANUP_DAYS=1
+SFTP_CLEANUP_DELETE_ALL=false
+SFTP_CLEANUP_SUBDIRS=videos,thumbnails,metadata,history
+SFTP_CLEANUP_MATCH=
 
 DEPLOY_REMOTE_DIR=/public_html
 DEPLOY_CLEAN_REMOTE=false
@@ -880,8 +882,32 @@ Base URL publik untuk file yang sudah di-upload ke hosting.
 Metode upload media. Untuk deployment gunakan:
 
 ```txt
-ftp
+sftp
 ```
+
+#### `SFTP_HOST`
+
+Host/IP SSH dari Hostinger. Contoh format: `153.92.9.168`.
+
+#### `SFTP_PORT`
+
+Port SFTP/SSH Hostinger, umumnya `65002`.
+
+#### `SFTP_USER`
+
+Username SSH dari hPanel, contoh `u123456789`.
+
+#### `SFTP_PASSWORD`
+
+Password SSH/SFTP. Di Hostinger biasanya sama dengan password FTP main domain, kecuali memakai SSH-only password.
+
+#### `SFTP_PRIVATE_KEY`
+
+Private key SSH opsional. Jika diisi, `SFTP_PASSWORD` boleh kosong.
+
+#### `SFTP_REMOTE_DIR`
+
+Folder remote absolut tujuan upload, contoh `/home/u123456789/domains/domain.tld/public_html/ig-generated`.
 
 #### `AI_PROVIDER`
 

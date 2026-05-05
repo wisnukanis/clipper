@@ -27,6 +27,19 @@ function numberEnv(name, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function firstEnv(names, fallback = "") {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value !== undefined && value !== "") return value;
+  }
+  return fallback;
+}
+
+function numberEnvFrom(names, fallback) {
+  const value = Number(firstEnv(names, ""));
+  return Number.isFinite(value) ? value : fallback;
+}
+
 function listEnv(...names) {
   const values = [];
   for (const name of names) {
@@ -55,6 +68,18 @@ function buildConfig() {
   const deepgramApiKeys = cleanText(process.env.DEEPGRAM_API_KEYS)
     ? listEnv("DEEPGRAM_API_KEYS")
     : listEnv("DEEPGRAM_API_KEY");
+  const uploadDriver = cleanText(process.env.UPLOAD_DRIVER || "local").toLowerCase();
+  const remotePrefix = uploadDriver === "sftp" ? "SFTP" : "FTP";
+  const remoteFallbackPrefix = remotePrefix === "SFTP" ? "FTP" : "SFTP";
+  const remoteEnvNames = (suffix) => [`${remotePrefix}_${suffix}`, `${remoteFallbackPrefix}_${suffix}`];
+  const remotePortEnvNames = uploadDriver === "sftp" ? ["SFTP_PORT"] : remoteEnvNames("PORT");
+  const remoteHost = cleanText(firstEnv(remoteEnvNames("HOST")));
+  const remoteUser = cleanText(firstEnv(remoteEnvNames("USER")));
+  const remotePassword = firstEnv(remoteEnvNames("PASSWORD"));
+  const remotePrivateKey = firstEnv(["SFTP_PRIVATE_KEY"])
+    .replace(/\\n/g, "\n")
+    .trim();
+  const remoteDefaultPort = uploadDriver === "sftp" ? 65002 : 21;
 
   return {
     rootDir,
@@ -68,7 +93,7 @@ function buildConfig() {
     localPort: numberEnv("LOCAL_PORT", 8788),
     timezone: cleanText(process.env.APP_TIMEZONE || "Asia/Jakarta"),
     publicBaseUrl: cleanBaseUrl(process.env.PUBLIC_BASE_URL),
-    uploadDriver: cleanText(process.env.UPLOAD_DRIVER || "local").toLowerCase(),
+    uploadDriver,
     dryRun: boolEnv("DRY_RUN", true),
     autoPublish: boolEnv("AUTO_PUBLISH", false),
     cleanupLocalAfterPublish: boolEnv("CLEANUP_LOCAL_AFTER_PUBLISH", false),
@@ -169,18 +194,24 @@ function buildConfig() {
       timeoutSeconds: numberEnv("DEEPGRAM_TIMEOUT_SECONDS", 900)
     },
     ftp: {
-      host: cleanText(process.env.FTP_HOST),
-      port: numberEnv("FTP_PORT", 21),
-      user: cleanText(process.env.FTP_USER),
-      password: process.env.FTP_PASSWORD || "",
-      remoteDir: cleanText(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated"),
-      timeoutMs: numberEnv("FTP_TIMEOUT_SECONDS", 300) * 1000,
-      uploadTimeoutMs: numberEnv("FTP_UPLOAD_TIMEOUT_SECONDS", 1800) * 1000,
-      cleanupTimeoutMs: numberEnv("FTP_CLEANUP_TIMEOUT_SECONDS", 600) * 1000,
-      stateTimeoutMs: numberEnv("FTP_STATE_TIMEOUT_SECONDS", 45) * 1000,
-      retries: Math.max(1, numberEnv("FTP_UPLOAD_RETRIES", 2)),
-      publicUrlRetries: Math.max(1, numberEnv("FTP_PUBLIC_URL_RETRIES", 8)),
-      publicUrlRetryDelayMs: Math.max(250, numberEnv("FTP_PUBLIC_URL_RETRY_DELAY_MS", 2500))
+      driver: uploadDriver,
+      label: uploadDriver === "sftp" ? "SFTP" : "FTP",
+      envPrefix: remotePrefix,
+      host: remoteHost,
+      port: numberEnvFrom(remotePortEnvNames, remoteDefaultPort),
+      user: remoteUser,
+      password: remotePassword,
+      privateKey: remotePrivateKey,
+      passphrase: firstEnv(["SFTP_PASSPHRASE"]),
+      remoteDir: cleanText(firstEnv(remoteEnvNames("REMOTE_DIR"), "/public_html/ig-generated")),
+      timeoutMs: numberEnvFrom(remoteEnvNames("TIMEOUT_SECONDS"), 300) * 1000,
+      uploadTimeoutMs: numberEnvFrom(remoteEnvNames("UPLOAD_TIMEOUT_SECONDS"), 1800) * 1000,
+      cleanupTimeoutMs: numberEnvFrom(remoteEnvNames("CLEANUP_TIMEOUT_SECONDS"), 600) * 1000,
+      stateTimeoutMs: numberEnvFrom(remoteEnvNames("STATE_TIMEOUT_SECONDS"), 45) * 1000,
+      precheckRetries: Math.max(1, numberEnvFrom(remoteEnvNames("PRECHECK_RETRIES"), 3)),
+      retries: Math.max(1, numberEnvFrom(remoteEnvNames("UPLOAD_RETRIES"), 2)),
+      publicUrlRetries: Math.max(1, numberEnvFrom(remoteEnvNames("PUBLIC_URL_RETRIES"), 8)),
+      publicUrlRetryDelayMs: Math.max(250, numberEnvFrom(remoteEnvNames("PUBLIC_URL_RETRY_DELAY_MS"), 2500))
     },
     clipper: {
       rootDir: path.resolve(rootDir, cleanText(process.env.CLIPPER_ROOT || "clipper")),
@@ -205,7 +236,11 @@ export function reloadConfigFromEnv() {
 }
 
 export function shouldUploadToFtp() {
-  return config.uploadDriver === "ftp";
+  return shouldUploadToRemote();
+}
+
+export function shouldUploadToRemote() {
+  return config.uploadDriver === "ftp" || config.uploadDriver === "sftp";
 }
 
 export function canPublish() {

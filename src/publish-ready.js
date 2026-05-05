@@ -48,7 +48,7 @@ async function resolveThumbnailPath(job) {
       const stat = await fs.stat(thumbnailPath);
       if (stat.size) return thumbnailPath;
     } catch {
-      // Fall back to the public FTP URL when the local generated file is gone.
+      // Fall back to the public remote URL when the local generated file is gone.
     }
   }
 
@@ -74,7 +74,7 @@ async function resolveVideoPath(job) {
       const stat = await fs.stat(videoPath);
       if (stat.size) return videoPath;
     } catch {
-      // GitHub runner baru biasanya tidak punya file lokal; ambil lagi dari FTP public URL.
+      // GitHub runner baru biasanya tidak punya file lokal; ambil lagi dari public URL remote.
     }
   }
 
@@ -84,10 +84,10 @@ async function resolveVideoPath(job) {
   const target = path.join(config.generatedDir, "ready-videos", `${job.job_id}.mp4`);
   const response = await fetch(job.public_video_url);
   if (!response.ok) {
-    throw new Error(`Gagal download ulang video ready dari FTP: HTTP ${response.status}`);
+    throw new Error(`Gagal download ulang video ready dari remote storage: HTTP ${response.status}`);
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length) throw new Error("Video ready dari FTP kosong.");
+  if (!buffer.length) throw new Error("Video ready dari remote storage kosong.");
   await fs.writeFile(target, buffer);
   return target;
 }
@@ -222,7 +222,7 @@ try {
   }
 
   if (config.instagram.enabled && !instagram) {
-    if (!job.public_video_url) throw new Error("public_video_url kosong, Instagram butuh URL video publik dari FTP.");
+    if (!job.public_video_url) throw new Error("public_video_url kosong, Instagram butuh URL video publik dari remote storage.");
     instagram = await publishReel({
       videoUrl: job.public_video_url,
       caption: job.caption || ""
@@ -230,7 +230,7 @@ try {
   }
 
   if (config.tiktok.enabled && !tiktok) {
-    if (!job.public_video_url) throw new Error("public_video_url kosong, TikTok butuh URL video publik dari FTP.");
+    if (!job.public_video_url) throw new Error("public_video_url kosong, TikTok butuh URL video publik dari remote storage.");
     tiktok = await publishToTikTok({
       videoUrl: job.public_video_url,
       videoPath,
@@ -239,7 +239,7 @@ try {
   }
 
   if (config.threads.enabled && !threads) {
-    if (!job.public_video_url) throw new Error("public_video_url kosong, Threads butuh URL video publik dari FTP.");
+    if (!job.public_video_url) throw new Error("public_video_url kosong, Threads butuh URL video publik dari remote storage.");
     threads = await publishToThreads({
       videoUrl: job.public_video_url,
       caption: job.caption || ""

@@ -58,12 +58,12 @@ async function resolveAsset({ localPath, publicUrl, folder, filename, required }
   const target = path.join(dir, filename);
   const response = await fetch(publicUrl);
   if (!response.ok) {
-    if (required) throw new Error(`Gagal download ${folder} dari FTP: HTTP ${response.status}`);
+    if (required) throw new Error(`Gagal download ${folder} dari remote storage: HTTP ${response.status}`);
     return localPath || "";
   }
   const buffer = Buffer.from(await response.arrayBuffer());
   if (!buffer.length) {
-    if (required) throw new Error(`${folder} dari FTP kosong.`);
+    if (required) throw new Error(`${folder} dari remote storage kosong.`);
     return localPath || "";
   }
   await fs.writeFile(target, buffer);

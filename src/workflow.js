@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { config, canPublish, shouldUploadToFtp } from "./config.js";
+import { config, canPublish, shouldUploadToRemote } from "./config.js";
 import { ensureProjectDirs, patchItem, saveGeneratedJson } from "./storage.js";
 import { appendLog } from "./logger.js";
 import { appendHistory, publishedCountToday } from "./history.js";
@@ -329,7 +329,7 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     thumbnailUrl: "",
     metadataUrl: ""
   };
-  if (shouldUploadToFtp()) {
+  if (shouldUploadToRemote()) {
     upload = await uploadJobFiles({
       job: storageJob,
       videoPath: output.finalAbsPath,
@@ -556,7 +556,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
 
   if (config.facebook.enabled) {
     platformResults.facebook = await publishPlatform("facebook", platformResults, job.job_id, async () => {
-      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Facebook.");
+      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/SFTP wajib valid sebelum publish Facebook.");
       await updateJob(job.job_id, { facebook_status: "processing", facebook_error: "" });
       return publishToFacebook({
         videoUrl: upload.videoUrl,
@@ -570,7 +570,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
 
   if (config.instagram.enabled) {
     platformResults.instagram = await publishPlatform("instagram", platformResults, job.job_id, async () => {
-      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Instagram.");
+      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/SFTP wajib valid sebelum publish Instagram.");
       await updateJob(job.job_id, { instagram_status: "processing", instagram_error: "" });
       const instagramVideo = await prepareInstagramVideo({
         job,
@@ -587,7 +587,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
 
   if (config.tiktok.enabled) {
     platformResults.tiktok = await publishPlatform("tiktok", platformResults, job.job_id, async () => {
-      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish TikTok.");
+      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/SFTP wajib valid sebelum publish TikTok.");
       await updateJob(job.job_id, { tiktok_status: "processing", tiktok_error: "" });
       return publishToTikTok({
         videoUrl: upload.videoUrl,
@@ -599,7 +599,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
 
   if (config.threads.enabled) {
     platformResults.threads = await publishPlatform("threads", platformResults, job.job_id, async () => {
-      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/FTP wajib valid sebelum publish Threads.");
+      if (!upload.videoUrl) throw new Error("PUBLIC_BASE_URL/SFTP wajib valid sebelum publish Threads.");
       await updateJob(job.job_id, { threads_status: "processing", threads_error: "" });
       return publishToThreads({
         videoUrl: upload.videoUrl,

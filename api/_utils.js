@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { Readable } from "node:stream";
-import { Client } from "basic-ftp";
+import { Client as FtpClient } from "basic-ftp";
+import SftpClient from "ssh2-sftp-client";
 
 const STATE_FILES = ["themes.json", "videos.json", "prompts.json", "jobs.json", "history.json"];
 
@@ -96,18 +97,39 @@ async function readStateFileFromPublicBaseUrl(file) {
 }
 
 export async function uploadStateFile(file, data) {
-  const cfg = ftpConfig();
-  const missing = Object.entries(cfg)
-    .filter(([key, value]) => key !== "port" && !value)
-    .map(([key]) => key.toUpperCase());
+  const cfg = remoteConfig();
+  if (!["ftp", "sftp"].includes(cfg.driver)) return { skipped: true };
+
+  const missing = remoteMissingEnv(cfg);
   if (missing.length) {
-    throw new Error(`FTP env belum lengkap untuk update state: ${missing.join(", ")}`);
+    throw new Error(`${cfg.label} env belum lengkap untuk update state: ${missing.join(", ")}`);
   }
 
   const raw = `${JSON.stringify(data, null, 2)}\n`;
 
-  await withFtpRetry(async () => {
-    const client = new Client(Number(process.env.FTP_STATE_TIMEOUT_SECONDS || 45) * 1000);
+  await withRemoteRetry(async () => {
+    if (cfg.driver === "sftp") {
+      const client = new SftpClient();
+      try {
+        await client.connect({
+          host: cfg.host,
+          port: cfg.port,
+          username: cfg.user,
+          password: cfg.password || undefined,
+          privateKey: cfg.privateKey || undefined,
+          passphrase: cfg.passphrase || undefined,
+          readyTimeout: cfg.stateTimeoutMs
+        });
+        const stateDir = path.posix.join(cfg.remoteDir, "state");
+        await client.mkdir(stateDir, true);
+        await client.put(Readable.from([Buffer.from(raw, "utf8")]), path.posix.join(stateDir, file));
+      } finally {
+        await client.end().catch(() => {});
+      }
+      return;
+    }
+
+    const client = new FtpClient(cfg.stateTimeoutMs);
     try {
       await client.access({
         host: cfg.host,
@@ -122,13 +144,15 @@ export async function uploadStateFile(file, data) {
       client.close();
     }
   });
+
+  return { skipped: false };
 }
 
 export function configSummary() {
   return {
     dryRun: boolEnv("DRY_RUN", false),
     autoPublish: boolEnv("AUTO_PUBLISH", true),
-    uploadDriver: clean(process.env.UPLOAD_DRIVER || "ftp"),
+    uploadDriver: clean(process.env.UPLOAD_DRIVER || "sftp"),
     defaultTheme: clean(process.env.DEFAULT_THEME || "auto"),
     publicBaseUrl: cleanBaseUrl(process.env.PUBLIC_BASE_URL),
     postCron: clean(process.env.POST_CRON || ""),
@@ -323,18 +347,55 @@ function cleanBaseUrl(value) {
   return clean(value).replace(/\/+$/, "");
 }
 
-function ftpConfig() {
+function firstEnv(names, fallback = "") {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value !== undefined && value !== "") return value;
+  }
+  return fallback;
+}
+
+function numberEnvFrom(names, fallback) {
+  const value = Number(firstEnv(names));
+  return Number.isFinite(value) ? value : fallback;
+}
+
+export function remoteConfig() {
+  const driver = clean(process.env.UPLOAD_DRIVER || "sftp").toLowerCase();
+  const prefix = driver === "sftp" ? "SFTP" : "FTP";
+  const fallbackPrefix = prefix === "SFTP" ? "FTP" : "SFTP";
+  const names = (suffix) => [`${prefix}_${suffix}`, `${fallbackPrefix}_${suffix}`];
+  const portNames = driver === "sftp" ? ["SFTP_PORT"] : names("PORT");
+  const defaultPort = driver === "sftp" ? 65002 : 21;
+
   return {
-    host: clean(process.env.FTP_HOST),
-    port: Number(process.env.FTP_PORT || 21),
-    user: clean(process.env.FTP_USER),
-    password: process.env.FTP_PASSWORD || "",
-    remoteDir: clean(process.env.FTP_REMOTE_DIR || "/public_html/ig-generated")
+    driver,
+    label: driver === "sftp" ? "SFTP" : "FTP",
+    prefix,
+    host: clean(firstEnv(names("HOST"))),
+    port: numberEnvFrom(portNames, defaultPort),
+    user: clean(firstEnv(names("USER"))),
+    password: firstEnv(names("PASSWORD")),
+    privateKey: firstEnv(["SFTP_PRIVATE_KEY"]).replace(/\\n/g, "\n").trim(),
+    passphrase: firstEnv(["SFTP_PASSPHRASE"]),
+    remoteDir: clean(firstEnv(names("REMOTE_DIR"), "/public_html/ig-generated")),
+    stateTimeoutMs: numberEnvFrom(names("STATE_TIMEOUT_SECONDS"), 45) * 1000,
+    retries: Math.max(1, numberEnvFrom(names("UPLOAD_RETRIES"), 3))
   };
 }
 
-async function withFtpRetry(task) {
-  const attempts = Math.max(1, Number(process.env.FTP_UPLOAD_RETRIES || 3));
+export function remoteMissingEnv(cfg) {
+  const missing = [];
+  if (!cfg.host) missing.push(`${cfg.prefix}_HOST`);
+  if (!cfg.user) missing.push(`${cfg.prefix}_USER`);
+  if (!cfg.password && !cfg.privateKey) missing.push(`${cfg.prefix}_PASSWORD`);
+  if (!cfg.remoteDir) missing.push(`${cfg.prefix}_REMOTE_DIR`);
+  return missing;
+}
+
+async function withRemoteRetry(task) {
+  const cfg = remoteConfig();
+  const attempts = cfg.retries;
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
@@ -342,8 +403,8 @@ async function withFtpRetry(task) {
     } catch (error) {
       lastError = error;
       const message = String(error?.message || error || "");
-      const retriable = !/\b(530|550|553)\b/.test(message)
-        && /timeout|timed out|closed|socket|econn|etimedout|econnreset|econnrefused|epipe|no control connection|421|425|426|450|451/i.test(message);
+      const retriable = !/\b(530|550|553)\b|auth|authentication|permission denied|login incorrect/i.test(message)
+        && /timeout|timed out|closed|socket|econn|etimedout|econnreset|econnrefused|epipe|no control connection|connection lost|421|425|426|450|451/i.test(message);
       if (attempt >= attempts || !retriable) throw error;
       await new Promise((resolve) => setTimeout(resolve, Math.min(30000, 1500 * attempt)));
     }

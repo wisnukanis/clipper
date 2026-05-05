@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { config, canPublish, shouldUploadToFtp } from "./config.js";
+import { config, canPublish, shouldUploadToRemote } from "./config.js";
 import { ensureFreshInstagramToken } from "./instagram-token.js";
 import { ensureFreshFacebookToken } from "./facebook-token.js";
-import { withFtpClient } from "./uploader.js";
+import { withRemoteClient } from "./uploader.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
 import { queryTikTokCreatorInfo } from "./tiktok.js";
 import { ensureFreshThreadsToken } from "./threads-token.js";
@@ -236,44 +236,57 @@ async function aiChecks(online) {
   return [gemini, openai];
 }
 
-async function checkFtp(online) {
-  if (!shouldUploadToFtp()) {
-    return checkResult("FTP", true, "UPLOAD_DRIVER bukan ftp", false);
+function missingRemoteConfig() {
+  const prefix = config.ftp.envPrefix || "FTP";
+  const missing = [];
+  if (!config.publicBaseUrl) missing.push("PUBLIC_BASE_URL");
+  if (!config.ftp.host) missing.push(`${prefix}_HOST`);
+  if (!config.ftp.user) missing.push(`${prefix}_USER`);
+  if (!config.ftp.password && !config.ftp.privateKey) missing.push(`${prefix}_PASSWORD`);
+  if (!config.ftp.remoteDir) missing.push(`${prefix}_REMOTE_DIR`);
+  return missing;
+}
+
+async function checkRemoteStorage(online) {
+  const label = config.ftp.label || "Remote storage";
+
+  if (!shouldUploadToRemote()) {
+    return checkResult(label, true, "UPLOAD_DRIVER bukan ftp/sftp", false);
   }
 
-  const missing = missingEnv(["PUBLIC_BASE_URL", "FTP_HOST", "FTP_USER", "FTP_PASSWORD", "FTP_REMOTE_DIR"]);
+  const missing = missingRemoteConfig();
   if (missing.length) {
-    return checkResult("FTP", false, `missing env: ${missing.join(", ")}`, true);
+    return checkResult(label, false, `missing env: ${missing.join(", ")}`, true);
   }
 
   if (!online) {
-    return checkResult("FTP", true, "env lengkap");
+    return checkResult(label, true, "env lengkap");
   }
 
-  const attempts = Math.max(1, numberEnv("FTP_PRECHECK_RETRIES", 3));
+  const attempts = config.ftp.precheckRetries || Math.max(1, numberEnv("FTP_PRECHECK_RETRIES", 3));
   const timeoutMs = Math.max(config.ftp.stateTimeoutMs, config.apiCheckTimeoutMs);
   let lastError = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      await withFtpClient(async (client) => {
+      await withRemoteClient(async (client) => {
         await client.ensureDir(config.ftp.remoteDir);
         await client.list();
       }, { timeoutMs });
       const detail = attempt > 1
         ? `remote siap: ${config.ftp.remoteDir} (attempt ${attempt}/${attempts})`
         : `remote siap: ${config.ftp.remoteDir}`;
-      return checkResult("FTP", true, detail);
+      return checkResult(label, true, detail);
     } catch (error) {
       lastError = error;
       if (attempt < attempts) {
-        console.warn(`FTP precheck attempt ${attempt}/${attempts} gagal: ${error.message}`);
+        console.warn(`${label} precheck attempt ${attempt}/${attempts} gagal: ${error.message}`);
         await sleep(1500 * attempt);
       }
     }
   }
 
-  return checkResult("FTP", false, lastError?.message || "FTP precheck gagal", true);
+  return checkResult(label, false, lastError?.message || `${label} precheck gagal`, true);
 }
 
 async function checkInstagram(online, required = canPublish()) {
@@ -471,7 +484,7 @@ export async function runPreflight(options = {}) {
   const socialPublishRequired = options.socialPublishRequired ?? false;
   const preChecks = [
     ...await localChecks(),
-    await checkFtp(ftpOnline),
+    await checkRemoteStorage(ftpOnline),
     await checkInstagram(socialOnline, socialPublishRequired),
     await checkFacebook(socialOnline, socialPublishRequired),
     await checkYoutube(youtubeOnline, publishRequired),

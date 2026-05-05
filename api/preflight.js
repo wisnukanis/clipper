@@ -5,6 +5,8 @@ import {
   getRecentRuns,
   methodAllowed,
   readState,
+  remoteConfig,
+  remoteMissingEnv,
   requireAuth,
   sendJson
 } from "./_utils.js";
@@ -16,10 +18,12 @@ export default async function handler(req, res) {
   try {
     const state = await readState();
     const runs = await getRecentRuns(1);
+    const remote = remoteConfig();
+    const missingRemote = remoteMissingEnv(remote);
     const checks = [
       check("Dashboard PIN", Boolean(clean(process.env.AUTO_DASHBOARD_PIN)), "PIN aktif"),
       check("PUBLIC_BASE_URL", Boolean(clean(process.env.PUBLIC_BASE_URL)), clean(process.env.PUBLIC_BASE_URL)),
-      check("FTP credential", Boolean(clean(process.env.FTP_HOST) && clean(process.env.FTP_USER) && process.env.FTP_PASSWORD), "dibutuhkan untuk update queue"),
+      check(`${remote.label} credential`, missingRemote.length === 0, missingRemote.length ? `missing env: ${missingRemote.join(", ")}` : "dibutuhkan untuk update queue"),
       check("Workflow token", Boolean(clean(process.env.GH_REPO_SECRET_TOKEN || process.env.GITHUB_TOKEN)), "dibutuhkan untuk tombol run"),
       check("data/videos.json", Array.isArray(state.videos), `${(state.videos || []).length} item`),
       check("data/jobs.json", Array.isArray(state.jobs), `${(state.jobs || []).length} item`),

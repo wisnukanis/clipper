@@ -23,6 +23,9 @@ const envFilePath = path.join(config.rootDir, ".env");
 const sensitiveEnvKeys = new Set([
   "AUTO_DASHBOARD_PIN",
   "FTP_PASSWORD",
+  "SFTP_PASSWORD",
+  "SFTP_PRIVATE_KEY",
+  "SFTP_PASSPHRASE",
   "INSTAGRAM_ACCESS_TOKEN",
   "FACEBOOK_PAGE_ACCESS_TOKEN",
   "FACEBOOK_USER_ACCESS_TOKEN",
@@ -59,20 +62,41 @@ const envGroups = [
     ]
   },
   {
-    id: "ftp",
-    title: "FTP",
+    id: "remote",
+    title: "Remote Storage",
     fields: [
-      field("FTP_HOST", "Host"),
-      field("FTP_PORT", "Port"),
-      field("FTP_USER", "User"),
-      field("FTP_PASSWORD", "Password", true),
-      field("FTP_REMOTE_DIR", "Remote dir"),
-      field("FTP_TIMEOUT_SECONDS", "Timeout seconds"),
-      field("FTP_UPLOAD_TIMEOUT_SECONDS", "Upload timeout seconds"),
-      field("FTP_CLEANUP_TIMEOUT_SECONDS", "Cleanup timeout seconds"),
-      field("FTP_UPLOAD_RETRIES", "Upload retries"),
-      field("FTP_PUBLIC_URL_RETRIES", "Public URL retries"),
-      field("FTP_PUBLIC_URL_RETRY_DELAY_MS", "Public URL retry delay ms"),
+      field("SFTP_HOST", "SFTP host"),
+      field("SFTP_PORT", "SFTP port"),
+      field("SFTP_USER", "SFTP user"),
+      field("SFTP_PASSWORD", "SFTP password", true),
+      field("SFTP_PRIVATE_KEY", "SFTP private key", true),
+      field("SFTP_PASSPHRASE", "SFTP passphrase", true),
+      field("SFTP_REMOTE_DIR", "SFTP remote dir"),
+      field("SFTP_TIMEOUT_SECONDS", "Timeout seconds"),
+      field("SFTP_UPLOAD_TIMEOUT_SECONDS", "Upload timeout seconds"),
+      field("SFTP_CLEANUP_TIMEOUT_SECONDS", "Cleanup timeout seconds"),
+      field("SFTP_STATE_TIMEOUT_SECONDS", "State timeout seconds"),
+      field("SFTP_PRECHECK_RETRIES", "Precheck retries"),
+      field("SFTP_UPLOAD_RETRIES", "Upload retries"),
+      field("SFTP_PUBLIC_URL_RETRIES", "Public URL retries"),
+      field("SFTP_PUBLIC_URL_RETRY_DELAY_MS", "Public URL retry delay ms"),
+      field("SFTP_CLEANUP_DAYS", "Cleanup days"),
+      field("SFTP_CLEANUP_DELETE_ALL", "Cleanup delete all"),
+      field("SFTP_CLEANUP_SUBDIRS", "Cleanup subdirs"),
+      field("SFTP_CLEANUP_MATCH", "Cleanup match"),
+      field("FTP_HOST", "Legacy FTP host"),
+      field("FTP_PORT", "Legacy FTP port"),
+      field("FTP_USER", "Legacy FTP user"),
+      field("FTP_PASSWORD", "Legacy FTP password", true),
+      field("FTP_REMOTE_DIR", "Legacy FTP remote dir"),
+      field("FTP_TIMEOUT_SECONDS", "Legacy timeout seconds"),
+      field("FTP_UPLOAD_TIMEOUT_SECONDS", "Legacy upload timeout seconds"),
+      field("FTP_CLEANUP_TIMEOUT_SECONDS", "Legacy cleanup timeout seconds"),
+      field("FTP_STATE_TIMEOUT_SECONDS", "Legacy state timeout seconds"),
+      field("FTP_PRECHECK_RETRIES", "Legacy precheck retries"),
+      field("FTP_UPLOAD_RETRIES", "Legacy upload retries"),
+      field("FTP_PUBLIC_URL_RETRIES", "Legacy public URL retries"),
+      field("FTP_PUBLIC_URL_RETRY_DELAY_MS", "Legacy public URL retry delay ms"),
       field("FTP_CLEANUP_DAYS", "Cleanup days"),
       field("FTP_CLEANUP_DELETE_ALL", "Cleanup delete all"),
       field("FTP_CLEANUP_SUBDIRS", "Cleanup subdirs"),
@@ -516,7 +540,7 @@ async function syncState() {
   try {
     await uploadStateToRemote();
   } catch (error) {
-    console.warn(`State FTP sync dilewati: ${error.message}`);
+    console.warn(`State remote sync dilewati: ${error.message}`);
   }
 }
 

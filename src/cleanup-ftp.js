@@ -1,6 +1,6 @@
 import path from "node:path";
-import { config, shouldUploadToFtp } from "./config.js";
-import { withFtpClient } from "./uploader.js";
+import { config, shouldUploadToRemote } from "./config.js";
+import { withRemoteClient } from "./uploader.js";
 
 const DEFAULT_RETENTION_DAYS = 1;
 const DEFAULT_SUBDIRS = ["videos", "thumbnails", "metadata", "history"];
@@ -22,14 +22,14 @@ function parseArgs(argv) {
 }
 
 function resolveRetentionDays(arg) {
-  const candidate = arg ?? process.env.FTP_CLEANUP_DAYS ?? DEFAULT_RETENTION_DAYS;
+  const candidate = arg ?? cleanupEnv("DAYS") ?? DEFAULT_RETENTION_DAYS;
   const num = Number(candidate);
   if (!Number.isFinite(num) || num < 0) return DEFAULT_RETENTION_DAYS;
   return Math.floor(num);
 }
 
 function resolveSubdirs(arg) {
-  const raw = arg ?? process.env.FTP_CLEANUP_SUBDIRS ?? "";
+  const raw = arg ?? cleanupEnv("SUBDIRS") ?? "";
   const list = String(raw).split(",").map((part) => part.trim()).filter(Boolean);
   return list.length ? list : DEFAULT_SUBDIRS;
 }
@@ -41,7 +41,12 @@ function boolEnv(name, fallback = false) {
 }
 
 function resolveMatch(arg) {
-  return String(arg ?? process.env.FTP_CLEANUP_MATCH ?? "").trim();
+  return String(arg ?? cleanupEnv("MATCH") ?? "").trim();
+}
+
+function cleanupEnv(suffix) {
+  const prefix = config.ftp.envPrefix || "FTP";
+  return process.env[`${prefix}_CLEANUP_${suffix}`] ?? process.env[`FTP_CLEANUP_${suffix}`];
 }
 
 function matchesCleanupFilter(name, match) {
@@ -127,25 +132,27 @@ function mergeStats(target, addition) {
 }
 
 async function main() {
-  if (!shouldUploadToFtp()) {
-    console.log("UPLOAD_DRIVER bukan ftp; cleanup dilewati.");
+  const label = config.ftp.label || "Remote";
+
+  if (!shouldUploadToRemote()) {
+    console.log("UPLOAD_DRIVER bukan ftp/sftp; cleanup dilewati.");
     return;
   }
 
-  if (!config.ftp.host || !config.ftp.user || !config.ftp.password || !config.ftp.remoteDir) {
-    console.error("FTP credentials/remoteDir belum lengkap di env.");
+  if (!config.ftp.host || !config.ftp.user || (!config.ftp.password && !config.ftp.privateKey) || !config.ftp.remoteDir) {
+    console.error(`${label} credentials/remoteDir belum lengkap di env.`);
     process.exit(1);
   }
 
   const args = parseArgs(process.argv);
-  const deleteAll = args.deleteAll || boolEnv("FTP_CLEANUP_DELETE_ALL", false);
+  const deleteAll = args.deleteAll || boolEnv(`${config.ftp.envPrefix || "FTP"}_CLEANUP_DELETE_ALL`, boolEnv("FTP_CLEANUP_DELETE_ALL", false));
   const retentionDays = deleteAll ? 0 : resolveRetentionDays(args.days);
   const subdirs = resolveSubdirs(args.subdirs);
   const match = resolveMatch(args.match);
   const dryRun = args.dryRun;
   const cutoffMs = Date.now() - retentionDays * 86400000;
 
-  console.log(`FTP cleanup target: ${config.ftp.remoteDir}`);
+  console.log(`${label} cleanup target: ${config.ftp.remoteDir}`);
   console.log(deleteAll
     ? "Retention: delete_all aktif (semua file yang match akan dihapus)"
     : `Retention: ${retentionDays} hari (cutoff ${new Date(cutoffMs).toISOString()})`);
@@ -155,7 +162,7 @@ async function main() {
 
   const totals = { scanned: 0, deleted: 0, freedBytes: 0, skipped: 0, errors: 0 };
 
-  await withFtpClient(async (client) => {
+  await withRemoteClient(async (client) => {
     for (const sub of subdirs) {
       const dir = path.posix.join(config.ftp.remoteDir, sub);
       const stats = await cleanupSubdir(client, dir, { cutoffMs, dryRun, deleteAll, match });
