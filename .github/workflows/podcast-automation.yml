@@ -538,6 +538,7 @@ jobs:
       - name: Check FFmpeg tools
         id: ffmpeg-tools
         shell: bash
+        timeout-minutes: 2
         run: |
           set -euo pipefail
           if command -v ffmpeg >/dev/null 2>&1 \
@@ -555,6 +556,7 @@ jobs:
       - name: Prepare APT package cache
         if: steps.ffmpeg-tools.outputs.ready != 'true'
         shell: bash
+        timeout-minutes: 2
         run: |
           sudo mkdir -p /var/cache/apt/archives/partial
           sudo chmod -R a+rwx /var/cache/apt/archives
@@ -564,6 +566,7 @@ jobs:
       - name: Cache APT packages
         if: steps.ffmpeg-tools.outputs.ready != 'true'
         uses: actions/cache@v4
+        timeout-minutes: 3
         with:
           path: /var/cache/apt/archives
           key: apt-ffmpeg-${{ runner.os }}-${{ runner.arch }}-v1
@@ -573,10 +576,19 @@ jobs:
       - name: Install FFmpeg
         if: steps.ffmpeg-tools.outputs.ready != 'true'
         shell: bash
+        timeout-minutes: 4
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg unzip
+          sudo apt-get \
+            -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20 \
+            update
+          sudo apt-get \
+            -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20 \
+            install -y --no-install-recommends ffmpeg unzip
           sudo chmod -R a+rwx /var/cache/apt/archives || true
           ffmpeg -version | head -n 1
           unzip -v | head -n 1
