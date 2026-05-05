@@ -27,9 +27,9 @@ def normalize_brand(value):
 
 
 def clean_title(value):
-    text = clean_text(value, "BAGIAN INI BIKIN PENONTON DIAM").upper()
+    text = clean_text(value, "BAGIAN INI BIKIN PENONTON BERHENTI SCROLL").upper()
     words = text.split()
-    return " ".join(words[:11]) or "BAGIAN INI BIKIN PENONTON DIAM"
+    return " ".join(words[:16]) or "BAGIAN INI BIKIN PENONTON BERHENTI SCROLL"
 
 
 def clean_quote(value):
@@ -135,9 +135,9 @@ def wrap_text(draw, text, font, max_width, max_lines=2):
     return kept
 
 
-def fit_title_layout(draw, title, rect, max_width, max_size=92, min_size=42):
-    max_height = (rect[3] - rect[1]) - 80
-    for max_lines in (2, 3):
+def fit_title_layout(draw, title, rect, max_width, max_size=92, min_size=34):
+    max_height = (rect[3] - rect[1]) - 70
+    for max_lines in (4, 3):
         size = max_size
         while size >= min_size:
             font = load_font(size)
@@ -151,7 +151,7 @@ def fit_title_layout(draw, title, rect, max_width, max_size=92, min_size=42):
             size -= 2
 
     font = load_font(min_size)
-    lines = wrap_text(draw, title, font, max_width, max_lines=3)
+    lines = wrap_text(draw, title, font, max_width, max_lines=4)
     lines = [ellipsize_to_width(draw, line, font, max_width) for line in lines]
     line_gap = 8
     heights = [text_size(draw, line, font, 4)[1] for line in lines]
@@ -176,7 +176,7 @@ def draw_panel(draw, rect, radius, fill_alpha=232):
     draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(*GOLD, 130), width=2)
 
 
-def draw_transparent_panel(draw, rect, radius, fill_alpha=118):
+def draw_transparent_panel(draw, rect, radius, fill_alpha=142):
     draw.rounded_rectangle(rect, radius=radius, fill=(*BLACK, fill_alpha), outline=(*GOLD, 225), width=4)
     inset = 16
     inner = (rect[0] + inset, rect[1] + inset, rect[2] - inset, rect[3] - inset)
@@ -234,7 +234,7 @@ def render_thumbnail(args):
 
     rect = (130, 880, 950, 1174)
     add_glow(canvas, rect, 42, GOLD, 135)
-    draw_transparent_panel(draw, rect, 42, 118)
+    draw_transparent_panel(draw, rect, 42, 142)
     draw_highlight(canvas, rect)
 
     max_text_width = (rect[2] - rect[0]) - 118

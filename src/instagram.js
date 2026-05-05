@@ -209,7 +209,10 @@ async function getContainerStatus(containerId) {
 }
 
 async function waitForContainerReady(containerId, label = "reel") {
-  for (let attempt = 1; attempt <= 90; attempt += 1) {
+  const maxAttempts = positiveIntEnv("INSTAGRAM_CONTAINER_MAX_ATTEMPTS", 90, 180);
+  const pollMs = positiveIntEnv("INSTAGRAM_CONTAINER_POLL_SECONDS", 6, 60) * 1000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const status = await getContainerStatus(containerId);
     const code = status.status_code || "";
 
@@ -229,10 +232,11 @@ async function waitForContainerReady(containerId, label = "reel") {
       );
     }
 
-    await sleep(10000);
+    await sleep(pollMs);
   }
 
-  throw new Error(`Instagram ${label} belum siap setelah 15 menit: ${containerId}`);
+  const waitedMinutes = Math.round((maxAttempts * pollMs) / 60000);
+  throw new Error(`Instagram ${label} belum siap setelah ${waitedMinutes} menit: ${containerId}`);
 }
 
 async function assertPublicVideoUrl(videoUrl) {

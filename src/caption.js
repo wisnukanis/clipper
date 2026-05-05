@@ -80,9 +80,10 @@ export async function generateThumbnailText({ job, output, promptTemplate, aiPro
   const fallback = fallbackThumbnailText(output);
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
-    "Aturan: 5 sampai 9 kata, ideal 5 sampai 7 kata, huruf besar, kuat, mudah dibaca, tidak clickbait menyesatkan.",
-    "- Jangan jawab satu atau dua kata.",
+    "Aturan: 6 sampai 16 kata, boleh panjang jika hook-nya lengkap, huruf besar, kuat, mudah dibaca, tidak clickbait menyesatkan.",
+    "- Jangan jawab satu atau dua kata, jangan hanya dua kata besar.",
     "- Buat sebagai hook utama, bukan potongan kalimat yang terputus.",
+    "- Buat kalimat/judul utuh yang membuat orang ingin menonton sampai akhir.",
     "- Jangan ambil potongan transkrip mentah yang tidak jelas.",
     "- Buat seperti judul cover video, bukan subtitle.",
     "- Wajib mengandung hook: konflik, rahasia, alasan mengejutkan, pertanyaan, atau momen paling bikin penasaran.",
@@ -95,7 +96,7 @@ export async function generateThumbnailText({ job, output, promptTemplate, aiPro
     `Transkrip singkat: ${String(output.clipTranscript || output.caption || "").slice(0, 900)}`,
     "Balas hanya teks thumbnail."
   ].join("\n");
-  const text = await generateAiText(prompt, { maxOutputTokens: 80, temperature: 0.65, provider: aiProvider });
+  const text = await generateAiText(prompt, { maxOutputTokens: 110, temperature: 0.65, provider: aiProvider });
   const generated = text ? normalizeThumbnailText(text, "") : "";
   return isStrongThumbnailText(generated) ? generated : fallback;
 }
@@ -478,23 +479,23 @@ const STOPWORDS = new Set([
   "why"
 ]);
 
-function normalizeThumbnailText(value, fallback = "CERITA YANG JARANG DIBUKA") {
+function normalizeThumbnailText(value, fallback = "RAHASIA DI BALIK CERITA INI BIKIN PENASARAN") {
   const cleaned = String(value || "")
     .replace(/[`"'*_#]/g, "")
     .replace(/[,:;]+$/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
-  return cleaned.split(/\s+/).slice(0, 11).join(" ") || fallback;
+  return cleaned.split(/\s+/).slice(0, 16).join(" ") || fallback;
 }
 
 function isStrongThumbnailText(value) {
   const cleaned = String(value || "").trim();
   const words = cleaned.split(/\s+/).filter(Boolean);
-  if (words.length < 5 || words.length > 11) return false;
+  if (words.length < 6 || words.length > 16) return false;
   if (/[,:;]$/.test(cleaned)) return false;
   const meaningfulCount = words.filter((word) => !STOPWORDS.has(word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""))).length;
-  return words.join("").length >= 16 && meaningfulCount >= 3;
+  return words.join("").length >= 24 && meaningfulCount >= 4;
 }
 
 function fallbackThumbnailText(output) {
@@ -514,7 +515,7 @@ function fallbackThumbnailText(output) {
   const transcriptTitle = buildTranscriptThumbnailText(output?.clipTranscript);
   if (isStrongThumbnailText(transcriptTitle)) return transcriptTitle;
 
-  return "CERITA INI BIKIN PENASARAN";
+  return "RAHASIA DI BALIK CERITA INI BIKIN PENASARAN";
 }
 
 function buildTranscriptThumbnailText(value) {
@@ -522,6 +523,6 @@ function buildTranscriptThumbnailText(value) {
     .replace(/[^\p{L}\p{N}\s?]/gu, " ")
     .split(/\s+/)
     .filter((word) => word.length >= 3 && !STOPWORDS.has(word.toLowerCase()))
-    .slice(0, 7);
+    .slice(0, 14);
   return normalizeThumbnailText(words.join(" "), "");
 }

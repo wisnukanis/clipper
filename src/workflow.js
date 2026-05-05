@@ -43,20 +43,23 @@ export async function runWorkflow(options = {}) {
     console.warn(`State remote dilewati: ${error.message}`);
   });
 
+  let scheduledDailyLimit = 0;
+  let scheduledPostedToday = 0;
+
   if (options.scheduled && options.publish) {
-    const dailyLimit = Math.max(0, Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY) || 0);
-    const postedToday = dailyLimit > 0 ? await publishedCountToday() : 0;
-    if (dailyLimit > 0 && postedToday >= dailyLimit) {
+    scheduledDailyLimit = Math.max(0, Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY) || 0);
+    scheduledPostedToday = scheduledDailyLimit > 0 ? await publishedCountToday() : 0;
+    if (scheduledDailyLimit > 0 && scheduledPostedToday >= scheduledDailyLimit) {
       await appendLog("scheduled_skip", {
         reason: "daily_limit_reached",
-        posted_today: postedToday,
-        daily_limit: dailyLimit
+        posted_today: scheduledPostedToday,
+        daily_limit: scheduledDailyLimit
       });
       return {
         status: "scheduled_skip",
         reason: "daily_limit_reached",
-        posted_today: postedToday,
-        daily_limit: dailyLimit
+        posted_today: scheduledPostedToday,
+        daily_limit: scheduledDailyLimit
       };
     }
   }
@@ -132,10 +135,31 @@ export async function runWorkflow(options = {}) {
       }
     });
 
-    const outputs = clipperResult.outputs.filter((output) => output?.finalAbsPath);
-    if (!outputs.length) {
+    const allOutputs = clipperResult.outputs.filter((output) => output?.finalAbsPath);
+    if (!allOutputs.length) {
       throw new Error("Clipper tidak menghasilkan file MP4 final.");
     }
+
+    const remainingScheduledSlots = options.scheduled && options.publish && scheduledDailyLimit > 0
+      ? Math.max(0, scheduledDailyLimit - scheduledPostedToday)
+      : allOutputs.length;
+    const outputs = allOutputs.slice(0, remainingScheduledSlots);
+
+    if (allOutputs.length > outputs.length) {
+      await appendLog("scheduled_clip_cap", {
+        job_id: job.job_id,
+        generated_clip_count: allOutputs.length,
+        processed_clip_count: outputs.length,
+        posted_today: scheduledPostedToday,
+        daily_limit: scheduledDailyLimit
+      });
+      console.log(
+        `Scheduled daily cap: proses ${outputs.length}/${allOutputs.length} clip ` +
+          `(posted today ${scheduledPostedToday}/${scheduledDailyLimit}).`
+      );
+    }
+
+    if (!outputs.length) throw new Error("Tidak ada slot publish tersisa untuk jadwal hari ini.");
 
     for (const output of outputs) {
       if (!await fileExists(output.finalAbsPath)) {

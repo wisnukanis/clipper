@@ -10,6 +10,12 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function positiveIntEnv(name, fallback, max = 60) {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value) || value < 1) return fallback;
+  return Math.min(Math.floor(value), max);
+}
+
 function userPath() {
   return config.threads.userId || "me";
 }
@@ -78,7 +84,10 @@ async function getContainerStatus(containerId) {
 }
 
 async function waitForContainerReady(containerId) {
-  for (let attempt = 1; attempt <= 60; attempt += 1) {
+  const maxAttempts = positiveIntEnv("THREADS_CONTAINER_MAX_ATTEMPTS", 60, 180);
+  const pollMs = positiveIntEnv("THREADS_CONTAINER_POLL_SECONDS", 6, 60) * 1000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const status = await getContainerStatus(containerId);
     const code = String(status.status || "").toUpperCase();
 
@@ -98,10 +107,11 @@ async function waitForContainerReady(containerId) {
       );
     }
 
-    await sleep(10000);
+    await sleep(pollMs);
   }
 
-  throw new Error(`Threads container belum siap setelah 10 menit: ${containerId}`);
+  const waitedMinutes = Math.round((maxAttempts * pollMs) / 60000);
+  throw new Error(`Threads container belum siap setelah ${waitedMinutes} menit: ${containerId}`);
 }
 
 async function fetchPermalink(publishId) {

@@ -195,8 +195,9 @@ Sistem harus mengecek apakah posting untuk tanggal hari ini sudah dilakukan.
 Aturan cron harian:
 
 ```txt
-Jika belum ada posting hari ini, lanjut proses.
-Jika sudah ada posting hari ini, skip agar tidak duplikat.
+Workflow scheduled berjalan 15 kali per hari.
+Jika publish hari ini masih di bawah MAX_SCHEDULED_POSTS_PER_DAY, lanjut proses.
+Jika batas harian sudah tercapai, skip agar tidak melewati target posting.
 ```
 
 ---
@@ -724,7 +725,12 @@ FACEBOOK_UPLOAD_ENABLED=true
 INSTAGRAM_UPLOAD_ENABLED=true
 INSTAGRAM_REEL_UPLOAD_METHOD=video_url
 INSTAGRAM_MAX_UPLOAD_BYTES=7800000
+INSTAGRAM_CONTAINER_POLL_SECONDS=6
+INSTAGRAM_CONTAINER_MAX_ATTEMPTS=90
 THREADS_UPLOAD_ENABLED=false
+THREADS_CONTAINER_POLL_SECONDS=6
+THREADS_CONTAINER_MAX_ATTEMPTS=90
+MAX_SCHEDULED_POSTS_PER_DAY=15
 ```
 
 ### Threads (Meta) Publishing
@@ -748,6 +754,8 @@ THREADS_USER_ID=
 THREADS_API_VERSION=v1.0
 AUTO_REFRESH_THREADS_TOKEN=true
 THREADS_TOKEN_ISSUED_AT=
+THREADS_CONTAINER_POLL_SECONDS=6
+THREADS_CONTAINER_MAX_ATTEMPTS=90
 ```
 
 Cara dapatin token:
@@ -828,6 +836,7 @@ VIDEO_EFFECT_PRESET=veryfast
 THUMBNAIL_PILL_TEXT=Podcast | Highlight | Viral
 THUMBNAIL_INTRO_ENABLED=true
 THUMBNAIL_INTRO_SECONDS=0.9
+MAX_SCHEDULED_POSTS_PER_DAY=15
 
 DEPLOY_REMOTE_DIR=/public_html
 DEPLOY_CLEAN_REMOTE=false
@@ -966,6 +975,26 @@ Durasi frame pembuka thumbnail. Default: `0.9`.
 #### `YOUTUBE_CUSTOM_THUMBNAIL_ENABLED`
 
 Upload custom thumbnail ke YouTube. Default: `false`, karena thumbnail sudah dimasukkan sebagai frame awal video agar publish lebih cepat dan tidak kena limit thumbnail.
+
+#### `MAX_SCHEDULED_POSTS_PER_DAY`
+
+Batas publish dari run terjadwal GitHub Actions per hari. Default: `15`. Jika batas tercapai, workflow scheduled berikutnya akan skip.
+
+#### `INSTAGRAM_CONTAINER_POLL_SECONDS`
+
+Jeda polling status container Instagram saat Meta memproses Reels. Default: `6`.
+
+#### `INSTAGRAM_CONTAINER_MAX_ATTEMPTS`
+
+Jumlah maksimal polling container Instagram sebelum dianggap belum siap. Default: `90`.
+
+#### `THREADS_CONTAINER_POLL_SECONDS`
+
+Jeda polling status container Threads. Default: `6`.
+
+#### `THREADS_CONTAINER_MAX_ATTEMPTS`
+
+Jumlah maksimal polling container Threads sebelum dianggap belum siap. Default: `90`.
 
 #### `AI_PROVIDER`
 

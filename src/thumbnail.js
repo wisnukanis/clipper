@@ -10,16 +10,16 @@ const BOX_W = CANVAS_WIDTH - (BOX_MARGIN_X * 2);
 const BOX_PADDING_X = 36;
 const BOX_PADDING_Y = 30;
 const BOX_BOTTOM_OFFSET = Number(process.env.THUMBNAIL_BOTTOM_OFFSET || 480);
-const BOX_MAX_HEIGHT = 320;
-const MAX_TITLE_LINES = 3;
-const MAX_TITLE_WORDS = 11;
+const BOX_MAX_HEIGHT = 380;
+const MAX_TITLE_LINES = 4;
+const MAX_TITLE_WORDS = 16;
 const FONT_SIZE_MAX = 74;
-const FONT_SIZE_MIN = 44;
+const FONT_SIZE_MIN = 34;
 const CHAR_WIDTH_RATIO = 0.62;
 const TEXT_COLOR = process.env.THUMBNAIL_TEXT_COLOR || "0xFFD60A";
 const BORDER_COLOR = process.env.THUMBNAIL_BORDER_COLOR || "0xFFD60A";
 const BG_COLOR = process.env.THUMBNAIL_BG_COLOR || "0x000000";
-const BG_OPACITY = clampOpacity(process.env.THUMBNAIL_BG_OPACITY, 0.55);
+const BG_OPACITY = clampOpacity(process.env.THUMBNAIL_BG_OPACITY, 0.6);
 const BORDER_OPACITY = clampOpacity(process.env.THUMBNAIL_BORDER_OPACITY, 0.85);
 const TEXT_OUTLINE_OPACITY = clampOpacity(process.env.THUMBNAIL_TEXT_OUTLINE_OPACITY, 0.85);
 const JPEG_Q = process.env.THUMBNAIL_JPEG_Q || "1";
@@ -200,7 +200,7 @@ function runRenderer(args) {
 }
 
 function buildTitleLayout(value) {
-  const title = String(value || "BAGIAN INI BIKIN PENONTON DIAM")
+  const title = String(value || "BAGIAN INI BIKIN PENONTON BERHENTI SCROLL")
     .replace(/\s+/g, " ")
     .trim();
   const textAreaW = BOX_W - (BOX_PADDING_X * 2);
@@ -217,7 +217,7 @@ function buildTitleLayout(value) {
     fontSize -= 2;
   }
 
-  if (!lines.length) lines = ["BAGIAN INI BIKIN", "PENONTON DIAM"];
+  if (!lines.length) lines = ["BAGIAN INI BIKIN", "PENONTON BERHENTI SCROLL"];
   const textBlockH = estimateTextBlockHeight(lines.length, fontSize);
   const boxH = Math.min(BOX_MAX_HEIGHT, textBlockH + BOX_PADDING_Y * 2);
   const boxBottom = CANVAS_HEIGHT - BOX_BOTTOM_OFFSET;
@@ -234,14 +234,14 @@ function buildTitleLayout(value) {
 }
 
 function normalizeTitleText(value) {
-  return String(value || "BAGIAN INI BIKIN PENONTON DIAM")
+  return String(value || "BAGIAN INI BIKIN PENONTON BERHENTI SCROLL")
     .replace(/[`"'*_#]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase()
     .split(/\s+/)
     .slice(0, MAX_TITLE_WORDS)
-    .join(" ") || "BAGIAN INI BIKIN PENONTON DIAM";
+    .join(" ") || "BAGIAN INI BIKIN PENONTON BERHENTI SCROLL";
 }
 
 function wrapText(value, maxChars, maxLines) {

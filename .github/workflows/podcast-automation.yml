@@ -69,23 +69,23 @@ on:
         default: "gemini"
   schedule:
     # GitHub schedule uses UTC.
-    # Target publish kira-kira:
-    # 07:30 WIB pagi
-    # 12:30 WIB jam istirahat
-    # 19:30 WIB prime time malam
-    #
-    # Workflow mulai sekitar 10 menit lebih awal.
-    # 00:17 UTC = 07:17 WIB
-    # 05:17 UTC = 12:17 WIB
-    # 12:17 UTC = 19:17 WIB
-    # GitHub cron sering telat 1.5-4 jam (lihat history run sebelumnya).
-    # Cron ini di-set 2 jam lebih awal dari target viral WIB:
-    #   22:23 UTC -> ~00:00-02:00 UTC fire = 07:00-09:00 WIB pagi
-    #    3:37 UTC -> ~05:00-06:00 UTC fire = 12:00-13:00 WIB siang
-    #   10:13 UTC -> ~11:30-12:30 UTC fire = 18:30-19:30 WIB malam
-    - cron: "23 22 * * *"
-    - cron: "37 3 * * *"
-    - cron: "13 10 * * *"
+    # Target 15 video/hari, disebar dari pagi sampai malam WIB.
+    # Menit dibuat ganjil agar tidak menabrak jam puncak cron GitHub.
+    - cron: "3 23 * * *"  # 06:03 WIB
+    - cron: "13 0 * * *"  # 07:13 WIB
+    - cron: "23 1 * * *"  # 08:23 WIB
+    - cron: "33 2 * * *"  # 09:33 WIB
+    - cron: "43 3 * * *"  # 10:43 WIB
+    - cron: "53 4 * * *"  # 11:53 WIB
+    - cron: "7 6 * * *"   # 13:07 WIB
+    - cron: "17 7 * * *"  # 14:17 WIB
+    - cron: "27 8 * * *"  # 15:27 WIB
+    - cron: "37 9 * * *"  # 16:37 WIB
+    - cron: "47 10 * * *" # 17:47 WIB
+    - cron: "57 11 * * *" # 18:57 WIB
+    - cron: "9 13 * * *"  # 20:09 WIB
+    - cron: "19 14 * * *" # 21:19 WIB
+    - cron: "29 15 * * *" # 22:29 WIB
 
 concurrency:
   group: podcast-clipper-automation
@@ -149,6 +149,8 @@ jobs:
       AUTO_REFRESH_THREADS_TOKEN: ${{ secrets.AUTO_REFRESH_THREADS_TOKEN || 'true' }}
       THREADS_TOKEN_ISSUED_AT: ${{ secrets.THREADS_TOKEN_ISSUED_AT }}
       THREADS_APP_SECRET: ${{ secrets.THREADS_APP_SECRET }}
+      THREADS_CONTAINER_POLL_SECONDS: ${{ secrets.THREADS_CONTAINER_POLL_SECONDS || '6' }}
+      THREADS_CONTAINER_MAX_ATTEMPTS: ${{ secrets.THREADS_CONTAINER_MAX_ATTEMPTS || '90' }}
 
       SFTP_HOST: ${{ secrets.SFTP_HOST || secrets.FTP_HOST }}
       SFTP_PORT: ${{ secrets.SFTP_PORT || '65002' }}
@@ -179,7 +181,7 @@ jobs:
       OPENAI_TRANSCRIBE_MODEL: ${{ secrets.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe' }}
       AI_REQUEST_TIMEOUT_SECONDS: ${{ secrets.AI_REQUEST_TIMEOUT_SECONDS || '25' }}
       TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
-      MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '0' }}
+      MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '15' }}
       DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '1' }}
       DEEPGRAM_API_KEYS: ${{ secrets.DEEPGRAM_API_KEYS }}
       DEEPGRAM_MODEL: ${{ secrets.DEEPGRAM_MODEL || 'nova-3' }}
@@ -193,6 +195,8 @@ jobs:
       META_APP_ID: ${{ secrets.META_APP_ID }}
       META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
       AUTO_REFRESH_INSTAGRAM_TOKEN: ${{ secrets.AUTO_REFRESH_INSTAGRAM_TOKEN || 'true' }}
+      INSTAGRAM_CONTAINER_POLL_SECONDS: ${{ secrets.INSTAGRAM_CONTAINER_POLL_SECONDS || '6' }}
+      INSTAGRAM_CONTAINER_MAX_ATTEMPTS: ${{ secrets.INSTAGRAM_CONTAINER_MAX_ATTEMPTS || '90' }}
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
       AUTO_DISCOVER_VIDEOS: ${{ secrets.AUTO_DISCOVER_VIDEOS || 'true' }}
       AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'podcast artis indonesia terbaru|podcast artis indonesia viral|deddy corbuzier artis terbaru|vindes artis terbaru|politik indonesia terbaru podcast|komedi indonesia podcast komika' }}
@@ -256,7 +260,7 @@ jobs:
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
       SCENE_MODE: ${{ github.event.inputs.scene_mode || secrets.SCENE_MODE || 'podcast' }}
       SMART_CROP_MODE: ${{ github.event.inputs.scene_mode || secrets.SMART_CROP_MODE || 'podcast' }}
-      CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '2' }}
+      CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '1' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
       SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || '550' }}
       SUBTITLE_MARGIN_H: ${{ github.event.inputs.subtitle_margin_h || secrets.SUBTITLE_MARGIN_H || '180' }}
