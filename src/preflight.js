@@ -378,6 +378,10 @@ async function checkYoutubeDiscovery(online) {
     );
   }
 
+  if (boolEnv("AUTO_DISCOVER_DAILY_SEARCH_ONLY", true)) {
+    return checkResult("YouTube Discovery API", true, "API key terkonfigurasi; search.list max 1x/hari", false);
+  }
+
   if (!online) {
     return checkResult("YouTube Discovery API", true, "API key terkonfigurasi", false);
   }

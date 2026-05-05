@@ -9,6 +9,7 @@ dashboard*.log
 data/videos.json
 data/jobs.json
 data/history.json
+data/discovery-cache.json
 
 .env
 *.env

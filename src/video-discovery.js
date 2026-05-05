@@ -4,7 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { addVideo } from "./selector.js";
-import { readJson } from "./storage.js";
+import { readJson, writeJson } from "./storage.js";
+import { uploadStateToRemote } from "./state-sync.js";
 import { todayDate } from "./job-id.js";
 import { extractYoutubeVideoId } from "./youtube.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
@@ -45,6 +46,7 @@ const DEFAULT_CHANNEL_HANDLES = [
 
 const TOPIC_RE = /podcast|podhub|podkesmas|vindes|deddy|corbuzier|raditya|artis|aktor|aktris|penyanyi|komika|komedi|stand\s*up|lucu|politik|pilpres|dpr|presiden|menteri|prabowo|jokowi|anies|ganjar/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
+const DISCOVERY_CACHE_FILE = "discovery-cache.json";
 let youtubeApiQuotaExhausted = false;
 
 function boolEnv(name, fallback = false) {
@@ -75,6 +77,32 @@ function listEnvMany(names, fallback = []) {
 
 function uniqueList(items) {
   return [...new Set(items.map((item) => String(item || "").trim()).filter(Boolean))];
+}
+
+async function readDiscoveryCache() {
+  const cache = await readJson(DISCOVERY_CACHE_FILE, {});
+  return cache && typeof cache === "object" && !Array.isArray(cache) ? cache : {};
+}
+
+async function writeDiscoveryCache(cache) {
+  const entries = Object.entries(cache)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-14);
+  await writeJson(DISCOVERY_CACHE_FILE, Object.fromEntries(entries));
+}
+
+async function patchDiscoveryCache(date, patch) {
+  const cache = await readDiscoveryCache();
+  cache[date] = {
+    ...(cache[date] || {}),
+    ...patch,
+    updated_at: new Date().toISOString()
+  };
+  await writeDiscoveryCache(cache);
+  if (boolEnv("AUTO_DISCOVER_CACHE_SYNC_IMMEDIATE", true)) {
+    await uploadStateToRemote().catch(() => {});
+  }
+  return cache[date];
 }
 
 function videoUrl(id) {
@@ -497,7 +525,10 @@ async function youtubeDiscoveryCredentials() {
     return apiKeys.map((apiKey) => ({ apiKey, label: "api_key" }));
   }
 
-  if (config.youtube.clientId && config.youtube.clientSecret && config.youtube.refreshToken) {
+  if (boolEnv("AUTO_DISCOVER_ALLOW_OAUTH", false)
+    && config.youtube.clientId
+    && config.youtube.clientSecret
+    && config.youtube.refreshToken) {
     const accessToken = await getYoutubeAccessToken();
     return [{ accessToken, label: "oauth" }];
   }
@@ -568,6 +599,59 @@ async function discoverWithYoutubeApi({ queries, knownIds, options, channelOnly 
   throw lastError || new Error("YouTube API discovery gagal.");
 }
 
+async function discoverWithDailyYoutubeApiSearch({ queries, knownIds, options, targetDate }) {
+  const cache = await readDiscoveryCache();
+  const todayCache = cache[targetDate] || {};
+  const cached = Array.isArray(todayCache.youtube_api_candidates) ? todayCache.youtube_api_candidates : [];
+
+  if (todayCache.youtube_api_search_done) {
+    console.log(`AUTO DISCOVERY: search.list sudah dipakai untuk ${targetDate}, pakai cache ${cached.length} kandidat.`);
+    return cached.filter((item) => {
+      const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
+      return id && !knownIds.has(id);
+    });
+  }
+
+  const credentials = await youtubeDiscoveryCredentials();
+  if (!credentials.length) {
+    console.log("AUTO DISCOVERY: YOUTUBE_API_KEY belum ada, daily API search dilewati.");
+    return null;
+  }
+
+  const query = String(process.env.AUTO_DISCOVER_DAILY_QUERY || queries[0] || DEFAULT_QUERIES[0]).trim();
+  const credential = credentials[0];
+  await patchDiscoveryCache(targetDate, {
+    youtube_api_search_done: true,
+    youtube_api_search_attempted_at: new Date().toISOString(),
+    youtube_api_search_query: query,
+    youtube_api_search_max_results: options.maxResults,
+    youtube_api_candidates: []
+  });
+
+  try {
+    console.log(`AUTO DISCOVERY: daily search.list sekali untuk ${targetDate}, query="${query}", maxResults=${options.maxResults}.`);
+    const found = await searchYoutubeIds({ credential, query, options });
+    const ids = uniqueList(found).filter((id) => !knownIds.has(id)).slice(0, options.maxResults);
+    const queryById = new Map(ids.map((id) => [id, query]));
+    const candidates = ids.length ? await loadYoutubeDetails(credential, ids, queryById) : [];
+    await patchDiscoveryCache(targetDate, {
+      youtube_api_search_completed_at: new Date().toISOString(),
+      youtube_api_search_error: "",
+      youtube_api_candidates: candidates
+    });
+    return candidates;
+  } catch (error) {
+    await patchDiscoveryCache(targetDate, {
+      youtube_api_search_error: error.message,
+      youtube_api_candidates: []
+    });
+    if (error.quotaExceeded || isYoutubeQuotaError(error)) {
+      youtubeApiQuotaExhausted = true;
+    }
+    throw error;
+  }
+}
+
 async function discoverWithYtDlp({ queries, knownIds, options }) {
   const candidates = new Map();
   for (const query of queries) {
@@ -616,9 +700,15 @@ async function discoverChannelsWithYtDlp({ knownIds, options }) {
   return [...candidates.values()];
 }
 
-async function loadRawCandidates({ queries, knownIds, options, channelOnly = false, useApi = true }) {
+async function loadRawCandidates({ queries, knownIds, options, targetDate, channelOnly = false, useApi = true, dailyApiSearch = false }) {
   let rawCandidates = null;
-  if (useApi) {
+  if (dailyApiSearch) {
+    try {
+      rawCandidates = await discoverWithDailyYoutubeApiSearch({ queries, knownIds, options, targetDate });
+    } catch (error) {
+      console.warn(`Daily YouTube API search dilewati: ${error.message}`);
+    }
+  } else if (useApi) {
     try {
       rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options, channelOnly });
     } catch (error) {
@@ -652,7 +742,7 @@ async function validateCandidateAvailability(item) {
 async function selectDiscoveredCandidates(rawCandidates, options, addCount, mode) {
   const filter = mode === "fresh_channels"
     ? isFreshChannelCandidate
-    : mode === "best_available" ? isTopicCandidate : isViralCandidate;
+    : ["best_available", "daily_api_search"].includes(mode) ? isTopicCandidate : isViralCandidate;
   const ranked = rawCandidates
     .filter((item) => filter(item, options))
     .map((item) => ({
@@ -675,16 +765,27 @@ async function selectDiscoveredCandidates(rawCandidates, options, addCount, mode
 
 function fallbackPasses(baseQueries, baseOptions) {
   const fallbackQueries = uniqueList([...baseQueries, ...FALLBACK_QUERIES]);
-  const useApi = boolEnv("AUTO_DISCOVER_USE_API", false);
+  const useDailyApi = boolEnv("AUTO_DISCOVER_USE_API", false);
+  const dailyApiMaxResults = numberEnv("AUTO_DISCOVER_DAILY_SEARCH_RESULTS", 7, 1, 50);
   const fallbackMaxResults = numberEnv("AUTO_DISCOVER_FALLBACK_MAX_RESULTS", 6, baseOptions.maxResults, 50);
   const freshUploadDays = numberEnv("AUTO_DISCOVER_FRESH_UPLOAD_DAYS", 3, 1, 30);
   const freshChannelMaxResults = numberEnv("AUTO_DISCOVER_CHANNEL_MAX_RESULTS", 1, 1, 25);
 
   return [
+    ...(useDailyApi ? [{
+      mode: "daily_api_search",
+      dailyApiSearch: true,
+      useApi: true,
+      queries: [String(process.env.AUTO_DISCOVER_DAILY_QUERY || baseQueries[0] || DEFAULT_QUERIES[0]).trim()],
+      options: {
+        ...baseOptions,
+        maxResults: dailyApiMaxResults
+      }
+    }] : []),
     {
       mode: "fresh_channels",
       channelOnly: true,
-      useApi,
+      useApi: false,
       queries: [],
       options: {
         ...baseOptions,
@@ -696,7 +797,7 @@ function fallbackPasses(baseQueries, baseOptions) {
     },
     {
       mode: "strict",
-      useApi,
+      useApi: false,
       queries: baseQueries,
       options: baseOptions
     },
@@ -781,8 +882,10 @@ export async function discoverAndQueueVideos(options = {}) {
       queries: pass.queries,
       knownIds,
       options: pass.options,
+      targetDate,
       channelOnly: Boolean(pass.channelOnly),
-      useApi: pass.useApi !== false
+      useApi: pass.useApi !== false,
+      dailyApiSearch: Boolean(pass.dailyApiSearch)
     });
     selected = await selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
     if (selected.length) {
