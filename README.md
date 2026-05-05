@@ -820,7 +820,7 @@ VIDEO_FRAME_ENABLED=true
 VIDEO_FILTER_ENABLED=true
 VIDEO_WATERMARK_ENABLED=true
 VIDEO_LOWER_THIRD_ENABLED=true
-VIDEO_LOWER_THIRD_BRAND=@emsa.pro | Podcast Highlight
+VIDEO_LOWER_THIRD_BRAND=@clipperemsapro | Podcast Highlight
 VIDEO_FRAME_ASSET=assets/branding/frame-1080x1920.png
 VIDEO_WATERMARK_ASSET=assets/branding/logo.png
 VIDEO_EFFECT_CRF=27
@@ -938,7 +938,7 @@ Default global untuk quote rapi di area kosong bawah frame. Default: `true`.
 
 #### `VIDEO_LOWER_THIRD_BRAND`
 
-Teks kecil di bawah quote lower-third. Default: `@emsa.pro | Podcast Highlight`.
+Teks kecil di bawah quote lower-third. Default: `@clipperemsapro | Podcast Highlight`.
 
 #### `VIDEO_FRAME_ASSET`
 

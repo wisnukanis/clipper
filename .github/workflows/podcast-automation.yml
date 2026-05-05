@@ -242,7 +242,7 @@ jobs:
       VIDEO_FILTER_ENABLED: ${{ github.event.inputs.use_filter || secrets.VIDEO_FILTER_ENABLED || 'true' }}
       VIDEO_WATERMARK_ENABLED: ${{ github.event.inputs.use_watermark || secrets.VIDEO_WATERMARK_ENABLED || 'true' }}
       VIDEO_LOWER_THIRD_ENABLED: ${{ secrets.VIDEO_LOWER_THIRD_ENABLED || 'true' }}
-      VIDEO_LOWER_THIRD_BRAND: ${{ secrets.VIDEO_LOWER_THIRD_BRAND || '@emsa.pro | Podcast Highlight' }}
+      VIDEO_LOWER_THIRD_BRAND: ${{ secrets.VIDEO_LOWER_THIRD_BRAND || '@clipperemsapro | Podcast Highlight' }}
       VIDEO_FRAME_ASSET: ${{ secrets.VIDEO_FRAME_ASSET || 'assets/branding/frame-1080x1920.png' }}
       VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
       VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}

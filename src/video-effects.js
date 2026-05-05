@@ -109,7 +109,7 @@ async function renderLowerThirdOverlay({ job, text }) {
     "lower-third",
     "--output", outputPath,
     "--quote", normalizeOverlayText(text),
-    "--brand", config.videoEffects.lowerThirdBrand || "@emsa.pro | Podcast Highlight"
+    "--brand", config.videoEffects.lowerThirdBrand || "@clipperemsapro | Podcast Highlight"
   ]);
   return outputPath;
 }

@@ -21,6 +21,11 @@ def clean_text(value, fallback=""):
     return text or fallback
 
 
+def normalize_brand(value):
+    text = clean_text(value, "@clipperemsapro | Podcast Highlight")
+    return re.sub(r"@emsa\.pro\b", "@clipperemsapro", text, flags=re.IGNORECASE)
+
+
 def clean_title(value):
     text = clean_text(value, "BAGIAN INI BIKIN PENONTON DIAM").upper()
     words = text.split()
@@ -80,8 +85,37 @@ def split_title(title):
     return [best[1], best[2]]
 
 
+def split_word_to_fit(draw, word, font, max_width):
+    if text_size(draw, word, font, 2)[0] <= max_width:
+        return [word]
+    chunks = []
+    current = ""
+    for char in word:
+        candidate = f"{current}{char}"
+        if current and text_size(draw, candidate, font, 2)[0] > max_width:
+            chunks.append(current)
+            current = char
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks or [word]
+
+
+def ellipsize_to_width(draw, value, font, max_width):
+    text = str(value or "").strip()
+    if text_size(draw, text, font, 2)[0] <= max_width:
+        return text
+    suffix = "..."
+    while text and text_size(draw, f"{text}{suffix}", font, 2)[0] > max_width:
+        text = text[:-1].rstrip()
+    return f"{text}{suffix}" if text else suffix
+
+
 def wrap_text(draw, text, font, max_width, max_lines=2):
-    words = text.split()
+    words = []
+    for word in text.split():
+        words.extend(split_word_to_fit(draw, word, font, max_width))
     lines = []
     current = ""
     for word in words:
@@ -97,20 +131,32 @@ def wrap_text(draw, text, font, max_width, max_lines=2):
         return lines
     kept = lines[:max_lines]
     overflow = " ".join(lines[max_lines - 1:])
-    while overflow and text_size(draw, overflow + "...", font, 2)[0] > max_width:
-        overflow = " ".join(overflow.split()[:-1])
-    kept[-1] = (overflow + "...") if overflow else kept[-1]
+    kept[-1] = ellipsize_to_width(draw, overflow, font, max_width)
     return kept
 
 
-def fit_lines(draw, lines, max_width, max_size, min_size):
-    size = max_size
-    while size >= min_size:
-        font = load_font(size)
-        if all(text_size(draw, line, font, 4)[0] <= max_width for line in lines):
-            return font, size
-        size -= 2
-    return load_font(min_size), min_size
+def fit_title_layout(draw, title, rect, max_width, max_size=126, min_size=44):
+    max_height = (rect[3] - rect[1]) - 80
+    for max_lines in (2, 3):
+        size = max_size
+        while size >= min_size:
+            font = load_font(size)
+            lines = wrap_text(draw, title, font, max_width, max_lines=max_lines)
+            line_gap = max(8, int(size * 0.14))
+            heights = [text_size(draw, line, font, 4)[1] for line in lines]
+            total_h = sum(heights) + line_gap * (len(lines) - 1)
+            width_ok = all(text_size(draw, line, font, 4)[0] <= max_width for line in lines)
+            if width_ok and total_h <= max_height:
+                return lines, font, size, line_gap, heights, total_h
+            size -= 2
+
+    font = load_font(min_size)
+    lines = wrap_text(draw, title, font, max_width, max_lines=3)
+    lines = [ellipsize_to_width(draw, line, font, max_width) for line in lines]
+    line_gap = 8
+    heights = [text_size(draw, line, font, 4)[1] for line in lines]
+    total_h = sum(heights) + line_gap * (len(lines) - 1)
+    return lines, font, min_size, line_gap, heights, total_h
 
 
 def add_glow(base, rect, radius, color=GOLD, strength=150):
@@ -128,6 +174,13 @@ def draw_panel(draw, rect, radius, fill_alpha=232):
     inset = 16
     inner = (rect[0] + inset, rect[1] + inset, rect[2] - inset, rect[3] - inset)
     draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(*GOLD, 130), width=2)
+
+
+def draw_transparent_panel(draw, rect, radius):
+    draw.rounded_rectangle(rect, radius=radius, outline=(*GOLD, 225), width=4)
+    inset = 16
+    inner = (rect[0] + inset, rect[1] + inset, rect[2] - inset, rect[3] - inset)
+    draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(255, 255, 255, 90), width=2)
 
 
 def draw_highlight(base, rect):
@@ -179,43 +232,40 @@ def render_thumbnail(args):
     add_vignette(canvas)
     draw = ImageDraw.Draw(canvas)
 
-    rect = (54, 96, 1026, 418)
-    add_glow(canvas, rect, 42, GOLD, 170)
-    draw_panel(draw, rect, 42, 235)
+    rect = (130, 880, 950, 1174)
+    add_glow(canvas, rect, 42, GOLD, 135)
+    draw_transparent_panel(draw, rect, 42)
     draw_highlight(canvas, rect)
 
-    lines = split_title(title)
-    font, size = fit_lines(draw, lines, 870, 126, 72)
-    line_gap = int(size * 0.16)
-    heights = [text_size(draw, line, font, 4)[1] for line in lines]
-    total_h = sum(heights) + line_gap * (len(lines) - 1)
+    max_text_width = (rect[2] - rect[0]) - 118
+    lines, font, size, line_gap, heights, total_h = fit_title_layout(draw, title, rect, max_text_width)
     y = rect[1] + (rect[3] - rect[1] - total_h) // 2 - 4
     for index, line in enumerate(lines):
         color = WHITE if index == 0 else GOLD
         width, height = text_size(draw, line, font, 4)
         draw.text(
-            ((CANVAS_W - width) / 2, y),
+            (max(rect[0] + 54, min((CANVAS_W - width) / 2, rect[2] - 54 - width)), y),
             line,
             font=font,
             fill=color,
-            stroke_width=4,
-            stroke_fill=(0, 0, 0, 210),
+            stroke_width=6,
+            stroke_fill=(0, 0, 0, 235),
         )
         y += height + line_gap
 
     pill = clean_text(args.pill or os.environ.get("THUMBNAIL_PILL_TEXT"), "Podcast | Highlight | Viral")
     pill_font = load_font(29)
     pill_w, pill_h = text_size(draw, pill, pill_font, 1)
-    pill_rect = (64, 444, min(1016, 64 + pill_w + 42), 498)
-    draw.rounded_rectangle(pill_rect, radius=13, fill=(0, 0, 0, 178), outline=(255, 255, 255, 105), width=2)
-    draw.text((pill_rect[0] + 21, pill_rect[1] + 10), pill, font=pill_font, fill=(245, 245, 245), stroke_width=1, stroke_fill=(0, 0, 0, 160))
+    pill_rect = (150, 1202, min(930, 150 + pill_w + 42), 1256)
+    draw.rounded_rectangle(pill_rect, radius=13, outline=(255, 255, 255, 120), width=2)
+    draw.text((pill_rect[0] + 21, pill_rect[1] + 10), pill, font=pill_font, fill=(245, 245, 245), stroke_width=2, stroke_fill=(0, 0, 0, 210))
 
     save_jpeg_under_limit(canvas, args.output)
 
 
 def render_lower_third(args):
     quote = clean_quote(args.quote)
-    brand = clean_text(args.brand or os.environ.get("VIDEO_LOWER_THIRD_BRAND"), "@emsa.pro | Podcast Highlight")
+    brand = normalize_brand(args.brand or os.environ.get("VIDEO_LOWER_THIRD_BRAND"))
     canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
@@ -242,7 +292,7 @@ def render_lower_third(args):
     brand_font = load_font(27)
     brand_w, _ = text_size(draw, brand, brand_font, 1)
     draw.text(((CANVAS_W - brand_w) / 2, rect[3] - 45), brand, font=brand_font, fill=(215, 183, 122, 220), stroke_width=1, stroke_fill=(0, 0, 0, 190))
-    draw.rounded_rectangle((180, rect[3] - 17, 900, rect[3] - 10), radius=4, fill=(255, 190, 18, 160))
+    draw.rounded_rectangle((180, rect[3] - 9, 900, rect[3] - 3), radius=4, fill=(255, 190, 18, 160))
     canvas.save(args.output, "PNG")
 
 
