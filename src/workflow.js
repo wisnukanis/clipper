@@ -7,7 +7,7 @@ import { appendHistory, publishedCountToday } from "./history.js";
 import { addVideo, createJobRecord, selectNextVideo, updateVideoStatus } from "./selector.js";
 import { runClipper } from "./clipper-runner.js";
 import { generateCaption, generateFrameQuoteText, generateThumbnailText } from "./caption.js";
-import { generateThumbnail } from "./thumbnail.js";
+import { generateThumbnail, prependThumbnailIntro } from "./thumbnail.js";
 import { fileExists, uploadHistoryFile, uploadJobFiles, validatePublicUrl } from "./uploader.js";
 import { publishReel } from "./instagram.js";
 import { prepareInstagramVideo } from "./instagram-video.js";
@@ -212,6 +212,7 @@ export async function runWorkflow(options = {}) {
       final_video_path: firstSuccess?.output?.finalAbsPath || "",
       original_final_video_path: firstSuccess?.output?.originalFinalAbsPath || "",
       video_effects: firstSuccess?.output?.videoEffects || null,
+      thumbnail_intro: firstSuccess?.output?.thumbnailIntro || { applied: false },
       frame_quote_text: firstSuccess?.output?.frameQuoteText || "",
       public_video_url: firstSuccess?.upload?.videoUrl || "",
       public_thumbnail_url: firstSuccess?.upload?.thumbnailUrl || "",
@@ -332,10 +333,31 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     videoPath: output.finalAbsPath,
     text: thumbnailText
   });
+  const thumbnailIntro = await prependThumbnailIntro({
+    job: storageJob,
+    videoPath: output.finalAbsPath,
+    thumbnailPath: thumbnail.path
+  }).catch((error) => {
+    console.warn(`Intro thumbnail dilewati: ${error.message}`);
+    return null;
+  });
+  if (thumbnailIntro?.path) {
+    output = {
+      ...output,
+      finalAbsPath: thumbnailIntro.path,
+      thumbnailIntro: {
+        applied: true,
+        durationSeconds: thumbnailIntro.durationSeconds,
+        introPath: thumbnailIntro.introPath
+      }
+    };
+  }
   await updateJob(job.job_id, {
     thumbnail_status: "done",
     thumbnail_path: thumbnail.path,
-    thumbnail_text: thumbnail.text
+    thumbnail_text: thumbnail.text,
+    final_video_path: output.finalAbsPath,
+    thumbnail_intro: output.thumbnailIntro || { applied: false }
   });
 
   const metadata = buildMetadata({
@@ -491,6 +513,7 @@ function summarizeClipResult(result) {
     final_video_path: result.output?.finalAbsPath || "",
     original_final_video_path: result.output?.originalFinalAbsPath || "",
     video_effects: result.output?.videoEffects || null,
+    thumbnail_intro: result.output?.thumbnailIntro || { applied: false },
     frame_quote_text: result.output?.frameQuoteText || "",
     caption: result.caption || "",
     youtube_error: result.platformResults?.errors?.youtube || ""
@@ -696,6 +719,7 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     finalPath: output.finalAbsPath,
     originalFinalPath: output.originalFinalAbsPath || "",
     videoEffects,
+    thumbnailIntro: output.thumbnailIntro || { applied: false },
     frameQuoteText: output.frameQuoteText || "",
     transcriptPath: output.transcriptReviewAbsPath || "",
     subtitlePath: output.subtitleAbsPath || "",
@@ -729,6 +753,7 @@ async function appendHistoryEntry({ job, video, caption, output, upload, platfor
     final_video_path: output.finalAbsPath,
     original_final_video_path: output.originalFinalAbsPath || "",
     video_effects: output.videoEffects || "",
+    thumbnail_intro: output.thumbnailIntro || { applied: false },
     public_video_url: upload.videoUrl || "",
     public_thumbnail_url: upload.thumbnailUrl || "",
     caption,

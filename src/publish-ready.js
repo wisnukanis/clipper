@@ -188,7 +188,12 @@ try {
     });
   }
 
-  if (config.youtube.enabled && youtube?.videoId && thumbnailPath && (forceThumbnail || youtube.customThumbnail !== true)) {
+  if (
+    config.youtube.enabled
+    && youtube?.videoId
+    && thumbnailPath
+    && (forceThumbnail || (config.youtube.customThumbnailEnabled && youtube.customThumbnail !== true))
+  ) {
     const thumbnail = await setYoutubeThumbnail({
       videoId: youtube.videoId,
       thumbnailPath

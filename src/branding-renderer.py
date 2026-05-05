@@ -29,7 +29,7 @@ def normalize_brand(value):
 def clean_title(value):
     text = clean_text(value, "BAGIAN INI BIKIN PENONTON DIAM").upper()
     words = text.split()
-    return " ".join(words[:9]) or "BAGIAN INI BIKIN PENONTON DIAM"
+    return " ".join(words[:11]) or "BAGIAN INI BIKIN PENONTON DIAM"
 
 
 def clean_quote(value):
@@ -176,7 +176,7 @@ def draw_panel(draw, rect, radius, fill_alpha=232):
     draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(*GOLD, 130), width=2)
 
 
-def draw_transparent_panel(draw, rect, radius, fill_alpha=82):
+def draw_transparent_panel(draw, rect, radius, fill_alpha=118):
     draw.rounded_rectangle(rect, radius=radius, fill=(*BLACK, fill_alpha), outline=(*GOLD, 225), width=4)
     inset = 16
     inner = (rect[0] + inset, rect[1] + inset, rect[2] - inset, rect[3] - inset)
@@ -234,7 +234,7 @@ def render_thumbnail(args):
 
     rect = (130, 880, 950, 1174)
     add_glow(canvas, rect, 42, GOLD, 135)
-    draw_transparent_panel(draw, rect, 42, 82)
+    draw_transparent_panel(draw, rect, 42, 118)
     draw_highlight(canvas, rect)
 
     max_text_width = (rect[2] - rect[0]) - 118

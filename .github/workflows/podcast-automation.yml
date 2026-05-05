@@ -114,7 +114,7 @@ jobs:
       API_CHECK_TIMEOUT_SECONDS: ${{ secrets.API_CHECK_TIMEOUT_SECONDS || '90' }}
 
       INSTAGRAM_UPLOAD_ENABLED: ${{ secrets.INSTAGRAM_UPLOAD_ENABLED || 'true' }}
-      INSTAGRAM_REEL_UPLOAD_METHOD: ${{ secrets.INSTAGRAM_REEL_UPLOAD_METHOD || 'resumable' }}
+      INSTAGRAM_REEL_UPLOAD_METHOD: video_url
       INSTAGRAM_MAX_UPLOAD_BYTES: ${{ secrets.INSTAGRAM_MAX_UPLOAD_BYTES || '7800000' }}
       FACEBOOK_UPLOAD_ENABLED: ${{ secrets.FACEBOOK_UPLOAD_ENABLED || 'true' }}
       FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
@@ -226,6 +226,7 @@ jobs:
       YOUTUBE_TAGS: ${{ secrets.YOUTUBE_TAGS || 'podcast,shorts,indonesia' }}
       YOUTUBE_TITLE_PREFIX: ${{ secrets.YOUTUBE_TITLE_PREFIX }}
       YOUTUBE_DESCRIPTION_FOOTER: ${{ secrets.YOUTUBE_DESCRIPTION_FOOTER }}
+      YOUTUBE_CUSTOM_THUMBNAIL_ENABLED: ${{ secrets.YOUTUBE_CUSTOM_THUMBNAIL_ENABLED || 'false' }}
 
       PYTHON_CMD: python
       CLIPPER_ROOT: clipper
@@ -248,6 +249,8 @@ jobs:
       VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}
       VIDEO_EFFECT_PRESET: ${{ secrets.VIDEO_EFFECT_PRESET || 'veryfast' }}
       THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Podcast | Highlight | Viral' }}
+      THUMBNAIL_INTRO_ENABLED: ${{ secrets.THUMBNAIL_INTRO_ENABLED || 'true' }}
+      THUMBNAIL_INTRO_SECONDS: ${{ secrets.THUMBNAIL_INTRO_SECONDS || '0.9' }}
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
       SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik Semibold,Selawik,DejaVu Sans' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}

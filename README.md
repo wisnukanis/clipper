@@ -722,7 +722,7 @@ Nilai penting untuk GitHub Actions:
 YOUTUBE_UPLOAD_ENABLED=true
 FACEBOOK_UPLOAD_ENABLED=true
 INSTAGRAM_UPLOAD_ENABLED=true
-INSTAGRAM_REEL_UPLOAD_METHOD=resumable
+INSTAGRAM_REEL_UPLOAD_METHOD=video_url
 INSTAGRAM_MAX_UPLOAD_BYTES=7800000
 THREADS_UPLOAD_ENABLED=false
 ```
@@ -826,6 +826,8 @@ VIDEO_WATERMARK_ASSET=assets/branding/logo.png
 VIDEO_EFFECT_CRF=27
 VIDEO_EFFECT_PRESET=veryfast
 THUMBNAIL_PILL_TEXT=Podcast | Highlight | Viral
+THUMBNAIL_INTRO_ENABLED=true
+THUMBNAIL_INTRO_SECONDS=0.9
 
 DEPLOY_REMOTE_DIR=/public_html
 DEPLOY_CLEAN_REMOTE=false
@@ -852,6 +854,7 @@ YOUTUBE_REFRESH_TOKEN=
 YOUTUBE_PRIVACY_STATUS=public
 YOUTUBE_CATEGORY_ID=22
 YOUTUBE_TAGS=podcast,shorts,indonesia
+YOUTUBE_CUSTOM_THUMBNAIL_ENABLED=false
 
 FACEBOOK_UPLOAD_ENABLED=true
 FACEBOOK_PAGE_ID=
@@ -860,7 +863,7 @@ FACEBOOK_MEDIA_TYPE=reel
 FACEBOOK_VIDEO_STATE=PUBLISHED
 
 INSTAGRAM_UPLOAD_ENABLED=true
-INSTAGRAM_REEL_UPLOAD_METHOD=resumable
+INSTAGRAM_REEL_UPLOAD_METHOD=video_url
 INSTAGRAM_MAX_UPLOAD_BYTES=7800000
 INSTAGRAM_IG_USER_ID=
 INSTAGRAM_ACCESS_TOKEN=
@@ -951,6 +954,18 @@ Path logo watermark. Default: `assets/branding/logo.png`.
 #### `THUMBNAIL_PILL_TEXT`
 
 Label kecil di bawah panel judul thumbnail. Default: `Podcast | Highlight | Viral`.
+
+#### `THUMBNAIL_INTRO_ENABLED`
+
+Menambahkan thumbnail sebagai frame pembuka pendek di video final. Default: `true`.
+
+#### `THUMBNAIL_INTRO_SECONDS`
+
+Durasi frame pembuka thumbnail. Default: `0.9`.
+
+#### `YOUTUBE_CUSTOM_THUMBNAIL_ENABLED`
+
+Upload custom thumbnail ke YouTube. Default: `false`, karena thumbnail sudah dimasukkan sebagai frame awal video agar publish lebih cepat dan tidak kena limit thumbnail.
 
 #### `AI_PROVIDER`
 
@@ -1170,7 +1185,7 @@ Mengaktifkan publish ke Instagram Reels.
 
 #### `INSTAGRAM_REEL_UPLOAD_METHOD`
 
-Metode upload IG Reels: `resumable`, `video_url`, atau `auto`. Produksi memakai `resumable`.
+Metode upload IG Reels: `resumable`, `video_url`, atau `auto`. Default produksi memakai `video_url` agar tidak menunggu jalur rupload yang sering fallback.
 
 #### `INSTAGRAM_MAX_UPLOAD_BYTES`
 

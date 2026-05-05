@@ -136,7 +136,9 @@ export async function publishToYoutube({ videoPath, title, description, tags = [
     });
     const id = upload.data?.id;
     if (!id) throw new Error("YouTube upload selesai tetapi video id kosong.");
-    const thumbnail = await setYoutubeThumbnail({ videoId: id, thumbnailPath, accessToken });
+    const thumbnail = config.youtube.customThumbnailEnabled
+      ? await setYoutubeThumbnail({ videoId: id, thumbnailPath, accessToken })
+      : { ok: false, skipped: true, error: "" };
     return {
       videoId: id,
       url: `https://www.youtube.com/watch?v=${id}`,
@@ -144,7 +146,7 @@ export async function publishToYoutube({ videoPath, title, description, tags = [
       title: metadata.snippet.title,
       type: "youtube_video",
       customThumbnail: thumbnail.ok,
-      thumbnailError: thumbnail.ok ? "" : thumbnail.error
+      thumbnailError: thumbnail.ok || thumbnail.skipped ? "" : thumbnail.error
     };
   } catch (error) {
     throw wrapGoogleError(error, "YouTube video upload failed");

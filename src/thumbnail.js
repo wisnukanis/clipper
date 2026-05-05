@@ -12,7 +12,7 @@ const BOX_PADDING_Y = 30;
 const BOX_BOTTOM_OFFSET = Number(process.env.THUMBNAIL_BOTTOM_OFFSET || 480);
 const BOX_MAX_HEIGHT = 320;
 const MAX_TITLE_LINES = 3;
-const MAX_TITLE_WORDS = 9;
+const MAX_TITLE_WORDS = 11;
 const FONT_SIZE_MAX = 74;
 const FONT_SIZE_MIN = 44;
 const CHAR_WIDTH_RATIO = 0.62;
@@ -23,6 +23,7 @@ const BG_OPACITY = clampOpacity(process.env.THUMBNAIL_BG_OPACITY, 0.55);
 const BORDER_OPACITY = clampOpacity(process.env.THUMBNAIL_BORDER_OPACITY, 0.85);
 const TEXT_OUTLINE_OPACITY = clampOpacity(process.env.THUMBNAIL_TEXT_OUTLINE_OPACITY, 0.85);
 const JPEG_Q = process.env.THUMBNAIL_JPEG_Q || "1";
+const INTRO_SECONDS = clampSeconds(process.env.THUMBNAIL_INTRO_SECONDS, 0.9);
 const rendererPath = path.join(config.srcDir, "branding-renderer.py");
 
 export async function generateThumbnail({ job, videoPath, text }) {
@@ -101,6 +102,86 @@ export async function generateThumbnail({ job, videoPath, text }) {
   }
 
   return { path: outputPath, filename, text: displayText };
+}
+
+export async function prependThumbnailIntro({ job, videoPath, thumbnailPath }) {
+  if (!boolValue(process.env.THUMBNAIL_INTRO_ENABLED, true)) return null;
+  if (!videoPath || !thumbnailPath) return null;
+  if (!await fileExists(videoPath) || !await fileExists(thumbnailPath)) return null;
+
+  await fs.mkdir(config.generatedVideoDir, { recursive: true });
+  const introPath = path.join(config.generatedVideoDir, `${job.job_id}-thumb-intro.mp4`);
+  const listPath = path.join(config.generatedVideoDir, `${job.job_id}-thumb-intro.ffconcat`);
+  const outputPath = path.join(config.generatedVideoDir, `${job.job_id}-with-thumb-intro.mp4`);
+  await Promise.all([
+    fs.rm(introPath, { force: true }).catch(() => {}),
+    fs.rm(listPath, { force: true }).catch(() => {}),
+    fs.rm(outputPath, { force: true }).catch(() => {})
+  ]);
+
+  await runFfmpeg([
+    "-y",
+    "-loop", "1",
+    "-framerate", "30",
+    "-t", String(INTRO_SECONDS),
+    "-i", thumbnailPath,
+    "-f", "lavfi",
+    "-t", String(INTRO_SECONDS),
+    "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+    "-vf", "scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,format=yuv420p",
+    "-r", "30",
+    "-c:v", "libx264",
+    "-preset", config.videoEffects.preset || "veryfast",
+    "-crf", String(config.videoEffects.crf),
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-shortest",
+    "-movflags", "+faststart",
+    introPath
+  ]);
+
+  await fs.writeFile(listPath, [
+    "ffconcat version 1.0",
+    `file '${escapeConcatPath(introPath)}'`,
+    `file '${escapeConcatPath(videoPath)}'`,
+    ""
+  ].join("\n"));
+
+  try {
+    await runFfmpeg([
+      "-y",
+      "-f", "concat",
+      "-safe", "0",
+      "-i", listPath,
+      "-c", "copy",
+      "-movflags", "+faststart",
+      outputPath
+    ]);
+  } catch (error) {
+    console.warn(`Concat copy intro thumbnail gagal, fallback re-encode: ${error.message}`);
+    await runFfmpeg([
+      "-y",
+      "-i", introPath,
+      "-i", videoPath,
+      "-filter_complex",
+      "[0:v]setsar=1[v0];[1:v]setsar=1[v1];[0:a]aresample=async=1[a0];[1:a]aresample=async=1[a1];[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]",
+      "-map", "[v]",
+      "-map", "[a]",
+      "-c:v", "libx264",
+      "-preset", config.videoEffects.preset || "veryfast",
+      "-crf", String(config.videoEffects.crf),
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-movflags", "+faststart",
+      outputPath
+    ]);
+  }
+
+  return {
+    path: outputPath,
+    introPath,
+    durationSeconds: INTRO_SECONDS
+  };
 }
 
 function runRenderer(args) {
@@ -291,6 +372,31 @@ async function pickSeekTimestamp(videoPath) {
   if (!duration || duration <= 2) return fallback;
   const seconds = Math.max(2, Math.min(duration - 2, duration * 0.3));
   return formatTimestamp(seconds);
+}
+
+async function fileExists(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    return stat.isFile() && stat.size > 0;
+  } catch {
+    return false;
+  }
+}
+
+function boolValue(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+function clampSeconds(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(3, Math.max(0.3, num));
+}
+
+function escapeConcatPath(value) {
+  return path.resolve(value).replace(/\\/g, "/").replace(/'/g, "'\\''");
 }
 
 function formatTimestamp(seconds) {

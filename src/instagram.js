@@ -43,7 +43,7 @@ function isRuploadProcessingFailure(error) {
 }
 
 function getReelUploadMethod() {
-  return String(process.env.INSTAGRAM_REEL_UPLOAD_METHOD || "auto")
+  return String(process.env.INSTAGRAM_REEL_UPLOAD_METHOD || "video_url")
     .trim()
     .toLowerCase();
 }

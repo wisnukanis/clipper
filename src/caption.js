@@ -80,8 +80,9 @@ export async function generateThumbnailText({ job, output, promptTemplate, aiPro
   const fallback = fallbackThumbnailText(output);
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
-    "Aturan: 4 sampai 9 kata, ideal 5 sampai 7 kata, huruf besar, kuat, mudah dibaca, tidak clickbait menyesatkan.",
+    "Aturan: 5 sampai 9 kata, ideal 5 sampai 7 kata, huruf besar, kuat, mudah dibaca, tidak clickbait menyesatkan.",
     "- Jangan jawab satu atau dua kata.",
+    "- Buat sebagai hook utama, bukan potongan kalimat yang terputus.",
     "- Jangan ambil potongan transkrip mentah yang tidak jelas.",
     "- Buat seperti judul cover video, bukan subtitle.",
     "- Wajib mengandung hook: konflik, rahasia, alasan mengejutkan, pertanyaan, atau momen paling bikin penasaran.",
@@ -118,7 +119,7 @@ export async function generateFrameQuoteText({ job, output, promptTemplate, aiPr
   ].join("\n");
   const text = await generateAiText(prompt, { maxOutputTokens: 60, temperature: 0.45, provider: aiProvider });
   const generated = normalizeFrameQuoteText(text);
-  return generated || fallback;
+  return isStrongFrameQuote(generated) ? generated : fallback;
 }
 
 function hasStrategyCaption(output) {
@@ -155,7 +156,7 @@ function fallbackFrameQuote(output) {
     const sentence = String(value)
       .split(/[.!?\n]+/)
       .map((item) => normalizeFrameQuoteText(item))
-      .find((item) => item.split(/\s+/).length >= 4);
+      .find(isStrongFrameQuote);
     if (sentence) return sentence;
   }
   return "Gue baru sadar setelah kehilangan";
@@ -171,6 +172,11 @@ function normalizeFrameQuoteText(value) {
     .split(/\s+/)
     .slice(0, 11)
     .join(" ");
+}
+
+function isStrongFrameQuote(value) {
+  const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+  return words.length >= 5 && words.join("").length >= 16;
 }
 
 function ensureCaptionHashtags(caption, output, promptTemplate, dynamicHashtags = []) {
@@ -479,16 +485,16 @@ function normalizeThumbnailText(value, fallback = "CERITA YANG JARANG DIBUKA") {
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
-  return cleaned.split(/\s+/).slice(0, 10).join(" ") || fallback;
+  return cleaned.split(/\s+/).slice(0, 11).join(" ") || fallback;
 }
 
 function isStrongThumbnailText(value) {
   const cleaned = String(value || "").trim();
   const words = cleaned.split(/\s+/).filter(Boolean);
-  if (words.length < 4 || words.length > 10) return false;
+  if (words.length < 5 || words.length > 11) return false;
   if (/[,:;]$/.test(cleaned)) return false;
   const meaningfulCount = words.filter((word) => !STOPWORDS.has(word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""))).length;
-  return words.join("").length >= 10 && meaningfulCount >= 2;
+  return words.join("").length >= 16 && meaningfulCount >= 3;
 }
 
 function fallbackThumbnailText(output) {
