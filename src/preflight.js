@@ -358,6 +358,10 @@ async function checkYoutubeDiscovery(online) {
     return checkResult("YouTube Discovery API", true, "AUTO_DISCOVER_VIDEOS=false", false);
   }
 
+  if (!boolEnv("AUTO_DISCOVER_USE_API", false)) {
+    return checkResult("YouTube Discovery API", true, "AUTO_DISCOVER_USE_API=false; discovery pakai yt-dlp", false);
+  }
+
   const key = String(
     process.env.YOUTUBE_API_KEY ||
     process.env.YOUTUBE_DATA_API_KEY ||

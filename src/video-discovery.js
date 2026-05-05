@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
@@ -156,7 +157,7 @@ function scoreCandidate(item) {
     stats.likesPerHour * 2 +
     stats.commentsPerHour * 25 +
     stats.engagementRate * 50000;
-  const trustedChannelBoost = item.discovery_source === "youtube_api_channel" ? 30000 : 0;
+  const trustedChannelBoost = ["youtube_api_channel", "yt_dlp_channel"].includes(item.discovery_source) ? 30000 : 0;
   const freshBoost = stats.ageHours <= 24 ? 40000 : stats.ageHours <= 72 ? 18000 : 0;
 
   return Math.round((raw + trustedChannelBoost + freshBoost) * topicMultiplier(text) * durationMultiplier * recencyMultiplier);
@@ -197,10 +198,11 @@ function isFreshChannelCandidate(item, options) {
   if (duration && duration < options.minDuration) return false;
   if (duration && duration > options.maxDuration) return false;
 
-  const isFresh = ageHours(item.publishedAt || item.upload_date) <= options.publishedAfterDays * 24 + 6;
+  const isFresh = item.discovery_source === "yt_dlp_channel"
+    || ageHours(item.publishedAt || item.upload_date) <= options.publishedAfterDays * 24 + 6;
   if (!isFresh) return false;
 
-  return item.discovery_source === "youtube_api_channel" || TOPIC_RE.test(candidateText(item));
+  return ["youtube_api_channel", "yt_dlp_channel"].includes(item.discovery_source) || TOPIC_RE.test(candidateText(item));
 }
 
 function parseJsonLines(stdout) {
@@ -217,11 +219,28 @@ function parseJsonLines(stdout) {
     });
 }
 
+function ytDlpCommonArgs() {
+  const args = [];
+  const cookiesFile = String(process.env.YTDLP_COOKIES_FILE || "").trim();
+  if (cookiesFile) {
+    const cookiePath = path.isAbsolute(cookiesFile)
+      ? cookiesFile
+      : path.join(config.clipper.rootDir, cookiesFile);
+    if (existsSync(cookiePath)) args.push("--cookies", cookiePath);
+  }
+  if (process.env.YTDLP_USER_AGENT) args.push("--user-agent", process.env.YTDLP_USER_AGENT);
+  if (process.env.YTDLP_REFERER) args.push("--referer", process.env.YTDLP_REFERER);
+  if (process.env.YTDLP_JS_RUNTIMES) args.push("--js-runtimes", process.env.YTDLP_JS_RUNTIMES);
+  if (process.env.YTDLP_REMOTE_COMPONENTS) args.push("--remote-components", process.env.YTDLP_REMOTE_COMPONENTS);
+  return args;
+}
+
 function runYtDlpSearch(query, maxResults) {
   const command = process.env.YTDLP_COMMAND || "yt-dlp";
   const args = [
     "--dump-json",
     "--flat-playlist",
+    ...ytDlpCommonArgs(),
     `ytsearch${maxResults}:${query}`
   ];
 
@@ -243,6 +262,87 @@ function runYtDlpSearch(query, maxResults) {
       } else {
         reject(new Error(`yt-dlp search gagal (${code}): ${stderr.slice(-800)}`));
       }
+    });
+  });
+}
+
+function channelVideosUrl(handle) {
+  const value = String(handle || "").trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^UC[A-Za-z0-9_-]{20,}$/.test(value)) return `https://www.youtube.com/channel/${value}/videos`;
+  return `https://www.youtube.com/${value.startsWith("@") ? value : `@${value}`}/videos`;
+}
+
+function runYtDlpChannel(handle, maxResults) {
+  const url = channelVideosUrl(handle);
+  if (!url) return Promise.resolve([]);
+  const command = process.env.YTDLP_COMMAND || "yt-dlp";
+  const args = [
+    "--dump-json",
+    "--flat-playlist",
+    "--playlist-end",
+    String(maxResults),
+    ...ytDlpCommonArgs(),
+    url
+  ];
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(parseJsonLines(stdout));
+      } else {
+        reject(new Error(`yt-dlp channel gagal (${code}): ${stderr.slice(-800)}`));
+      }
+    });
+  });
+}
+
+function runYtDlpValidate(url) {
+  const command = process.env.YTDLP_COMMAND || "yt-dlp";
+  const args = [
+    "--skip-download",
+    "--no-warnings",
+    "--print",
+    "id",
+    ...ytDlpCommonArgs(),
+    url
+  ];
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("yt-dlp validate timeout"));
+    }, numberEnv("AUTO_DISCOVER_VALIDATE_TIMEOUT_SECONDS", 45, 5, 180) * 1000);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code === 0 && stdout.trim()) resolve(stdout.trim());
+      else reject(new Error(`yt-dlp validate gagal (${code}): ${stderr.slice(-500)}`));
     });
   });
 }
@@ -491,6 +591,31 @@ async function discoverWithYtDlp({ queries, knownIds, options }) {
   return [...candidates.values()];
 }
 
+async function discoverChannelsWithYtDlp({ knownIds, options }) {
+  const channelHandles = listEnv("AUTO_DISCOVER_CHANNEL_HANDLES", DEFAULT_CHANNEL_HANDLES);
+  const candidates = new Map();
+  for (const handle of channelHandles) {
+    try {
+      const results = await runYtDlpChannel(handle, options.maxResults);
+      for (const item of results) {
+        const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
+        if (!id || knownIds.has(id) || candidates.has(id)) continue;
+        candidates.set(id, {
+          ...item,
+          id,
+          url: item.webpage_url || item.url || videoUrl(id),
+          channel: item.channel || item.uploader || item.playlist_channel || item.playlist_uploader || handle,
+          discovery_source: "yt_dlp_channel",
+          discovery_query: `channel:${handle}`
+        });
+      }
+    } catch (error) {
+      console.warn(`Auto discovery channel gagal (${handle}): ${error.message}`);
+    }
+  }
+  return [...candidates.values()];
+}
+
 async function loadRawCandidates({ queries, knownIds, options, channelOnly = false, useApi = true }) {
   let rawCandidates = null;
   if (useApi) {
@@ -504,17 +629,31 @@ async function loadRawCandidates({ queries, knownIds, options, channelOnly = fal
   }
 
   if (!rawCandidates) {
-    rawCandidates = await discoverWithYtDlp({ queries, knownIds, options });
+    rawCandidates = channelOnly
+      ? await discoverChannelsWithYtDlp({ knownIds, options })
+      : await discoverWithYtDlp({ queries, knownIds, options });
   }
 
   return rawCandidates || [];
 }
 
-function selectDiscoveredCandidates(rawCandidates, options, addCount, mode) {
+async function validateCandidateAvailability(item) {
+  if (!boolEnv("AUTO_DISCOVER_VALIDATE_URL", true)) return true;
+  const url = item.webpage_url || item.url || videoUrl(item.id);
+  try {
+    await runYtDlpValidate(url);
+    return true;
+  } catch (error) {
+    console.warn(`AUTO DISCOVERY kandidat dilewati karena link tidak valid (${url}): ${error.message}`);
+    return false;
+  }
+}
+
+async function selectDiscoveredCandidates(rawCandidates, options, addCount, mode) {
   const filter = mode === "fresh_channels"
     ? isFreshChannelCandidate
     : mode === "best_available" ? isTopicCandidate : isViralCandidate;
-  return rawCandidates
+  const ranked = rawCandidates
     .filter((item) => filter(item, options))
     .map((item) => ({
       ...item,
@@ -523,20 +662,29 @@ function selectDiscoveredCandidates(rawCandidates, options, addCount, mode) {
       discovery_fallback_mode: mode
     }))
     .sort((a, b) => b.discovery_score - a.discovery_score)
-    .slice(0, addCount);
+    .slice(0, Math.max(addCount * 4, addCount));
+
+  const selected = [];
+  for (const item of ranked) {
+    if (!await validateCandidateAvailability(item)) continue;
+    selected.push(item);
+    if (selected.length >= addCount) break;
+  }
+  return selected;
 }
 
 function fallbackPasses(baseQueries, baseOptions) {
   const fallbackQueries = uniqueList([...baseQueries, ...FALLBACK_QUERIES]);
-  const fallbackMaxResults = numberEnv("AUTO_DISCOVER_FALLBACK_MAX_RESULTS", 25, baseOptions.maxResults, 50);
+  const useApi = boolEnv("AUTO_DISCOVER_USE_API", false);
+  const fallbackMaxResults = numberEnv("AUTO_DISCOVER_FALLBACK_MAX_RESULTS", 6, baseOptions.maxResults, 50);
   const freshUploadDays = numberEnv("AUTO_DISCOVER_FRESH_UPLOAD_DAYS", 3, 1, 30);
-  const freshChannelMaxResults = numberEnv("AUTO_DISCOVER_CHANNEL_MAX_RESULTS", 5, 1, 25);
+  const freshChannelMaxResults = numberEnv("AUTO_DISCOVER_CHANNEL_MAX_RESULTS", 1, 1, 25);
 
   return [
     {
       mode: "fresh_channels",
       channelOnly: true,
-      useApi: true,
+      useApi,
       queries: [],
       options: {
         ...baseOptions,
@@ -548,7 +696,7 @@ function fallbackPasses(baseQueries, baseOptions) {
     },
     {
       mode: "strict",
-      useApi: true,
+      useApi,
       queries: baseQueries,
       options: baseOptions
     },
@@ -599,8 +747,8 @@ export async function discoverAndQueueVideos(options = {}) {
   }
 
   const queries = listEnv("AUTO_DISCOVER_QUERY", DEFAULT_QUERIES);
-  const maxResults = numberEnv("AUTO_DISCOVER_MAX_RESULTS", 8, 1, 25);
-  const addCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 5, 1, 10);
+  const maxResults = numberEnv("AUTO_DISCOVER_MAX_RESULTS", 4, 1, 25);
+  const addCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 1, 1, 10);
   const minDuration = numberEnv("AUTO_DISCOVER_MIN_DURATION_SECONDS", 600, 0, 86400);
   const maxDuration = numberEnv("AUTO_DISCOVER_MAX_DURATION_SECONDS", 10800, 60, 86400);
   const minViews = numberEnv("AUTO_DISCOVER_MIN_VIEWS", 25000, 0, 1000000000);
@@ -636,7 +784,7 @@ export async function discoverAndQueueVideos(options = {}) {
       channelOnly: Boolean(pass.channelOnly),
       useApi: pass.useApi !== false
     });
-    selected = selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
+    selected = await selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
     if (selected.length) {
       selectedPass = pass.mode;
       console.log(`AUTO DISCOVERY pass=${pass.mode} memilih ${selected.length} kandidat.`);
