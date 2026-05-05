@@ -276,7 +276,7 @@ async function checkRemoteStorage(online) {
       await withRemoteClient(async (client) => {
         await client.ensureDir(config.ftp.remoteDir);
         await client.list();
-      }, { timeoutMs });
+      }, { timeoutMs, retries: 1 });
       const detail = attempt > 1
         ? `remote siap: ${config.ftp.remoteDir} (attempt ${attempt}/${attempts})`
         : `remote siap: ${config.ftp.remoteDir}`;

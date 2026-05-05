@@ -19,6 +19,12 @@ app.use(express.json({ limit: "1mb" }));
 
 let activeRun = null;
 
+function boolInput(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
 const envFilePath = path.join(config.rootDir, ".env");
 const sensitiveEnvKeys = new Set([
   "AUTO_DASHBOARD_PIN",
@@ -500,9 +506,9 @@ app.post("/api/run", async (req, res) => {
     range: body.range || "",
     aiProvider: body.ai_provider || process.env.AI_PROVIDER || "",
     qualityProfile: body.quality_profile || "standard",
-    useFrame: body.use_frame === true || body.use_frame === "true",
-    useFilter: body.use_filter === true || body.use_filter === "true",
-    useWatermark: body.use_watermark === true || body.use_watermark === "true",
+    useFrame: boolInput(body.use_frame, config.videoEffects.frameEnabled),
+    useFilter: boolInput(body.use_filter, config.videoEffects.filterEnabled),
+    useWatermark: boolInput(body.use_watermark, config.videoEffects.watermarkEnabled),
     subtitleFont: body.subtitle_font || "Segoe UI Semibold",
     subtitleFontSize: Number(body.subtitle_font_size || 46),
     subtitleMarginV: Number(body.subtitle_margin_v || 550),

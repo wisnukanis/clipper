@@ -118,7 +118,9 @@ export async function uploadStateFile(file, data) {
           password: cfg.password || undefined,
           privateKey: cfg.privateKey || undefined,
           passphrase: cfg.passphrase || undefined,
-          readyTimeout: cfg.stateTimeoutMs
+          readyTimeout: Math.max(cfg.stateTimeoutMs, cfg.connectionTimeoutMs, 30000),
+          keepaliveInterval: 10000,
+          keepaliveCountMax: 12
         });
         const stateDir = path.posix.join(cfg.remoteDir, "state");
         await client.mkdir(stateDir, true);
@@ -164,9 +166,9 @@ export function configSummary() {
     threadsEnabled: boolEnv("THREADS_UPLOAD_ENABLED", false),
     aiProvider: clean(process.env.AI_PROVIDER || "gemini"),
     openaiModel: clean(process.env.OPENAI_MODEL || "gpt-5-nano"),
-    videoFrameEnabled: boolEnv("VIDEO_FRAME_ENABLED", false),
-    videoFilterEnabled: boolEnv("VIDEO_FILTER_ENABLED", false),
-    videoWatermarkEnabled: boolEnv("VIDEO_WATERMARK_ENABLED", false),
+    videoFrameEnabled: boolEnv("VIDEO_FRAME_ENABLED", true),
+    videoFilterEnabled: boolEnv("VIDEO_FILTER_ENABLED", true),
+    videoWatermarkEnabled: boolEnv("VIDEO_WATERMARK_ENABLED", true),
     subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "550"),
     vercelDashboard: true
@@ -285,9 +287,9 @@ export function buildVideo(input) {
     subtitle_font_size: Number(input.subtitle_font_size || process.env.SUBTITLE_FONT_SIZE || 46),
     subtitle_margin_v: Number(input.subtitle_margin_v || process.env.SUBTITLE_MARGIN_V || 550),
     subtitle_margin_h: Number(input.subtitle_margin_h || process.env.SUBTITLE_MARGIN_H || 180),
-    use_frame: boolInput(input.use_frame, boolEnv("VIDEO_FRAME_ENABLED", false)),
-    use_filter: boolInput(input.use_filter, boolEnv("VIDEO_FILTER_ENABLED", false)),
-    use_watermark: boolInput(input.use_watermark, boolEnv("VIDEO_WATERMARK_ENABLED", false)),
+    use_frame: boolInput(input.use_frame, boolEnv("VIDEO_FRAME_ENABLED", true)),
+    use_filter: boolInput(input.use_filter, boolEnv("VIDEO_FILTER_ENABLED", true)),
+    use_watermark: boolInput(input.use_watermark, boolEnv("VIDEO_WATERMARK_ENABLED", true)),
     force_reprocess: input.force_reprocess === true,
     created_at: input.created_at || now,
     updated_at: now
@@ -391,8 +393,9 @@ export function remoteConfig() {
     privateKey: firstEnv(["SFTP_PRIVATE_KEY"]).replace(/\\n/g, "\n").trim(),
     passphrase: firstEnv(["SFTP_PASSPHRASE"]),
     remoteDir: clean(firstEnv(names("REMOTE_DIR"), "/public_html/ig-generated")),
-    stateTimeoutMs: numberEnvFrom(names("STATE_TIMEOUT_SECONDS"), 45) * 1000,
-    retries: Math.max(1, numberEnvFrom(names("UPLOAD_RETRIES"), 3))
+    connectionTimeoutMs: numberEnvFrom(names("TIMEOUT_SECONDS"), 420) * 1000,
+    stateTimeoutMs: numberEnvFrom(names("STATE_TIMEOUT_SECONDS"), 180) * 1000,
+    retries: Math.max(1, numberEnvFrom(names("UPLOAD_RETRIES"), 4))
   };
 }
 

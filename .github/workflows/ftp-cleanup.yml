@@ -50,10 +50,10 @@ jobs:
       SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
       SFTP_PASSPHRASE: ${{ secrets.SFTP_PASSPHRASE }}
       SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
-      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '300' }}
+      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '420' }}
       SFTP_CLEANUP_TIMEOUT_SECONDS: ${{ secrets.SFTP_CLEANUP_TIMEOUT_SECONDS || secrets.FTP_CLEANUP_TIMEOUT_SECONDS || '600' }}
-      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
-      SFTP_UPLOAD_RETRIES: ${{ secrets.SFTP_UPLOAD_RETRIES || secrets.FTP_UPLOAD_RETRIES || '2' }}
+      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '180' }}
+      SFTP_UPLOAD_RETRIES: ${{ secrets.SFTP_UPLOAD_RETRIES || secrets.FTP_UPLOAD_RETRIES || '4' }}
       SFTP_CLEANUP_DAYS: ${{ github.event.inputs.days || secrets.SFTP_CLEANUP_DAYS || secrets.FTP_CLEANUP_DAYS || '1' }}
       SFTP_CLEANUP_DELETE_ALL: ${{ github.event.inputs.delete_all || 'false' }}
       SFTP_CLEANUP_SUBDIRS: ${{ github.event.inputs.subdirs || '' }}

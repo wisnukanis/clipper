@@ -54,15 +54,15 @@ on:
       use_frame:
         description: "Apply Emsa frame: true/false"
         required: false
-        default: "false"
+        default: "true"
       use_filter:
         description: "Apply light uniqueness filter: true/false"
         required: false
-        default: "false"
+        default: "true"
       use_watermark:
         description: "Apply transparent logo watermark: true/false"
         required: false
-        default: "false"
+        default: "true"
       ai_provider:
         description: "Caption/thumbnail AI provider: gemini or openai"
         required: false
@@ -162,12 +162,12 @@ jobs:
       SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
       SFTP_PASSPHRASE: ${{ secrets.SFTP_PASSPHRASE }}
       SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
-      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '300' }}
+      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '420' }}
       SFTP_UPLOAD_TIMEOUT_SECONDS: ${{ secrets.SFTP_UPLOAD_TIMEOUT_SECONDS || secrets.FTP_UPLOAD_TIMEOUT_SECONDS || '1800' }}
       SFTP_CLEANUP_TIMEOUT_SECONDS: ${{ secrets.SFTP_CLEANUP_TIMEOUT_SECONDS || secrets.FTP_CLEANUP_TIMEOUT_SECONDS || '600' }}
-      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '90' }}
-      SFTP_PRECHECK_RETRIES: ${{ secrets.SFTP_PRECHECK_RETRIES || secrets.FTP_PRECHECK_RETRIES || '3' }}
-      SFTP_UPLOAD_RETRIES: ${{ secrets.SFTP_UPLOAD_RETRIES || secrets.FTP_UPLOAD_RETRIES || '2' }}
+      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '180' }}
+      SFTP_PRECHECK_RETRIES: ${{ secrets.SFTP_PRECHECK_RETRIES || secrets.FTP_PRECHECK_RETRIES || '5' }}
+      SFTP_UPLOAD_RETRIES: ${{ secrets.SFTP_UPLOAD_RETRIES || secrets.FTP_UPLOAD_RETRIES || '4' }}
       SFTP_PUBLIC_URL_RETRIES: ${{ secrets.SFTP_PUBLIC_URL_RETRIES || secrets.FTP_PUBLIC_URL_RETRIES || '8' }}
       SFTP_PUBLIC_URL_RETRY_DELAY_MS: ${{ secrets.SFTP_PUBLIC_URL_RETRY_DELAY_MS || secrets.FTP_PUBLIC_URL_RETRY_DELAY_MS || '2500' }}
 
@@ -243,9 +243,9 @@ jobs:
       DOWNLOAD_COMPRESS_CRF: "22"
       FINAL_RENDER_CRF: "20"
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
-      VIDEO_FRAME_ENABLED: ${{ github.event.inputs.use_frame || secrets.VIDEO_FRAME_ENABLED || 'false' }}
-      VIDEO_FILTER_ENABLED: ${{ github.event.inputs.use_filter || secrets.VIDEO_FILTER_ENABLED || 'false' }}
-      VIDEO_WATERMARK_ENABLED: ${{ github.event.inputs.use_watermark || secrets.VIDEO_WATERMARK_ENABLED || 'false' }}
+      VIDEO_FRAME_ENABLED: ${{ github.event.inputs.use_frame || secrets.VIDEO_FRAME_ENABLED || 'true' }}
+      VIDEO_FILTER_ENABLED: ${{ github.event.inputs.use_filter || secrets.VIDEO_FILTER_ENABLED || 'true' }}
+      VIDEO_WATERMARK_ENABLED: ${{ github.event.inputs.use_watermark || secrets.VIDEO_WATERMARK_ENABLED || 'true' }}
       VIDEO_FRAME_ASSET: ${{ secrets.VIDEO_FRAME_ASSET || 'assets/branding/frame-1080x1920.png' }}
       VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
       VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}

@@ -803,12 +803,12 @@ SFTP_PASSWORD=
 SFTP_PRIVATE_KEY=
 SFTP_PASSPHRASE=
 SFTP_REMOTE_DIR=/home/u123456789/domains/domain.tld/public_html/ig-generated
-SFTP_TIMEOUT_SECONDS=300
+SFTP_TIMEOUT_SECONDS=420
 SFTP_UPLOAD_TIMEOUT_SECONDS=1800
 SFTP_CLEANUP_TIMEOUT_SECONDS=600
-SFTP_STATE_TIMEOUT_SECONDS=90
-SFTP_PRECHECK_RETRIES=3
-SFTP_UPLOAD_RETRIES=2
+SFTP_STATE_TIMEOUT_SECONDS=180
+SFTP_PRECHECK_RETRIES=5
+SFTP_UPLOAD_RETRIES=4
 SFTP_PUBLIC_URL_RETRIES=8
 SFTP_PUBLIC_URL_RETRY_DELAY_MS=2500
 SFTP_CLEANUP_DAYS=1
@@ -816,9 +816,9 @@ SFTP_CLEANUP_DELETE_ALL=false
 SFTP_CLEANUP_SUBDIRS=videos,thumbnails,metadata,history
 SFTP_CLEANUP_MATCH=
 
-VIDEO_FRAME_ENABLED=false
-VIDEO_FILTER_ENABLED=false
-VIDEO_WATERMARK_ENABLED=false
+VIDEO_FRAME_ENABLED=true
+VIDEO_FILTER_ENABLED=true
+VIDEO_WATERMARK_ENABLED=true
 VIDEO_FRAME_ASSET=assets/branding/frame-1080x1920.png
 VIDEO_WATERMARK_ASSET=assets/branding/logo.png
 VIDEO_EFFECT_CRF=27
@@ -919,15 +919,15 @@ Folder remote absolut tujuan upload, contoh `/home/u123456789/domains/domain.tld
 
 #### `VIDEO_FRAME_ENABLED`
 
-Default global untuk memakai frame visual 1080x1920. Dashboard tetap bisa memilih per run/queue.
+Default global untuk memakai frame visual 1080x1920. Default: `true`. Dashboard tetap bisa memilih per run/queue.
 
 #### `VIDEO_FILTER_ENABLED`
 
-Default global untuk filter ringan yang sedikit mengubah brightness, contrast, saturation, hue, dan noise halus.
+Default global untuk filter ringan yang sedikit mengubah brightness, contrast, saturation, hue, dan noise halus. Default: `true`.
 
 #### `VIDEO_WATERMARK_ENABLED`
 
-Default global untuk watermark logo transparan.
+Default global untuk watermark logo transparan. Default: `true`.
 
 #### `VIDEO_FRAME_ASSET`
 
@@ -1019,7 +1019,7 @@ Folder remote tujuan upload.
 
 #### `FTP_TIMEOUT_SECONDS`
 
-Timeout koneksi FTP umum. Default: `300`.
+Timeout koneksi FTP/SFTP umum. Default: `420`.
 
 #### `FTP_UPLOAD_TIMEOUT_SECONDS`
 
@@ -1031,15 +1031,15 @@ Timeout khusus cleanup FTP. Default: `600`.
 
 #### `FTP_STATE_TIMEOUT_SECONDS`
 
-Timeout FTP untuk sinkronisasi state dashboard. Default: `90`.
+Timeout FTP/SFTP untuk sinkronisasi state dashboard. Default: `180`.
 
 #### `FTP_PRECHECK_RETRIES`
 
-Jumlah retry untuk preflight FTP sebelum workflow jalan. Default: `3`.
+Jumlah retry untuk preflight FTP/SFTP sebelum workflow jalan. Default: `5`.
 
 #### `FTP_UPLOAD_RETRIES`
 
-Jumlah retry upload FTP dengan koneksi baru. Default: `2`. Jika timeout terjadi setelah file lengkap di remote, sistem memverifikasi ukuran file dan lanjut tanpa upload ulang.
+Jumlah retry upload FTP/SFTP dengan koneksi baru. Default: `4`. Jika timeout terjadi setelah file lengkap di remote, sistem memverifikasi ukuran file dan lanjut tanpa upload ulang.
 
 #### `FTP_PUBLIC_URL_RETRIES`
 

@@ -37,7 +37,7 @@ function isRetriableRemoteError(error) {
 }
 
 function retryDelayMs(attempt) {
-  return Math.min(30000, 1500 * attempt);
+  return Math.min(45000, 5000 * attempt);
 }
 
 async function localFileSize(filePath) {
@@ -144,6 +144,11 @@ class SftpRemoteClient {
 async function connectRemoteClient(timeoutMs) {
   if (config.uploadDriver === "sftp") {
     const client = new SftpClient();
+    const readyTimeout = Math.max(
+      Number(timeoutMs || 0),
+      Number(config.ftp.timeoutMs || 0),
+      30000
+    );
     await client.connect({
       host: config.ftp.host,
       port: config.ftp.port,
@@ -151,7 +156,9 @@ async function connectRemoteClient(timeoutMs) {
       password: config.ftp.password || undefined,
       privateKey: config.ftp.privateKey || undefined,
       passphrase: config.ftp.passphrase || undefined,
-      readyTimeout: timeoutMs || config.ftp.timeoutMs
+      readyTimeout,
+      keepaliveInterval: 10000,
+      keepaliveCountMax: 12
     });
     return new SftpRemoteClient(client);
   }
@@ -170,7 +177,11 @@ async function connectRemoteClient(timeoutMs) {
 async function closeRemoteClient(client) {
   if (!client) return;
   if (typeof client.close === "function") {
-    await client.close();
+    try {
+      await client.close();
+    } catch {
+      // Ignore close errors so the original remote error remains visible.
+    }
   }
 }
 

@@ -29,7 +29,7 @@ let videoLimit = ROW_LIMIT_DEFAULT;
 let jobLimit = ROW_LIMIT_DEFAULT;
 let cachedVideos = [];
 let cachedJobs = [];
-let effectDefaults = { use_frame: false, use_filter: false, use_watermark: false };
+let effectDefaults = { use_frame: true, use_filter: true, use_watermark: true };
 let effectDefaultsApplied = false;
 
 if (dashboardPin) {
