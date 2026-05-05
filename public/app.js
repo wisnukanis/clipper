@@ -193,6 +193,7 @@ function effectSummary(cfg) {
   if (cfg.videoFrameEnabled) items.push("frame");
   if (cfg.videoFilterEnabled) items.push("filter");
   if (cfg.videoWatermarkEnabled) items.push("wm");
+  if (cfg.videoLowerThirdEnabled) items.push("quote");
   return items.length ? items.join("+") : "manual";
 }
 

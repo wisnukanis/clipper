@@ -126,6 +126,8 @@ const envGroups = [
       field("VIDEO_FRAME_ENABLED", "Frame default"),
       field("VIDEO_FILTER_ENABLED", "Filter default"),
       field("VIDEO_WATERMARK_ENABLED", "Watermark default"),
+      field("VIDEO_LOWER_THIRD_ENABLED", "Lower-third default"),
+      field("VIDEO_LOWER_THIRD_BRAND", "Lower-third brand"),
       field("VIDEO_FRAME_ASSET", "Frame asset"),
       field("VIDEO_WATERMARK_ASSET", "Watermark asset"),
       field("VIDEO_EFFECT_CRF", "Effect CRF"),
@@ -289,6 +291,7 @@ app.get("/api/state", async (_req, res) => {
     videoFrameEnabled: config.videoEffects.frameEnabled,
     videoFilterEnabled: config.videoEffects.filterEnabled,
     videoWatermarkEnabled: config.videoEffects.watermarkEnabled,
+    videoLowerThirdEnabled: config.videoEffects.lowerThirdEnabled,
     aiProvider: config.ai.provider,
     subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
     subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "550"

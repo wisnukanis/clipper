@@ -12,7 +12,6 @@
     "dry-run": "node src/run.js --dry-run",
     "publish": "node src/run.js --publish",
     "publish:ready": "node src/publish-ready.js",
-    "youtube:retry-ready": "node src/retry-youtube-ready.js",
     "scheduler": "node src/scheduler.js",
     "youtube:check": "node src/youtube-check.js",
     "instagram:check": "node src/instagram-check.js",

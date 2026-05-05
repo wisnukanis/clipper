@@ -67,11 +67,6 @@ on:
         description: "Caption/thumbnail AI provider: gemini or openai"
         required: false
         default: "gemini"
-      retry_ready_only:
-        description: "Only retry ready YouTube upload without rendering: true/false"
-        required: false
-        default: "false"
-
   schedule:
     # GitHub schedule uses UTC.
     # Target publish kira-kira:
@@ -246,10 +241,13 @@ jobs:
       VIDEO_FRAME_ENABLED: ${{ github.event.inputs.use_frame || secrets.VIDEO_FRAME_ENABLED || 'true' }}
       VIDEO_FILTER_ENABLED: ${{ github.event.inputs.use_filter || secrets.VIDEO_FILTER_ENABLED || 'true' }}
       VIDEO_WATERMARK_ENABLED: ${{ github.event.inputs.use_watermark || secrets.VIDEO_WATERMARK_ENABLED || 'true' }}
+      VIDEO_LOWER_THIRD_ENABLED: ${{ secrets.VIDEO_LOWER_THIRD_ENABLED || 'true' }}
+      VIDEO_LOWER_THIRD_BRAND: ${{ secrets.VIDEO_LOWER_THIRD_BRAND || '@emsa.pro | Podcast Highlight' }}
       VIDEO_FRAME_ASSET: ${{ secrets.VIDEO_FRAME_ASSET || 'assets/branding/frame-1080x1920.png' }}
       VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
       VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}
       VIDEO_EFFECT_PRESET: ${{ secrets.VIDEO_EFFECT_PRESET || 'veryfast' }}
+      THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Podcast | Highlight | Viral' }}
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
       SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik Semibold,Selawik,DejaVu Sans' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
@@ -856,6 +854,7 @@ jobs:
           echo "VIDEO_FRAME_ENABLED=$VIDEO_FRAME_ENABLED"
           echo "VIDEO_FILTER_ENABLED=$VIDEO_FILTER_ENABLED"
           echo "VIDEO_WATERMARK_ENABLED=$VIDEO_WATERMARK_ENABLED"
+          echo "VIDEO_LOWER_THIRD_ENABLED=$VIDEO_LOWER_THIRD_ENABLED"
           echo "SUBTITLE_FONT_FAMILY=$SUBTITLE_FONT_FAMILY"
           echo "SUBTITLE_FONT_SIZE=$SUBTITLE_FONT_SIZE"
           echo "SUBTITLE_MARGIN_V=$SUBTITLE_MARGIN_V"
@@ -918,14 +917,7 @@ jobs:
           URL: ${{ github.event.inputs.url || '' }}
           RANGE: ${{ github.event.inputs.range || '' }}
           FORCE_REPROCESS: ${{ github.event.inputs.force_reprocess || 'false' }}
-          RETRY_READY_ONLY: ${{ github.event.inputs.retry_ready_only || 'false' }}
         run: |
-          if [ "$RETRY_READY_ONLY" = "true" ] || [ "$RETRY_READY_ONLY" = "1" ]; then
-            echo "Retrying latest ready YouTube upload only."
-            node src/publish-ready.js --force-youtube
-            exit 0
-          fi
-
           args=(--publish --theme "$THEME")
 
           # Pakai --scheduled hanya saat trigger dari cron schedule.

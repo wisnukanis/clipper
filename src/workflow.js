@@ -6,7 +6,7 @@ import { appendLog } from "./logger.js";
 import { appendHistory, publishedCountToday } from "./history.js";
 import { addVideo, createJobRecord, selectNextVideo, updateVideoStatus } from "./selector.js";
 import { runClipper } from "./clipper-runner.js";
-import { generateCaption, generateThumbnailText } from "./caption.js";
+import { generateCaption, generateFrameQuoteText, generateThumbnailText } from "./caption.js";
 import { generateThumbnail } from "./thumbnail.js";
 import { fileExists, uploadHistoryFile, uploadJobFiles, validatePublicUrl } from "./uploader.js";
 import { publishReel } from "./instagram.js";
@@ -212,6 +212,7 @@ export async function runWorkflow(options = {}) {
       final_video_path: firstSuccess?.output?.finalAbsPath || "",
       original_final_video_path: firstSuccess?.output?.originalFinalAbsPath || "",
       video_effects: firstSuccess?.output?.videoEffects || null,
+      frame_quote_text: firstSuccess?.output?.frameQuoteText || "",
       public_video_url: firstSuccess?.upload?.videoUrl || "",
       public_thumbnail_url: firstSuccess?.upload?.thumbnailUrl || "",
       public_metadata_url: firstSuccess?.upload?.metadataUrl || "",
@@ -291,13 +292,26 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
   const clipIndex = index + 1;
   const storageJob = buildClipStorageJob(job, index, total);
   const aiProvider = options.aiProvider || video.ai_provider || "";
-  const effectsResult = await applyVideoEffects({ job: storageJob, video, output, options });
+  const thumbnailText = await generateThumbnailText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
+  const frameQuoteText = await generateFrameQuoteText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
+  output = { ...output, thumbnailText, frameQuoteText };
+
+  const effectsResult = await applyVideoEffects({
+    job: storageJob,
+    video,
+    output,
+    options: {
+      ...options,
+      lowerThirdText: frameQuoteText
+    }
+  });
   output = { ...effectsResult.output, videoEffects: effectsResult.effects };
 
   await updateJob(job.job_id, {
     final_video_path: output.finalAbsPath,
     original_final_video_path: output.originalFinalAbsPath || "",
-    video_effects: effectsResult.effects
+    video_effects: effectsResult.effects,
+    frame_quote_text: frameQuoteText
   });
 
   const caption = await generateCaption({
@@ -313,7 +327,6 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     current_clip_index: clipIndex
   });
 
-  const thumbnailText = await generateThumbnailText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
   const thumbnail = await generateThumbnail({
     job: storageJob,
     videoPath: output.finalAbsPath,
@@ -377,27 +390,28 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     const youtubePrimary = config.youtube.enabled;
     const primaryPublished = youtubePrimary ? Boolean(platformResults.youtube) : platformResults.hasAnySuccess;
     const youtubeQuotaExceeded = Boolean(platformResults.quotaExceeded?.youtube);
+    const deferredByQuota = youtubeQuotaExceeded && !primaryPublished;
     const publishStatus = primaryPublished
       ? platformResults.hasErrors ? "published_with_warnings" : "published"
-      : youtubeQuotaExceeded ? "youtube_quota_exceeded" : "publish_failed";
+      : deferredByQuota ? "queued" : "publish_failed";
     const now = new Date().toISOString();
 
     await updateJob(job.job_id, {
-      status: primaryPublished ? "published" : "ready_to_publish",
+      status: primaryPublished ? "published" : deferredByQuota ? "queued" : "ready_to_publish",
       publish_status: publishStatus,
-      instagram_status: platformResults.instagram ? "published" : config.instagram.enabled ? "failed" : "disabled",
+      instagram_status: platformResults.instagram ? "published" : deferredByQuota ? "queued" : config.instagram.enabled ? "failed" : "disabled",
       instagram_media_id: platformResults.instagram?.mediaId || "",
       instagram_error: platformResults.errors.instagram || "",
-      facebook_status: platformResults.facebook ? "published" : config.facebook.enabled ? "failed" : "disabled",
+      facebook_status: platformResults.facebook ? "published" : deferredByQuota ? "queued" : config.facebook.enabled ? "failed" : "disabled",
       facebook_video_id: platformResults.facebook?.videoId || "",
       facebook_post_id: platformResults.facebook?.postId || "",
       facebook_url: platformResults.facebook?.url || "",
       facebook_error: platformResults.errors.facebook || "",
-      tiktok_status: platformResults.tiktok ? "submitted" : config.tiktok.enabled ? "failed" : "disabled",
+      tiktok_status: platformResults.tiktok ? "submitted" : deferredByQuota ? "queued" : config.tiktok.enabled ? "failed" : "disabled",
       tiktok_publish_id: platformResults.tiktok?.publishId || "",
       tiktok_mode: platformResults.tiktok?.mode || "",
       tiktok_error: platformResults.errors.tiktok || "",
-      threads_status: platformResults.threads ? "published" : config.threads.enabled ? "failed" : "disabled",
+      threads_status: platformResults.threads ? "published" : deferredByQuota ? "queued" : config.threads.enabled ? "failed" : "disabled",
       threads_media_id: platformResults.threads?.mediaId || "",
       threads_url: platformResults.threads?.url || "",
       threads_error: platformResults.errors.threads || "",
@@ -477,6 +491,7 @@ function summarizeClipResult(result) {
     final_video_path: result.output?.finalAbsPath || "",
     original_final_video_path: result.output?.originalFinalAbsPath || "",
     video_effects: result.output?.videoEffects || null,
+    frame_quote_text: result.output?.frameQuoteText || "",
     caption: result.caption || "",
     youtube_error: result.platformResults?.errors?.youtube || ""
   };
@@ -529,17 +544,28 @@ function finalStatusFromClipResults(clipResults, publishEnabled) {
     };
   }
 
+  if (hasYoutubeQuotaExceeded) {
+    return {
+      status: "queued",
+      publishStatus: "queued",
+      videoStatus: "queued",
+      event: "youtube_quota_deferred",
+      successfulClips,
+      failedClips,
+      publishedClips,
+      errorMessage: "Quota YouTube habis; video dikembalikan ke queue untuk jadwal berikutnya."
+    };
+  }
+
   return {
     status: "ready_to_publish",
-    publishStatus: hasYoutubeQuotaExceeded ? "youtube_quota_exceeded" : "publish_failed",
+    publishStatus: "publish_failed",
     videoStatus: "ready_to_publish",
-    event: hasYoutubeQuotaExceeded ? "youtube_quota_exceeded" : "publish_failed",
+    event: "publish_failed",
     successfulClips,
     failedClips,
     publishedClips,
-    errorMessage: hasYoutubeQuotaExceeded
-      ? "Quota YouTube habis; clip sudah siap retry tanpa render ulang."
-      : "Publish platform gagal; siap retry."
+    errorMessage: "Publish platform gagal; siap retry."
   };
 }
 
@@ -570,6 +596,9 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
         ...youtubeMetadata
       });
     });
+    if (platformResults.quotaExceeded.youtube) {
+      return platformResults;
+    }
   }
 
   if (config.facebook.enabled) {
@@ -667,6 +696,7 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     finalPath: output.finalAbsPath,
     originalFinalPath: output.originalFinalAbsPath || "",
     videoEffects,
+    frameQuoteText: output.frameQuoteText || "",
     transcriptPath: output.transcriptReviewAbsPath || "",
     subtitlePath: output.subtitleAbsPath || "",
     thumbnailPath: thumbnail.path,

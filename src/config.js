@@ -102,6 +102,8 @@ function buildConfig() {
       frameEnabled: boolEnv("VIDEO_FRAME_ENABLED", true),
       filterEnabled: boolEnv("VIDEO_FILTER_ENABLED", true),
       watermarkEnabled: boolEnv("VIDEO_WATERMARK_ENABLED", true),
+      lowerThirdEnabled: boolEnv("VIDEO_LOWER_THIRD_ENABLED", true),
+      lowerThirdBrand: cleanText(process.env.VIDEO_LOWER_THIRD_BRAND || "@emsa.pro | Podcast Highlight"),
       frameAssetPath: path.resolve(rootDir, cleanText(process.env.VIDEO_FRAME_ASSET || "assets/branding/frame-1080x1920.png")),
       watermarkAssetPath: path.resolve(rootDir, cleanText(process.env.VIDEO_WATERMARK_ASSET || "assets/branding/logo.png")),
       crf: numberEnv("VIDEO_EFFECT_CRF", numberEnv("FINAL_RENDER_CRF", 27)),

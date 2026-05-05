@@ -819,10 +819,13 @@ SFTP_CLEANUP_MATCH=
 VIDEO_FRAME_ENABLED=true
 VIDEO_FILTER_ENABLED=true
 VIDEO_WATERMARK_ENABLED=true
+VIDEO_LOWER_THIRD_ENABLED=true
+VIDEO_LOWER_THIRD_BRAND=@emsa.pro | Podcast Highlight
 VIDEO_FRAME_ASSET=assets/branding/frame-1080x1920.png
 VIDEO_WATERMARK_ASSET=assets/branding/logo.png
 VIDEO_EFFECT_CRF=27
 VIDEO_EFFECT_PRESET=veryfast
+THUMBNAIL_PILL_TEXT=Podcast | Highlight | Viral
 
 DEPLOY_REMOTE_DIR=/public_html
 DEPLOY_CLEAN_REMOTE=false
@@ -929,6 +932,14 @@ Default global untuk filter ringan yang sedikit mengubah brightness, contrast, s
 
 Default global untuk watermark logo transparan. Default: `true`.
 
+#### `VIDEO_LOWER_THIRD_ENABLED`
+
+Default global untuk quote rapi di area kosong bawah frame. Default: `true`.
+
+#### `VIDEO_LOWER_THIRD_BRAND`
+
+Teks kecil di bawah quote lower-third. Default: `@emsa.pro | Podcast Highlight`.
+
 #### `VIDEO_FRAME_ASSET`
 
 Path frame PNG dengan transparent hole. Default: `assets/branding/frame-1080x1920.png`.
@@ -936,6 +947,10 @@ Path frame PNG dengan transparent hole. Default: `assets/branding/frame-1080x192
 #### `VIDEO_WATERMARK_ASSET`
 
 Path logo watermark. Default: `assets/branding/logo.png`.
+
+#### `THUMBNAIL_PILL_TEXT`
+
+Label kecil di bawah panel judul thumbnail. Default: `Podcast | Highlight | Viral`.
 
 #### `AI_PROVIDER`
 

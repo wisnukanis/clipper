@@ -99,6 +99,28 @@ export async function generateThumbnailText({ job, output, promptTemplate, aiPro
   return isStrongThumbnailText(generated) ? generated : fallback;
 }
 
+export async function generateFrameQuoteText({ job, output, promptTemplate, aiProvider = "" }) {
+  const fallback = fallbackFrameQuote(output);
+  const prompt = [
+    "Buat quote pendek untuk lower-third video Reels dalam Bahasa Indonesia.",
+    "Aturan: 5 sampai 11 kata, terasa seperti kalimat paling kuat dari clip, natural, rapi, dan mudah dibaca.",
+    "- Jangan pakai hashtag.",
+    "- Jangan pakai emoji.",
+    "- Jangan pakai markdown.",
+    "- Jangan menambah fakta di luar konteks.",
+    "- Jangan terlalu clickbait.",
+    `Tema: ${job.theme}`,
+    `Style: ${promptTemplate?.thumbnail_style || "singkat dan kuat"}`,
+    `Judul/hook clip: ${output.hook || output.title || ""}`,
+    `Alasan clip: ${output.reason || ""}`,
+    `Transkrip singkat: ${String(output.clipTranscript || output.caption || "").slice(0, 900)}`,
+    "Balas hanya quote tanpa tanda kutip."
+  ].join("\n");
+  const text = await generateAiText(prompt, { maxOutputTokens: 60, temperature: 0.45, provider: aiProvider });
+  const generated = normalizeFrameQuoteText(text);
+  return generated || fallback;
+}
+
 function hasStrategyCaption(output) {
   return Boolean(
     output?.caption
@@ -118,6 +140,37 @@ function fallbackCaption(output, promptTemplate, dynamicHashtags = []) {
   const cta = promptTemplate?.cta || "Menurut kamu, bagian paling relate yang mana?";
   const tags = mergeHashtags(BASE_HASHTAGS, dynamicHashtags, ["#Viral"]).slice(0, 6).join(" ");
   return `${hook}\n\n${body}\n\n${cta}\n\n${tags}`;
+}
+
+function fallbackFrameQuote(output) {
+  const candidates = [
+    output?.clipTranscript,
+    output?.caption,
+    output?.hook,
+    output?.reason,
+    output?.title
+  ].filter(Boolean);
+
+  for (const value of candidates) {
+    const sentence = String(value)
+      .split(/[.!?\n]+/)
+      .map((item) => normalizeFrameQuoteText(item))
+      .find((item) => item.split(/\s+/).length >= 4);
+    if (sentence) return sentence;
+  }
+  return "Gue baru sadar setelah kehilangan";
+}
+
+function normalizeFrameQuoteText(value) {
+  const cleaned = String(value || "")
+    .replace(/[`"'*_#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+  return cleaned
+    .split(/\s+/)
+    .slice(0, 11)
+    .join(" ");
 }
 
 function ensureCaptionHashtags(caption, output, promptTemplate, dynamicHashtags = []) {

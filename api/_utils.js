@@ -169,6 +169,7 @@ export function configSummary() {
     videoFrameEnabled: boolEnv("VIDEO_FRAME_ENABLED", true),
     videoFilterEnabled: boolEnv("VIDEO_FILTER_ENABLED", true),
     videoWatermarkEnabled: boolEnv("VIDEO_WATERMARK_ENABLED", true),
+    videoLowerThirdEnabled: boolEnv("VIDEO_LOWER_THIRD_ENABLED", true),
     subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "550"),
     vercelDashboard: true

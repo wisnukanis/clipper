@@ -98,6 +98,7 @@ async function localChecks() {
     commandOk("ffmpeg", ["-version"]).then((ok) => checkResult("ffmpeg", ok)),
     commandOk("yt-dlp", ["--version"]).then((ok) => checkResult("yt-dlp", ok)),
     commandOk(config.clipper.pythonCommand, ["--version"]).then((ok) => checkResult(config.clipper.pythonCommand, ok)),
+    commandOk(config.clipper.pythonCommand, ["-c", "import PIL"]).then((ok) => checkResult("Pillow", ok)),
     exists(clipperScript).then((ok) => checkResult("clipper/scripts/clipper.py", ok)),
     exists(path.join(config.dataDir, "themes.json")).then((ok) => checkResult("data/themes.json", ok)),
     exists(path.join(config.dataDir, "videos.json")).then((ok) => checkResult("data/videos.json", ok))

@@ -27,7 +27,7 @@ function latestReadyJob(jobs) {
       ].some(Boolean);
       if (!needsPlatform) return false;
       return [job.status, job.publish_status, job.youtube_status]
-        .some((status) => ["ready_to_publish", "publish_failed", "failed_publish", "youtube_quota_exceeded", "quota_exceeded"].includes(status));
+        .some((status) => ["ready_to_publish", "publish_failed", "failed_publish"].includes(status));
     })
     .sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")))[0] || null;
 }
@@ -323,11 +323,11 @@ try {
   if (isYoutubeQuotaError(error)) {
     await patchItem("jobs", job.job_id, {
       status: "ready_to_publish",
-      publish_status: "youtube_quota_exceeded",
+      publish_status: "queued",
       youtube_status: hasYoutube ? "published" : "quota_exceeded",
       youtube_video_id: youtube?.videoId || job.youtube_video_id || "",
       youtube_url: youtube?.url || job.youtube_url || "",
-      error_message: "Quota YouTube habis; siap retry tanpa render ulang."
+      error_message: "Quota YouTube habis; menunggu queue reguler berikutnya."
     });
     await appendLog("youtube_quota_exceeded", {
       job_id: job.job_id,
@@ -335,7 +335,7 @@ try {
     });
     await uploadStateToRemote().catch(() => {});
     console.log(JSON.stringify({
-      status: "youtube_quota_exceeded",
+      status: "queued",
       job_id: job.job_id,
       error: error.message
     }, null, 2));

@@ -23,11 +23,13 @@ const BG_OPACITY = clampOpacity(process.env.THUMBNAIL_BG_OPACITY, 0.55);
 const BORDER_OPACITY = clampOpacity(process.env.THUMBNAIL_BORDER_OPACITY, 0.85);
 const TEXT_OUTLINE_OPACITY = clampOpacity(process.env.THUMBNAIL_TEXT_OUTLINE_OPACITY, 0.85);
 const JPEG_Q = process.env.THUMBNAIL_JPEG_Q || "1";
+const rendererPath = path.join(config.srcDir, "branding-renderer.py");
 
 export async function generateThumbnail({ job, videoPath, text }) {
   await fs.mkdir(config.thumbnailDir, { recursive: true });
   const filename = `${job.job_id}-thumbnail.jpg`;
   const outputPath = path.join(config.thumbnailDir, filename);
+  const basePath = path.join(config.thumbnailDir, `${job.job_id}-thumbnail-base.jpg`);
 
   const displayText = normalizeTitleText(text);
   const layout = buildTitleLayout(displayText);
@@ -40,6 +42,30 @@ export async function generateThumbnail({ job, videoPath, text }) {
     "unsharp=lx=5:ly=5:la=0.85:cx=5:cy=5:ca=0.4",
     "eq=contrast=1.05:saturation=1.10"
   ];
+
+  try {
+    await runFfmpeg([
+      "-y",
+      "-ss", seek,
+      "-i", videoPath,
+      "-frames:v", "1",
+      "-vf", baseFilters.join(","),
+      "-q:v", JPEG_Q,
+      basePath
+    ]);
+    await runRenderer([
+      "thumbnail",
+      "--input", basePath,
+      "--output", outputPath,
+      "--title", displayText,
+      "--pill", process.env.THUMBNAIL_PILL_TEXT || "Podcast | Highlight | Viral"
+    ]);
+    await fs.rm(basePath, { force: true }).catch(() => {});
+    return { path: outputPath, filename, text: displayText };
+  } catch (error) {
+    await fs.rm(basePath, { force: true }).catch(() => {});
+    console.warn(`Thumbnail renderer fallback dipakai: ${error.message}`);
+  }
 
   const overlayFilter = [
     ...baseFilters,
@@ -75,6 +101,21 @@ export async function generateThumbnail({ job, videoPath, text }) {
   }
 
   return { path: outputPath, filename, text: displayText };
+}
+
+function runRenderer(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(config.clipper.pythonCommand, [rendererPath, ...args], { windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr || `branding renderer exited with ${code}`));
+    });
+  });
 }
 
 function buildTitleLayout(value) {
