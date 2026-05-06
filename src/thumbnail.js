@@ -111,11 +111,9 @@ export async function prependThumbnailIntro({ job, videoPath, thumbnailPath }) {
 
   await fs.mkdir(config.generatedVideoDir, { recursive: true });
   const introPath = path.join(config.generatedVideoDir, `${job.job_id}-thumb-intro.mp4`);
-  const listPath = path.join(config.generatedVideoDir, `${job.job_id}-thumb-intro.ffconcat`);
   const outputPath = path.join(config.generatedVideoDir, `${job.job_id}-with-thumb-intro.mp4`);
   await Promise.all([
     fs.rm(introPath, { force: true }).catch(() => {}),
-    fs.rm(listPath, { force: true }).catch(() => {}),
     fs.rm(outputPath, { force: true }).catch(() => {})
   ]);
 
@@ -127,55 +125,51 @@ export async function prependThumbnailIntro({ job, videoPath, thumbnailPath }) {
     "-i", thumbnailPath,
     "-f", "lavfi",
     "-t", String(INTRO_SECONDS),
-    "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-    "-vf", "scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,format=yuv420p",
+    "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+    "-vf", "setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,fps=30,format=yuv420p",
+    "-af", "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS",
     "-r", "30",
     "-c:v", "libx264",
     "-preset", config.videoEffects.preset || "veryfast",
     "-crf", String(config.videoEffects.crf),
     "-c:a", "aac",
+    "-ar", "48000",
+    "-ac", "2",
     "-b:a", "128k",
     "-shortest",
+    "-avoid_negative_ts", "make_zero",
     "-movflags", "+faststart",
     introPath
   ]);
 
-  await fs.writeFile(listPath, [
-    "ffconcat version 1.0",
-    `file '${escapeConcatPath(introPath)}'`,
-    `file '${escapeConcatPath(videoPath)}'`,
-    ""
-  ].join("\n"));
-
-  try {
-    await runFfmpeg([
-      "-y",
-      "-f", "concat",
-      "-safe", "0",
-      "-i", listPath,
-      "-c", "copy",
-      "-movflags", "+faststart",
-      outputPath
-    ]);
-  } catch (error) {
-    console.warn(`Concat copy intro thumbnail gagal, fallback re-encode: ${error.message}`);
-    await runFfmpeg([
-      "-y",
-      "-i", introPath,
-      "-i", videoPath,
-      "-filter_complex",
-      "[0:v]setsar=1[v0];[1:v]setsar=1[v1];[0:a]aresample=async=1[a0];[1:a]aresample=async=1[a1];[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]",
-      "-map", "[v]",
-      "-map", "[a]",
-      "-c:v", "libx264",
-      "-preset", config.videoEffects.preset || "veryfast",
-      "-crf", String(config.videoEffects.crf),
-      "-pix_fmt", "yuv420p",
-      "-c:a", "aac",
-      "-movflags", "+faststart",
-      outputPath
-    ]);
-  }
+  await runFfmpeg([
+    "-y",
+    "-fflags", "+genpts",
+    "-i", introPath,
+    "-fflags", "+genpts",
+    "-i", videoPath,
+    "-filter_complex",
+    [
+      "[0:v]setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1,fps=30,format=yuv420p[v0]",
+      "[1:v]setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1,fps=30,format=yuv420p[v1]",
+      "[0:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[a0]",
+      "[1:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[a1]",
+      "[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
+    ].join(";"),
+    "-map", "[v]",
+    "-map", "[a]",
+    "-c:v", "libx264",
+    "-preset", config.videoEffects.preset || "veryfast",
+    "-crf", String(config.videoEffects.crf),
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-ar", "48000",
+    "-ac", "2",
+    "-b:a", "128k",
+    "-avoid_negative_ts", "make_zero",
+    "-movflags", "+faststart",
+    outputPath
+  ]);
 
   return {
     path: outputPath,
@@ -393,10 +387,6 @@ function clampSeconds(value, fallback) {
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
   return Math.min(3, Math.max(0.3, num));
-}
-
-function escapeConcatPath(value) {
-  return path.resolve(value).replace(/\\/g, "/").replace(/'/g, "'\\''");
 }
 
 function formatTimestamp(seconds) {

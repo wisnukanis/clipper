@@ -39,6 +39,24 @@ async function fileIsReadable(filePath) {
   }
 }
 
+async function hasAudioStream(filePath) {
+  return new Promise((resolve) => {
+    const child = spawn("ffprobe", [
+      "-v", "error",
+      "-select_streams", "a:0",
+      "-show_entries", "stream=index",
+      "-of", "csv=p=0",
+      filePath
+    ], { windowsHide: true });
+    let stdout = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.on("error", () => resolve(false));
+    child.on("close", () => resolve(Boolean(stdout.trim())));
+  });
+}
+
 function ffmpegPathArg(filePath) {
   return String(filePath).replace(/\\/g, "/").replace(/'/g, "\\'");
 }
@@ -64,7 +82,7 @@ function normalizeOverlayText(value) {
 
 function buildFilterGraph({ useFrame, useFilter, useWatermark, useLowerThird }) {
   const filters = [];
-  const sourceFilters = ["setsar=1"];
+  const sourceFilters = ["setpts=PTS-STARTPTS", "setsar=1", "fps=30"];
   let nextInputIndex = 1;
   const bgIndex = useFrame ? nextInputIndex++ : null;
   const frameIndex = useFrame ? nextInputIndex++ : null;
@@ -185,12 +203,13 @@ export async function applyVideoEffects({ job, video, output, options = {} }) {
   const outputPath = path.join(config.generatedVideoDir, `${job.job_id}-branded.mp4`);
   const tempPath = path.join(config.generatedVideoDir, `${job.job_id}-branded.tmp.mp4`);
   await fs.rm(tempPath, { force: true }).catch(() => {});
+  const hasAudio = await hasAudioStream(inputPath);
 
   const lowerThirdPath = useLowerThird
     ? await renderLowerThirdOverlay({ job, text: lowerThirdText })
     : "";
 
-  const args = ["-y", "-i", inputPath];
+  const args = ["-y", "-fflags", "+genpts", "-i", inputPath];
   if (useFrame) {
     args.push("-f", "lavfi", "-i", "color=c=#070709:s=1080x1920:r=30");
     args.push("-loop", "1", "-i", config.videoEffects.frameAssetPath);
@@ -212,8 +231,6 @@ export async function applyVideoEffects({ job, video, output, options = {} }) {
     }),
     "-map",
     "[vout]",
-    "-map",
-    "0:a?",
     "-c:v",
     "libx264",
     "-preset",
@@ -221,9 +238,29 @@ export async function applyVideoEffects({ job, video, output, options = {} }) {
     "-crf",
     String(config.videoEffects.crf),
     "-pix_fmt",
-    "yuv420p",
-    "-c:a",
-    "copy",
+    "yuv420p"
+  );
+
+  if (hasAudio) {
+    args.push(
+      "-map",
+      "0:a:0",
+      "-af",
+      "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS",
+      "-c:a",
+      "aac",
+      "-ar",
+      "48000",
+      "-ac",
+      "2",
+      "-b:a",
+      "128k"
+    );
+  }
+
+  args.push(
+    "-avoid_negative_ts",
+    "make_zero",
     "-movflags",
     "+faststart",
     "-shortest",

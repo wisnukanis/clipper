@@ -1970,9 +1970,11 @@ def compress_downloaded_clip(source_clip, config):
         [
             "ffmpeg",
             "-y",
+            "-fflags",
+            "+genpts",
             "-i",
             str(source_clip),
-            "-vf", f"fps=30,scale=-2:{max_height}:force_original_aspect_ratio=decrease:force_divisible_by=2",
+            "-vf", f"setpts=PTS-STARTPTS,fps=30,scale=-2:{max_height}:force_original_aspect_ratio=decrease:force_divisible_by=2",
             "-c:v",
             "libx264",
             "-preset",
@@ -1981,10 +1983,18 @@ def compress_downloaded_clip(source_clip, config):
             str(config["download_crf"]),
             "-pix_fmt",
             "yuv420p",
+            "-af",
+            "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS",
             "-c:a",
             "aac",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
             "-b:a",
             "96k",
+            "-avoid_negative_ts",
+            "make_zero",
             "-movflags",
             "+faststart",
             str(compressed),
@@ -3377,11 +3387,13 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
 
 
 def run_render(source_clip, final_clip, vf, config):
-    sharpened_vf = f"{vf},unsharp=lx=3:ly=3:la=0.6:cx=3:cy=3:ca=0.3"
+    sharpened_vf = f"setpts=PTS-STARTPTS,{vf},unsharp=lx=3:ly=3:la=0.6:cx=3:cy=3:ca=0.3"
     run(
         [
             "ffmpeg",
             "-y",
+            "-fflags",
+            "+genpts",
             "-i",
             str(source_clip),
             "-map_metadata",
@@ -3406,6 +3418,8 @@ def run_render(source_clip, final_clip, vf, config):
             "60",
             "-bf",
             "0",
+            "-af",
+            "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS",
             "-c:a",
             "aac",
             "-ar",
@@ -3414,6 +3428,8 @@ def run_render(source_clip, final_clip, vf, config):
             "2",
             "-b:a",
             "128k",
+            "-avoid_negative_ts",
+            "make_zero",
             "-movflags",
             "+faststart",
             "-shortest",

@@ -190,11 +190,12 @@ def render_segment(
     # at boundaries observed with input-seek).
     cmd = [
         "ffmpeg", "-y",
+        "-fflags", "+genpts",
         "-i", str(source),
         "-ss", f"{seg.start:.3f}",
         "-t", f"{seg_duration:.3f}",
         "-map_metadata", "-1",
-        "-vf", vf,
+        "-vf", f"setpts=PTS-STARTPTS,{vf}",
         "-r", "30",
         "-c:v", "libx264",
         "-profile:v", "high",
@@ -204,6 +205,7 @@ def render_segment(
         "-pix_fmt", "yuv420p",
         "-g", "60",
         "-bf", "0",
+        "-af", "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS",
         "-c:a", "aac",
         "-ar", "48000",
         "-ac", "2",
@@ -345,9 +347,10 @@ def concat_segments(segment_paths: list[Path], output: Path, run: Callable[[list
 def burn_subtitles(input_video: Path, ass_path: Path, output: Path, crf: int, run: Callable[[list[str]], object]) -> None:
     """Burn ASS subtitles into a video. Re-encodes to ensure subtitle filter applies."""
     subtitle_path = str(ass_path.resolve()).replace("\\", "/").replace(":", "\\:")
-    vf = f"subtitles='{subtitle_path}'"
+    vf = f"setpts=PTS-STARTPTS,subtitles='{subtitle_path}'"
     cmd = [
         "ffmpeg", "-y",
+        "-fflags", "+genpts",
         "-i", str(input_video),
         "-map_metadata", "-1",
         "-vf", vf,
@@ -360,7 +363,12 @@ def burn_subtitles(input_video: Path, ass_path: Path, output: Path, crf: int, ru
         "-pix_fmt", "yuv420p",
         "-g", "60",
         "-bf", "0",
-        "-c:a", "copy",
+        "-af", "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS",
+        "-c:a", "aac",
+        "-ar", "48000",
+        "-ac", "2",
+        "-b:a", "128k",
+        "-avoid_negative_ts", "make_zero",
         "-movflags", "+faststart",
         str(output),
     ]
