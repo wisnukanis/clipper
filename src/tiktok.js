@@ -192,6 +192,10 @@ function isUrlOwnershipError(error) {
   return String(error?.apiCode || error?.message || "").includes("url_ownership_unverified");
 }
 
+function isUnauditedDirectPostError(error) {
+  return String(error?.apiCode || error?.message || "").includes("unaudited_client_can_only_post_to_private_accounts");
+}
+
 async function publishDirect({ videoUrl, videoPath, caption, source = "PULL_FROM_URL" }) {
   const creator = await queryTikTokCreatorInfo();
   const privacyLevel = pickPrivacyLevel(creator.privacy_level_options || []);
@@ -275,6 +279,10 @@ export async function publishToTikTok({ videoUrl, videoPath, caption }) {
     if (videoPath && isUrlOwnershipError(error)) {
       console.warn(`TikTok direct URL upload ditolak, coba file upload: ${error.message}`);
       return publishDirect({ videoUrl, videoPath, caption, source: "FILE_UPLOAD" });
+    }
+    if (isUnauditedDirectPostError(error)) {
+      console.warn(`TikTok direct post dibatasi audit app, fallback ke inbox upload: ${error.message}`);
+      return publishInbox({ videoUrl, videoPath });
     }
     if (config.tiktok.publishMode === "direct") throw error;
     console.warn(`TikTok direct post gagal, coba inbox upload: ${error.message}`);
