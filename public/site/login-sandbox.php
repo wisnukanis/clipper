@@ -118,7 +118,7 @@ function tiktok_chunk_info($fileSize) {
 
 function upload_chunks($uploadUrl, $filePath, $fileSize, $chunkSize, $totalChunkCount) {
   $handle = fopen($filePath, 'rb');
-  if (!$handle) throw new Exception('Tidak bisa membaca file video demo.');
+  if (!$handle) throw new Exception('Tidak bisa membaca file video.');
   try {
     for ($index = 0; $index < $totalChunkCount; $index++) {
       $start = $index * $chunkSize;
@@ -163,8 +163,8 @@ function latest_demo_video() {
     if (!empty($job['public_video_url'])) {
       return [
         'job_id' => $job['job_id'] ?? '',
-        'title' => $job['source_title'] ?? $job['title'] ?? $job['job_id'] ?? 'Demo video',
-        'caption' => $job['caption'] ?? 'Clipper Emsa Pro TikTok Sandbox demo',
+        'title' => $job['source_title'] ?? $job['title'] ?? $job['job_id'] ?? 'TikTok video',
+        'caption' => $job['caption'] ?? 'Clipper Emsa Pro TikTok video',
         'url' => $job['public_video_url'],
       ];
     }
@@ -222,13 +222,13 @@ function publish_to_tiktok($token, $video) {
 try {
   if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login') {
     $_SESSION['tiktok_demo_logged_in'] = true;
-    header('Location: /login-sandbox.php');
+    header('Location: /login-tiktok.php');
     exit;
   }
 
   if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'logout') {
     session_destroy();
-    header('Location: /login-sandbox.php');
+    header('Location: /login-tiktok.php');
     exit;
   }
 
@@ -244,15 +244,15 @@ try {
       'redirect_uri' => $config['redirect_uri'],
     ]);
     $_SESSION['tiktok_demo_token'] = $token;
-    header('Location: /login-sandbox.php?connected=1');
+    header('Location: /login-tiktok.php?connected=1');
     exit;
   }
 
   if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'publish') {
     $token = $_SESSION['tiktok_demo_token']['access_token'] ?? '';
-    if (!$token) throw new Exception('Akun TikTok Sandbox belum terhubung.');
+    if (!$token) throw new Exception('Akun TikTok belum terhubung.');
     $video = latest_demo_video();
-    if (!$video) throw new Exception('Belum ada video hasil workflow untuk demo.');
+    if (!$video) throw new Exception('Belum ada video hasil workflow.');
     $result = publish_to_tiktok($token, $video);
     $_SESSION['tiktok_demo_publish'] = [
       'ok' => true,
@@ -264,7 +264,7 @@ try {
       'source' => $result['source'],
       'mode' => $result['mode'],
     ];
-    header('Location: /login-sandbox.php?published=1');
+    header('Location: /login-tiktok.php?published=1');
     exit;
   }
 } catch (Throwable $caught) {
@@ -358,7 +358,7 @@ if (isset($_GET['published'])) $message = 'Video berhasil dikirim ke TikTok Cont
     <nav>
       <a href="/privacy-policy.php">Privacy Policy</a>
       <a href="/terms-of-service.php">Terms of Service</a>
-      <a href="/login-sandbox.php">Login TikTok</a>
+      <a href="/login-tiktok.php">Login TikTok</a>
     </nav>
   </header>
 
@@ -400,7 +400,7 @@ if (isset($_GET['published'])) $message = 'Video berhasil dikirim ke TikTok Cont
           <p class="muted">Session login aktif.</p>
           <form method="post"><input type="hidden" name="action" value="logout"><button class="btn" type="submit">Logout</button></form>
         <?php else: ?>
-          <p class="muted">Klik tombol ini saat rekaman demo untuk memperlihatkan login ke dashboard aplikasi.</p>
+          <p class="muted">Klik tombol ini untuk masuk ke dashboard aplikasi.</p>
           <form method="post"><input type="hidden" name="action" value="login"><button class="btn primary" type="submit">Login</button></form>
         <?php endif; ?>
       </div>
@@ -426,7 +426,7 @@ if (isset($_GET['published'])) $message = 'Video berhasil dikirim ke TikTok Cont
       </div>
 
       <div class="panel">
-        <h2>3. Video Sandbox</h2>
+        <h2>3. Video</h2>
         <?php if ($video): ?>
           <p><strong><?= e($video['title']) ?></strong></p>
           <p class="muted">Job: <code><?= e($video['job_id']) ?></code></p>
@@ -438,7 +438,7 @@ if (isset($_GET['published'])) $message = 'Video berhasil dikirim ke TikTok Cont
 
       <div class="panel">
         <h2>4. Publish to TikTok</h2>
-        <p class="muted">Mode sandbox memakai inbox upload agar user menyelesaikan posting dari aplikasi TikTok.</p>
+        <p class="muted">Mode upload saat ini mengirim video ke TikTok agar user menyelesaikan posting dari aplikasi TikTok.</p>
         <form method="post">
           <input type="hidden" name="action" value="publish">
           <button class="btn primary" type="submit" <?= (!$loggedIn || !$connected || !$video) ? 'disabled' : '' ?>>Publish to TikTok</button>
