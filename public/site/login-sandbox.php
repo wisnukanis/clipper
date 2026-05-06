@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-$defaultRedirectUri = 'https://clipper.emsa.pro/ig-generated/auth/tiktok/callback.php';
+$defaultRedirectUri = 'https://clipper.emsa.pro/auth/tiktok/callback.php';
 $config = [
   'client_key' => getenv('TIKTOK_CLIENT_KEY') ?: '',
   'client_secret' => getenv('TIKTOK_CLIENT_SECRET') ?: '',

@@ -134,7 +134,7 @@ jobs:
       TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
       TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
       TIKTOK_SCOPE: ${{ secrets.TIKTOK_SCOPE }}
-      TIKTOK_REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI || 'https://clipper.emsa.pro/ig-generated/auth/tiktok/callback.php' }}
+      TIKTOK_REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI || 'https://clipper.emsa.pro/auth/tiktok/callback.php' }}
       TIKTOK_PUBLISH_MODE: ${{ secrets.TIKTOK_PUBLISH_MODE || 'direct' }}
       TIKTOK_PRIVACY_LEVEL: ${{ secrets.TIKTOK_PRIVACY_LEVEL || 'SELF_ONLY' }}
       TIKTOK_DISABLE_DUET: ${{ secrets.TIKTOK_DISABLE_DUET || 'false' }}
