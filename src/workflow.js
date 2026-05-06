@@ -79,6 +79,9 @@ export async function runWorkflow(options = {}) {
         skipped: Boolean(discoveryResult?.skipped),
         reason: discoveryResult?.reason || "",
         added_count: discoveryResult?.added?.length || 0,
+        expired_count: discoveryResult?.expired_count || 0,
+        daily_queue_count: discoveryResult?.daily_queue_count || 0,
+        daily_queue_limit: discoveryResult?.daily_queue_limit || 0,
         added_video_ids: (discoveryResult?.added || []).map((video) => video.id)
       });
     } catch (error) {
@@ -106,13 +109,19 @@ export async function runWorkflow(options = {}) {
     await appendLog("no_video_selected", {
       discovery_added_count: discoveryResult?.added?.length || 0,
       discovery_skipped: Boolean(discoveryResult?.skipped),
-      discovery_reason: discoveryResult?.reason || ""
+      discovery_reason: discoveryResult?.reason || "",
+      discovery_expired_count: discoveryResult?.expired_count || 0,
+      daily_queue_count: discoveryResult?.daily_queue_count || 0,
+      daily_queue_limit: discoveryResult?.daily_queue_limit || 0
     });
     return {
       status: "no_video_selected",
       discovery_added_count: discoveryResult?.added?.length || 0,
       discovery_skipped: Boolean(discoveryResult?.skipped),
-      discovery_reason: discoveryResult?.reason || ""
+      discovery_reason: discoveryResult?.reason || "",
+      discovery_expired_count: discoveryResult?.expired_count || 0,
+      daily_queue_count: discoveryResult?.daily_queue_count || 0,
+      daily_queue_limit: discoveryResult?.daily_queue_limit || 0
     };
   }
 
@@ -296,6 +305,7 @@ async function createManualSelection(options) {
     manual_range: options.range || "",
     quality_profile: options.qualityProfile || "standard",
     clip_count: Number(options.clipCount || process.env.CLIP_COUNT || 1),
+    scene_mode: options.sceneMode || "podcast",
     subtitle_font: options.subtitleFont || "Segoe UI Semibold",
     subtitle_font_size: options.subtitleFontSize || 46,
     subtitle_margin_v: options.subtitleMarginV || 550,

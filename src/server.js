@@ -3,10 +3,10 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { config, reloadConfigFromEnv } from "./config.js";
-import { ensureProjectDirs, patchItem, readJson, upsertItem } from "./storage.js";
+import { ensureProjectDirs, patchItem, readJson, upsertItem, writeJson } from "./storage.js";
 import { addVideo } from "./selector.js";
 import { runWorkflow } from "./workflow.js";
-import { makeId } from "./job-id.js";
+import { makeId, todayDate } from "./job-id.js";
 import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { runPreflight } from "./preflight.js";
 import { exchangeTikTokCode, publishToTikTok } from "./tiktok.js";
@@ -18,6 +18,7 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 let activeRun = null;
+const resettableQueueStatuses = new Set(["queued", "failed", "retry"]);
 
 function boolInput(value, fallback = false) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -283,18 +284,20 @@ app.get("/api/state", async (_req, res) => {
       publicBaseUrl: config.publicBaseUrl,
       postCron: config.postCron,
       timezone: config.timezone,
+      maxScheduledPostsPerDay: Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY || 15),
+      autoDiscoverDailyQueueLimit: Number(process.env.AUTO_DISCOVER_DAILY_QUEUE_LIMIT || process.env.MAX_SCHEDULED_POSTS_PER_DAY || 15),
       instagramEnabled: config.instagram.enabled,
       facebookEnabled: config.facebook.enabled,
-    youtubeEnabled: config.youtube.enabled,
-    tiktokEnabled: config.tiktok.enabled,
-    threadsEnabled: config.threads.enabled,
-    videoFrameEnabled: config.videoEffects.frameEnabled,
-    videoFilterEnabled: config.videoEffects.filterEnabled,
-    videoWatermarkEnabled: config.videoEffects.watermarkEnabled,
-    videoLowerThirdEnabled: config.videoEffects.lowerThirdEnabled,
-    aiProvider: config.ai.provider,
-    subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
-    subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "550"
+      youtubeEnabled: config.youtube.enabled,
+      tiktokEnabled: config.tiktok.enabled,
+      threadsEnabled: config.threads.enabled,
+      videoFrameEnabled: config.videoEffects.frameEnabled,
+      videoFilterEnabled: config.videoEffects.filterEnabled,
+      videoWatermarkEnabled: config.videoEffects.watermarkEnabled,
+      videoLowerThirdEnabled: config.videoEffects.lowerThirdEnabled,
+      aiProvider: config.ai.provider,
+      subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
+      subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "550"
     },
     activeRun,
     themes: await readJson("themes", []),
@@ -394,7 +397,7 @@ app.post("/api/tiktok/demo-publish", async (req, res) => {
     const result = await publishToTikTok({
       videoUrl: job.public_video_url,
       videoPath: job.final_video_path || "",
-      caption: job.caption || "Clipper Emsa Pro TikTok Sandbox demo"
+      caption: job.caption || "Clipper Emsa Pro TikTok video"
     });
     await patchItem("jobs", job.job_id, {
       tiktok_status: result?.publishId ? "submitted" : "failed",
@@ -415,6 +418,18 @@ app.post("/api/videos", async (req, res) => {
     const video = await addVideo(req.body || {});
     await syncState();
     res.json(video);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/videos/reset-queue", async (req, res) => {
+  try {
+    const result = await expireStaleAutoDiscoveryQueue({
+      targetDate: String(req.body?.target_date || "").trim() || todayDate()
+    });
+    await syncState();
+    res.json(result);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -507,6 +522,8 @@ app.post("/api/run", async (req, res) => {
     theme: body.theme || config.defaultTheme,
     url: body.url || "",
     range: body.range || "",
+    sceneMode: body.scene_mode || "podcast",
+    clipCount: Number(body.clip_count || process.env.CLIP_COUNT || 1),
     aiProvider: body.ai_provider || process.env.AI_PROVIDER || "",
     qualityProfile: body.quality_profile || "standard",
     useFrame: boolInput(body.use_frame, config.videoEffects.frameEnabled),
@@ -571,6 +588,56 @@ async function syncState() {
   } catch (error) {
     console.warn(`State remote sync dilewati: ${error.message}`);
   }
+}
+
+function dateSerial(dateString) {
+  const match = String(dateString || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match.map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function isAutoDiscoveryVideo(video) {
+  return Boolean(
+    video?.discovery_source
+      || video?.discovery_query
+      || String(video?.notes || "").startsWith("Auto discovery:")
+  );
+}
+
+async function expireStaleAutoDiscoveryQueue({ targetDate }) {
+  const targetSerial = dateSerial(targetDate);
+  if (targetSerial === null) throw new Error("target_date tidak valid.");
+
+  const ttlDays = Math.max(1, Math.floor(Number(process.env.AUTO_DISCOVER_QUEUE_TTL_DAYS) || 1));
+  const videos = await readJson("videos", []);
+  const now = new Date().toISOString();
+  let expired = 0;
+
+  const nextVideos = videos.map((video) => {
+    if (!isAutoDiscoveryVideo(video)) return video;
+    if (!resettableQueueStatuses.has(video.status || "queued")) return video;
+
+    const videoSerial = dateSerial(video.target_date);
+    if (videoSerial === null || videoSerial + ttlDays > targetSerial) return video;
+
+    expired += 1;
+    return {
+      ...video,
+      status: "expired",
+      expired_at: now,
+      updated_at: now,
+      error_message: `Auto discovery expired setelah melewati target_date ${video.target_date}.`
+    };
+  });
+
+  if (expired) await writeJson("videos", nextVideos);
+  return {
+    ok: true,
+    expired,
+    target_date: targetDate,
+    ttl_days: ttlDays
+  };
 }
 
 function tiktokScopes() {

@@ -47,6 +47,8 @@ const DEFAULT_CHANNEL_HANDLES = [
 const TOPIC_RE = /podcast|podhub|podkesmas|vindes|deddy|corbuzier|raditya|artis|aktor|aktris|penyanyi|komika|komedi|stand\s*up|lucu|politik|pilpres|dpr|presiden|menteri|prabowo|jokowi|anies|ganjar/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 const DISCOVERY_CACHE_FILE = "discovery-cache.json";
+const AUTO_DISCOVERY_SELECTABLE_STATUSES = new Set(["queued", "failed", "retry"]);
+const AUTO_DISCOVERY_CLOSED_STATUSES = new Set(["expired"]);
 let youtubeApiQuotaExhausted = false;
 
 function boolEnv(name, fallback = false) {
@@ -77,6 +79,72 @@ function listEnvMany(names, fallback = []) {
 
 function uniqueList(items) {
   return [...new Set(items.map((item) => String(item || "").trim()).filter(Boolean))];
+}
+
+function daySerial(dateString) {
+  const match = String(dateString || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match.map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function isAutoDiscoveredVideo(video) {
+  return Boolean(
+    video?.discovery_source
+      || video?.discovery_query
+      || String(video?.notes || "").startsWith("Auto discovery:")
+  );
+}
+
+function autoDiscoveryDailyQueueLimit() {
+  const fallback = numberEnv("MAX_SCHEDULED_POSTS_PER_DAY", 15, 0, 1000);
+  return numberEnv("AUTO_DISCOVER_DAILY_QUEUE_LIMIT", fallback, 0, 1000);
+}
+
+function countDailyAutoDiscoveryQueue(videos, targetDate) {
+  return videos.filter((video) => {
+    if (!isAutoDiscoveredVideo(video)) return false;
+    if (video.target_date !== targetDate) return false;
+    if (video.active === false) return false;
+    return !AUTO_DISCOVERY_CLOSED_STATUSES.has(video.status || "queued");
+  }).length;
+}
+
+async function expireOldAutoDiscoveryQueue(targetDate) {
+  if (!boolEnv("AUTO_DISCOVER_EXPIRE_OLD_QUEUE", true)) {
+    return { expired: 0, videos: await readJson("videos", []) };
+  }
+
+  const targetDay = daySerial(targetDate);
+  const ttlDays = numberEnv("AUTO_DISCOVER_QUEUE_TTL_DAYS", 1, 1, 365);
+  const videos = await readJson("videos", []);
+  if (targetDay === null) return { expired: 0, videos };
+
+  const now = new Date().toISOString();
+  let expired = 0;
+  const nextVideos = videos.map((video) => {
+    if (!isAutoDiscoveredVideo(video)) return video;
+    if (!AUTO_DISCOVERY_SELECTABLE_STATUSES.has(video.status || "queued")) return video;
+
+    const videoDay = daySerial(video.target_date);
+    if (videoDay === null || videoDay + ttlDays > targetDay) return video;
+
+    expired += 1;
+    return {
+      ...video,
+      status: "expired",
+      expired_at: now,
+      updated_at: now,
+      error_message: `Auto discovery expired setelah melewati target_date ${video.target_date}.`
+    };
+  });
+
+  if (expired) {
+    await writeJson("videos", nextVideos);
+    console.log(`AUTO DISCOVERY expired ${expired} queue lama sebelum membuat queue ${targetDate}.`);
+  }
+
+  return { expired, videos: nextVideos };
 }
 
 async function readDiscoveryCache() {
@@ -847,9 +915,32 @@ export async function discoverAndQueueVideos(options = {}) {
     return { skipped: true, reason: "AUTO_DISCOVER_VIDEOS=false", added: [] };
   }
 
+  const targetDate = options.targetDate || todayDate();
+  const queueMaintenance = await expireOldAutoDiscoveryQueue(targetDate);
+  const dailyQueueLimit = autoDiscoveryDailyQueueLimit();
+  const currentDailyQueue = countDailyAutoDiscoveryQueue(queueMaintenance.videos, targetDate);
+  const remainingDailyQueueSlots = dailyQueueLimit > 0
+    ? Math.max(0, dailyQueueLimit - currentDailyQueue)
+    : Number.POSITIVE_INFINITY;
+
+  if (dailyQueueLimit > 0 && remainingDailyQueueSlots <= 0) {
+    console.log(
+      `AUTO DISCOVERY skip: queue harian ${targetDate} sudah ${currentDailyQueue}/${dailyQueueLimit}.`
+    );
+    return {
+      skipped: true,
+      reason: "daily_queue_limit_reached",
+      added: [],
+      expired_count: queueMaintenance.expired,
+      daily_queue_count: currentDailyQueue,
+      daily_queue_limit: dailyQueueLimit
+    };
+  }
+
   const queries = listEnv("AUTO_DISCOVER_QUERY", DEFAULT_QUERIES);
   const maxResults = numberEnv("AUTO_DISCOVER_MAX_RESULTS", 4, 1, 25);
-  const addCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 1, 1, 10);
+  const requestedAddCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 1, 1, 10);
+  const addCount = Math.min(requestedAddCount, remainingDailyQueueSlots);
   const minDuration = numberEnv("AUTO_DISCOVER_MIN_DURATION_SECONDS", 600, 0, 86400);
   const maxDuration = numberEnv("AUTO_DISCOVER_MAX_DURATION_SECONDS", 10800, 60, 86400);
   const minViews = numberEnv("AUTO_DISCOVER_MIN_VIEWS", 25000, 0, 1000000000);
@@ -868,9 +959,8 @@ export async function discoverAndQueueVideos(options = {}) {
     relevanceLanguage
   };
   const theme = options.theme && options.theme !== "auto" ? options.theme : "podcast artis";
-  const targetDate = options.targetDate || todayDate();
 
-  const videos = await readJson("videos", []);
+  const videos = queueMaintenance.videos;
   const history = await readJson("history", []);
   const knownIds = knownVideoIds(videos, history);
 
@@ -951,7 +1041,13 @@ export async function discoverAndQueueVideos(options = {}) {
     console.log("AUTO DISCOVERY tidak menemukan kandidat viral baru.");
   }
 
-  return { skipped: false, added };
+  return {
+    skipped: false,
+    added,
+    expired_count: queueMaintenance.expired,
+    daily_queue_count: currentDailyQueue + added.length,
+    daily_queue_limit: dailyQueueLimit
+  };
 }
 
 const isCli = process.argv[1]

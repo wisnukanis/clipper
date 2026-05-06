@@ -731,6 +731,9 @@ THREADS_UPLOAD_ENABLED=false
 THREADS_CONTAINER_POLL_SECONDS=6
 THREADS_CONTAINER_MAX_ATTEMPTS=90
 MAX_SCHEDULED_POSTS_PER_DAY=15
+AUTO_DISCOVER_DAILY_QUEUE_LIMIT=15
+AUTO_DISCOVER_EXPIRE_OLD_QUEUE=true
+AUTO_DISCOVER_QUEUE_TTL_DAYS=1
 ```
 
 ### Threads (Meta) Publishing
@@ -837,6 +840,9 @@ THUMBNAIL_PILL_TEXT=Podcast | Highlight | Viral
 THUMBNAIL_INTRO_ENABLED=true
 THUMBNAIL_INTRO_SECONDS=0.9
 MAX_SCHEDULED_POSTS_PER_DAY=15
+AUTO_DISCOVER_DAILY_QUEUE_LIMIT=15
+AUTO_DISCOVER_EXPIRE_OLD_QUEUE=true
+AUTO_DISCOVER_QUEUE_TTL_DAYS=1
 
 DEPLOY_REMOTE_DIR=/public_html
 DEPLOY_CLEAN_REMOTE=false
@@ -979,6 +985,18 @@ Upload custom thumbnail ke YouTube. Default: `false`, karena thumbnail sudah dim
 #### `MAX_SCHEDULED_POSTS_PER_DAY`
 
 Batas publish dari run terjadwal GitHub Actions per hari. Default: `15`. Jika batas tercapai, workflow scheduled berikutnya akan skip.
+
+#### `AUTO_DISCOVER_DAILY_QUEUE_LIMIT`
+
+Batas jumlah video auto-discovery yang boleh dibuat untuk satu `target_date`. Default mengikuti `MAX_SCHEDULED_POSTS_PER_DAY` atau `15`, sehingga 15 jadwal cron tidak membuat ratusan queue baru.
+
+#### `AUTO_DISCOVER_EXPIRE_OLD_QUEUE`
+
+Jika `true`, auto-discovery dengan status `queued`, `failed`, atau `retry` yang melewati `target_date` akan ditandai `expired` sebelum queue hari baru dibuat. Default: `true`.
+
+#### `AUTO_DISCOVER_QUEUE_TTL_DAYS`
+
+Umur queue auto-discovery dalam hari sejak `target_date`. Default: `1`, artinya queue tanggal kemarin expired saat hari baru berjalan.
 
 #### `INSTAGRAM_CONTAINER_POLL_SECONDS`
 

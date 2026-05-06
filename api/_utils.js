@@ -159,6 +159,8 @@ export function configSummary() {
     publicBaseUrl: cleanBaseUrl(process.env.PUBLIC_BASE_URL),
     postCron: clean(process.env.POST_CRON || ""),
     timezone: clean(process.env.APP_TIMEZONE || "Asia/Jakarta"),
+    maxScheduledPostsPerDay: Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY || 15),
+    autoDiscoverDailyQueueLimit: Number(process.env.AUTO_DISCOVER_DAILY_QUEUE_LIMIT || process.env.MAX_SCHEDULED_POSTS_PER_DAY || 15),
     instagramEnabled: boolEnv("INSTAGRAM_UPLOAD_ENABLED", true),
     facebookEnabled: boolEnv("FACEBOOK_UPLOAD_ENABLED", true),
     youtubeEnabled: boolEnv("YOUTUBE_UPLOAD_ENABLED", true),
