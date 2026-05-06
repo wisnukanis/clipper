@@ -23,7 +23,7 @@ function e($value) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TikTok Sandbox Callback</title>
+  <title>TikTok Callback</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -46,7 +46,7 @@ function e($value) {
 </head>
 <body>
   <div class="box">
-    <h1>TikTok Sandbox Callback</h1>
+    <h1>TikTok Callback</h1>
 
     <?php if ($error): ?>
       <p>Login TikTok gagal.</p>
@@ -55,8 +55,8 @@ function e($value) {
         <p><strong>Detail:</strong> <?= e($errorDescription) ?></p>
       <?php endif; ?>
     <?php elseif ($code): ?>
-      <p>Authorization code diterima. Lanjutkan ke Login (Sandbox) untuk menyelesaikan koneksi TikTok Sandbox.</p>
-      <p><a href="<?= e($continueUrl) ?>">Continue to Login (Sandbox)</a></p>
+      <p>Authorization code diterima. Lanjutkan ke halaman login untuk menyelesaikan koneksi TikTok.</p>
+      <p><a href="<?= e($continueUrl) ?>">Continue to Login</a></p>
       <p>Jika perlu fallback manual, jalankan command ini di project lokal:</p>
       <textarea readonly>node src/tiktok-token-fastcheck.js --code "<?= e($code) ?>" --redirect-uri "<?= e($redirectUri) ?>" --persist-local</textarea>
       <p><strong>Redirect URI:</strong> <code><?= e($redirectUri) ?></code></p>
@@ -64,7 +64,7 @@ function e($value) {
         <p><strong>State:</strong> <code><?= e($state) ?></code></p>
       <?php endif; ?>
     <?php else: ?>
-      <p>Callback aktif. Gunakan URL ini sebagai Redirect URI di TikTok Sandbox:</p>
+      <p>Callback aktif. Gunakan URL ini sebagai Redirect URI di TikTok Developer:</p>
       <p><code><?= e($redirectUri) ?></code></p>
     <?php endif; ?>
   </div>

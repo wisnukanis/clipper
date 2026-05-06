@@ -29,6 +29,21 @@ function mask_value($value) {
   return substr($text, 0, 6) . '...' . substr($text, -4);
 }
 
+function token_export_text($token) {
+  if (!is_array($token)) return '';
+  $pairs = [
+    'TIKTOK_ACCESS_TOKEN' => $token['access_token'] ?? '',
+    'TIKTOK_REFRESH_TOKEN' => $token['refresh_token'] ?? '',
+    'TIKTOK_OPEN_ID' => $token['open_id'] ?? '',
+    'TIKTOK_SCOPE' => $token['scope'] ?? '',
+  ];
+  $lines = [];
+  foreach ($pairs as $key => $value) {
+    if ($value !== '') $lines[] = $key . '=' . $value;
+  }
+  return implode("\n", $lines);
+}
+
 function build_auth_url($config) {
   $params = [
     'client_key' => $config['client_key'],
@@ -263,15 +278,15 @@ $publish = $_SESSION['tiktok_demo_publish'] ?? null;
 $video = latest_demo_video();
 $authUrl = ($config['client_key'] && $config['redirect_uri']) ? build_auth_url($config) : '';
 
-if (isset($_GET['connected'])) $message = 'Akun TikTok Sandbox berhasil terhubung.';
-if (isset($_GET['published'])) $message = 'Video sandbox berhasil dikirim ke TikTok Content Posting API Sandbox.';
+if (isset($_GET['connected'])) $message = 'Akun TikTok berhasil terhubung.';
+if (isset($_GET['published'])) $message = 'Video berhasil dikirim ke TikTok Content Posting API.';
 ?>
 <!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Clipper Emsa Pro Login (Sandbox)</title>
+  <title>Clipper Emsa Pro Login TikTok</title>
   <style>
     :root {
       color-scheme: dark;
@@ -343,7 +358,7 @@ if (isset($_GET['published'])) $message = 'Video sandbox berhasil dikirim ke Tik
     <nav>
       <a href="/privacy-policy.php">Privacy Policy</a>
       <a href="/terms-of-service.php">Terms of Service</a>
-      <a href="/login-sandbox.php">Login (Sandbox)</a>
+      <a href="/login-sandbox.php">Login TikTok</a>
     </nav>
   </header>
 
@@ -353,9 +368,9 @@ if (isset($_GET['published'])) $message = 'Video sandbox berhasil dikirim ke Tik
 
     <section class="hero">
       <div class="panel">
-        <p class="eyebrow">Login (Sandbox)</p>
+        <p class="eyebrow">Login TikTok</p>
         <h1>Clipper Emsa Pro</h1>
-        <p class="lead">Halaman sandbox untuk memperlihatkan alur website resmi, login aplikasi, Connect TikTok, authorize scope, callback, pilih video, publish, dan hasil sandbox.</p>
+        <p class="lead">Halaman koneksi TikTok untuk authorize scope, callback, ambil token, pilih video, dan publish via Content Posting API.</p>
         <div class="row">
           <span class="status <?= $loggedIn ? 'ok' : 'warn' ?>"><?= $loggedIn ? 'Logged in' : 'Need login' ?></span>
           <span class="status <?= $connected ? 'ok' : 'warn' ?>"><?= $connected ? 'TikTok connected' : 'TikTok not connected' ?></span>
@@ -373,26 +388,26 @@ if (isset($_GET['published'])) $message = 'Video sandbox berhasil dikirim ke Tik
 
     <section class="steps">
       <div class="step"><span>1</span><strong>Official website</strong><small>clipper.emsa.pro, Privacy Policy, Terms.</small></div>
-      <div class="step"><span>2</span><strong>Login (Sandbox)</strong><small>User masuk ke dashboard aplikasi.</small></div>
-      <div class="step"><span>3</span><strong>Connect TikTok</strong><small>Authorize scope Sandbox.</small></div>
+      <div class="step"><span>2</span><strong>Login TikTok</strong><small>User masuk ke dashboard aplikasi.</small></div>
+      <div class="step"><span>3</span><strong>Connect TikTok</strong><small>Authorize scope TikTok.</small></div>
       <div class="step"><span>4</span><strong>Publish result</strong><small>Upload video via Content Posting API.</small></div>
     </section>
 
     <section class="grid">
       <div class="panel">
-        <h2>1. Login (Sandbox)</h2>
+        <h2>1. Login</h2>
         <?php if ($loggedIn): ?>
-          <p class="muted">Session sandbox aktif.</p>
-          <form method="post"><input type="hidden" name="action" value="logout"><button class="btn" type="submit">Logout Sandbox</button></form>
+          <p class="muted">Session login aktif.</p>
+          <form method="post"><input type="hidden" name="action" value="logout"><button class="btn" type="submit">Logout</button></form>
         <?php else: ?>
           <p class="muted">Klik tombol ini saat rekaman demo untuk memperlihatkan login ke dashboard aplikasi.</p>
-          <form method="post"><input type="hidden" name="action" value="login"><button class="btn primary" type="submit">Login (Sandbox)</button></form>
+          <form method="post"><input type="hidden" name="action" value="login"><button class="btn primary" type="submit">Login</button></form>
         <?php endif; ?>
       </div>
 
       <div class="panel">
         <h2>2. Connect TikTok</h2>
-        <p class="muted">Mengarah ke authorization TikTok Sandbox dengan scope yang diminta.</p>
+        <p class="muted">Mengarah ke authorization TikTok dengan scope yang diminta.</p>
         <?php if (!$loggedIn): ?>
           <button class="btn primary" type="button" disabled>Login dulu</button>
         <?php elseif (!$authUrl): ?>
@@ -400,6 +415,11 @@ if (isset($_GET['published'])) $message = 'Video sandbox berhasil dikirim ke Tik
         <?php elseif ($connected): ?>
           <p><span class="status ok">Connected</span></p>
           <p class="muted">Scope: <code><?= e($token['scope'] ?? $config['scopes']) ?></code></p>
+          <?php $tokenExport = token_export_text($token); ?>
+          <?php if ($tokenExport): ?>
+            <p class="muted">Token untuk `.env` dan GitHub Secrets. Simpan aman, jangan dibagikan publik.</p>
+            <pre><?= e($tokenExport) ?></pre>
+          <?php endif; ?>
         <?php else: ?>
           <a class="btn primary" href="<?= e($authUrl) ?>">Connect TikTok</a>
         <?php endif; ?>
