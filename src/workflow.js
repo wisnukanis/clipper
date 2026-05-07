@@ -326,7 +326,7 @@ async function createManualSelection(options) {
 async function processClipOutput({ job, video, theme, prompt, output, clipperResult, index, total, options }) {
   const clipIndex = index + 1;
   const storageJob = buildClipStorageJob(job, index, total);
-  const aiProvider = options.aiProvider || video.ai_provider || "";
+  const aiProvider = "openai";
   const thumbnailText = await generateThumbnailText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
   const frameQuoteText = await generateFrameQuoteText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
   output = { ...output, thumbnailText, frameQuoteText };
@@ -768,6 +768,7 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     selectedAngle: output.selectedAngle || "",
     publishDecision: output.publishDecision || "",
     candidateId: output.candidateId || "",
+    hashtags: output.hashtags || [],
     clipperJobId: clipperResult.jobId,
     createdAt: new Date().toISOString()
   };

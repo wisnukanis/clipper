@@ -192,7 +192,8 @@ function renderConfigLine(cfg) {
     cfg.dryRun ? "dry-run" : "live",
     cfg.autoPublish ? "publish on" : "publish off",
     `storage ${(cfg.uploadDriver || "local").toUpperCase()}`,
-    `AI ${cfg.aiProvider || "gemini"}`,
+    `AI ${(cfg.aiProvider || "openai").toUpperCase()}`,
+    `transkrip ${(cfg.transcribeProvider || "deepgram").toUpperCase()}`,
     `FX ${effectSummary(cfg)}`,
     cfg.timezone || ""
   ].filter(Boolean);

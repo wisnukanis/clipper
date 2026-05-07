@@ -64,9 +64,9 @@ on:
         required: false
         default: "true"
       ai_provider:
-        description: "Caption/thumbnail AI provider: gemini or openai"
+        description: "Caption/thumbnail AI provider: openai or gemini"
         required: false
-        default: "gemini"
+        default: "openai"
   schedule:
     # GitHub schedule uses UTC.
     # Target 15 video/hari, disebar dari pagi sampai malam WIB.
@@ -97,12 +97,17 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
 
     env:
       LOCAL_PORT: 8788
       APP_TIMEZONE: Asia/Jakarta
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      NPM_CONFIG_PREFER_OFFLINE: "true"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_PREFER_BINARY: "1"
 
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
       UPLOAD_DRIVER: sftp
@@ -173,7 +178,7 @@ jobs:
       GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
       GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
       GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-flash-latest' }}
-      AI_PROVIDER: ${{ github.event.inputs.ai_provider || secrets.AI_PROVIDER || 'gemini' }}
+      AI_PROVIDER: openai
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4.1-nano' }}
       OPENAI_MODELS: ${{ secrets.OPENAI_MODELS || 'gpt-4.1-nano,gpt-5-nano,gpt-4o-mini' }}
@@ -279,9 +284,9 @@ jobs:
       TRANSCRIPT_REVIEW_REQUIRED: ${{ secrets.TRANSCRIPT_REVIEW_REQUIRED || '0' }}
       VIRAL_STRATEGY_ENABLED: ${{ secrets.VIRAL_STRATEGY_ENABLED || '1' }}
       VIRAL_STRATEGY_REQUIRED: ${{ secrets.VIRAL_STRATEGY_REQUIRED || '0' }}
-      AI_CANDIDATE_MAX_COUNT: ${{ secrets.AI_CANDIDATE_MAX_COUNT || '5' }}
-      AI_CANDIDATE_MAX_CHARS: ${{ secrets.AI_CANDIDATE_MAX_CHARS || '4000' }}
-      MIN_VIRAL_SCORE_TO_PUBLISH: ${{ secrets.MIN_VIRAL_SCORE_TO_PUBLISH || '0' }}
+      AI_CANDIDATE_MAX_COUNT: ${{ secrets.AI_CANDIDATE_MAX_COUNT || '8' }}
+      AI_CANDIDATE_MAX_CHARS: ${{ secrets.AI_CANDIDATE_MAX_CHARS || '7000' }}
+      MIN_VIRAL_SCORE_TO_PUBLISH: ${{ secrets.MIN_VIRAL_SCORE_TO_PUBLISH || '55' }}
       FORCE_PUBLISH: ${{ secrets.FORCE_PUBLISH || '1' }}
 
       YTDLP_JS_RUNTIMES: node
@@ -316,6 +321,15 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: package-lock.json
+
+      - name: Restore Node modules cache
+        id: node-modules-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node20-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-${{ runner.arch }}-node20-
 
       - name: Fail fast required secrets
         shell: bash
@@ -389,11 +403,9 @@ jobs:
             echo "::warning::THREADS_ACCESS_TOKEN belum diisi. Threads akan dilewati; workflow tetap fokus YouTube."
           fi
 
-          if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ]; then
-            echo "::warning::Gemini key belum diisi. AI review/analisis akan memakai OpenAI atau fallback lokal."
-          fi
           if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
-            echo "::warning::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi. Sistem akan fallback ke Gemini/lokal."
+            echo "::error::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi."
+            missing=1
           fi
 
           if [ "$DEEPGRAM_ENABLED" != "1" ] || [ -z "$DEEPGRAM_API_KEYS" ]; then
@@ -545,6 +557,29 @@ jobs:
           cache: pip
           cache-dependency-path: clipper/requirements.txt
 
+      - name: Restore Python virtualenv cache
+        id: python-venv-cache
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: python-venv-${{ runner.os }}-${{ runner.arch }}-py311-${{ hashFiles('clipper/requirements.txt') }}-v2
+          restore-keys: |
+            python-venv-${{ runner.os }}-${{ runner.arch }}-py311-
+
+      - name: Prepare Python virtualenv
+        shell: bash
+        run: |
+          set -euo pipefail
+          rebuilt=false
+          if [ ! -x .venv/bin/python ]; then
+            rm -rf .venv
+            python -m venv .venv
+            rebuilt=true
+          fi
+          echo "PYTHON_VENV_REBUILT=$rebuilt" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python -m pip --version
+
       - name: Check FFmpeg tools
         id: ffmpeg-tools
         shell: bash
@@ -552,15 +587,13 @@ jobs:
         run: |
           set -euo pipefail
           if command -v ffmpeg >/dev/null 2>&1 \
-            && command -v ffprobe >/dev/null 2>&1 \
-            && command -v unzip >/dev/null 2>&1; then
+            && command -v ffprobe >/dev/null 2>&1; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "FFmpeg, ffprobe, dan unzip sudah tersedia di runner."
+            echo "FFmpeg dan ffprobe sudah tersedia di runner."
             ffmpeg -version | head -n 1
-            unzip -v | head -n 1
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "FFmpeg/ffprobe/unzip belum lengkap. APT install akan dipakai."
+            echo "FFmpeg/ffprobe belum lengkap. APT install akan dipakai."
           fi
 
       - name: Prepare APT package cache
@@ -598,22 +631,41 @@ jobs:
             -o Acquire::Retries=2 \
             -o Acquire::http::Timeout=20 \
             -o Acquire::https::Timeout=20 \
-            install -y --no-install-recommends ffmpeg unzip
+            install -y --no-install-recommends ffmpeg
           sudo chmod -R a+rwx /var/cache/apt/archives || true
           ffmpeg -version | head -n 1
-          unzip -v | head -n 1
 
-      - name: Install Selawik (Segoe UI metric clone)
+      - name: Restore Selawik font cache
+        id: selawik-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/fonts/selawik
+          key: selawik-fonts-v1
+
+      - name: Register Selawik font
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.local/share/fonts/selawik
-          curl -fsSL \
-            https://github.com/microsoft/Selawik/releases/download/1.01/Selawik_Release.zip \
-            -o /tmp/Selawik_Release.zip
-          unzip -o -j /tmp/Selawik_Release.zip '*.ttf' -d ~/.local/share/fonts/selawik
-          fc-cache -f
-          fc-list | grep -i selawik
+          if ! ls ~/.local/share/fonts/selawik/*.ttf >/dev/null 2>&1; then
+            curl -fsSL \
+              https://github.com/microsoft/Selawik/releases/download/1.01/Selawik_Release.zip \
+              -o /tmp/Selawik_Release.zip
+            python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          out_dir = Path.home() / ".local/share/fonts/selawik"
+          out_dir.mkdir(parents=True, exist_ok=True)
+          with ZipFile("/tmp/Selawik_Release.zip") as archive:
+              for info in archive.infolist():
+                  if info.filename.lower().endswith(".ttf"):
+                      target = out_dir / Path(info.filename).name
+                      target.write_bytes(archive.read(info))
+          PY
+          fi
+          fc-cache -f ~/.local/share/fonts/selawik
+          fc-match "Selawik Semibold"
 
       - name: Restore automation state
         uses: actions/cache@v4
@@ -629,7 +681,8 @@ jobs:
             podcast-history-
 
       - name: Install Node dependencies
-        run: npm ci
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
 
       - name: Refresh TikTok token if possible
         shell: bash
@@ -722,12 +775,17 @@ jobs:
           echo "Threads token GitHub Secret updated."
 
       - name: Install Python dependencies
-        run: python -m pip install -r clipper/requirements.txt
+        shell: bash
+        run: |
+          if [ "${PYTHON_VENV_REBUILT:-false}" = "true" ] || [ "${{ steps.python-venv-cache.outputs.cache-hit }}" != "true" ]; then
+            python -m pip install --upgrade pip wheel setuptools
+          fi
+          python -m pip install --prefer-binary -r clipper/requirements.txt
 
       - name: Update yt-dlp
         shell: bash
         run: |
-          python -m pip install -U yt-dlp
+          python -m pip install --upgrade --prefer-binary yt-dlp
           yt-dlp --version
 
       - name: Write YouTube cookies
@@ -745,25 +803,13 @@ jobs:
           sed -i 's/\r$//' clipper/cookies.txt
           echo "YTDLP_COOKIES_FILE=cookies.txt" >> "$GITHUB_ENV"
 
-      - name: Debug YouTube cookies safely
+      - name: Validate YouTube cookies safely
         if: ${{ env.YTDLP_COOKIES_TXT != '' }}
         shell: bash
         run: |
-          echo "Cookies file check:"
-          ls -lah clipper/cookies.txt || true
-
-          echo "Cookies bytes:"
-          wc -c clipper/cookies.txt || true
-
-          echo "Cookies lines:"
-          wc -l clipper/cookies.txt || true
-
-          echo "YouTube/Google cookie rows:"
+          set -euo pipefail
           COOKIE_ROWS=$(grep -Ei "youtube|google" clipper/cookies.txt | wc -l || true)
-          echo "$COOKIE_ROWS"
-
-          echo "First line:"
-          head -n 1 clipper/cookies.txt || true
+          echo "YouTube/Google cookie rows: $COOKIE_ROWS"
 
           if [ "$COOKIE_ROWS" -eq 0 ]; then
             echo "::error::cookies.txt tidak punya baris youtube/google. Secret YTDLP_COOKIES_TXT kemungkinan kosong, header doang, atau salah format."
@@ -775,102 +821,8 @@ jobs:
             echo "::warning::Baris pertama cookies bukan format standar Netscape/HTTP Cookie File."
           fi
 
-      - name: Validate required secrets
-        shell: bash
-        run: |
-          missing=0
-
-          for key in \
-            PUBLIC_BASE_URL \
-            SFTP_HOST \
-            SFTP_USER \
-            SFTP_REMOTE_DIR
-          do
-            if [ -z "${!key}" ]; then
-              echo "::error::$key belum diisi di GitHub Secrets"
-              missing=1
-            fi
-          done
-          if [ -z "$SFTP_PASSWORD" ] && [ -z "$SFTP_PRIVATE_KEY" ]; then
-            echo "::error::SFTP_PASSWORD atau SFTP_PRIVATE_KEY belum diisi di GitHub Secrets"
-            missing=1
-          fi
-
-          if [ "$INSTAGRAM_UPLOAD_ENABLED" = "true" ]; then
-            for key in INSTAGRAM_IG_USER_ID INSTAGRAM_ACCESS_TOKEN
-            do
-              if [ -z "${!key}" ]; then
-                echo "::warning::$key belum diisi di GitHub Secrets. Instagram akan dilewati; workflow tetap fokus YouTube."
-              fi
-            done
-
-            if [ "$AUTO_REFRESH_INSTAGRAM_TOKEN" = "true" ]; then
-              for key in META_APP_ID META_APP_SECRET
-              do
-                if [ -z "${!key}" ]; then
-                  echo "::warning::$key belum diisi untuk auto-refresh token Instagram. Upload YouTube tetap lanjut."
-                fi
-              done
-            fi
-          fi
-
-          if [ "$FACEBOOK_UPLOAD_ENABLED" = "true" ]; then
-            if [ -z "$FACEBOOK_PAGE_ID" ]; then
-              echo "::warning::FACEBOOK_PAGE_ID belum diisi di GitHub Secrets. Facebook akan dilewati; workflow tetap fokus YouTube."
-            fi
-
-            if [ -z "$FACEBOOK_PAGE_ACCESS_TOKEN" ] && [ -z "$FACEBOOK_USER_ACCESS_TOKEN" ]; then
-              echo "::warning::FACEBOOK_PAGE_ACCESS_TOKEN atau FACEBOOK_USER_ACCESS_TOKEN belum diisi. Facebook akan dilewati; workflow tetap fokus YouTube."
-            fi
-          fi
-
-          if [ "$YOUTUBE_UPLOAD_ENABLED" = "true" ]; then
-            for key in YOUTUBE_CLIENT_ID YOUTUBE_CLIENT_SECRET YOUTUBE_REFRESH_TOKEN
-            do
-              if [ -z "${!key}" ]; then
-                echo "::error::$key belum diisi di GitHub Secrets"
-                missing=1
-              fi
-            done
-          fi
-
-          if [ "$TIKTOK_UPLOAD_ENABLED" = "true" ]; then
-            for key in TIKTOK_CLIENT_KEY TIKTOK_CLIENT_SECRET
-            do
-              if [ -z "${!key}" ]; then
-                echo "::warning::$key belum diisi di GitHub Secrets. TikTok akan dilewati; workflow tetap fokus YouTube."
-              fi
-            done
-
-            if [ -z "$TIKTOK_ACCESS_TOKEN" ] && [ -z "$TIKTOK_REFRESH_TOKEN" ]; then
-              echo "::warning::TIKTOK_ACCESS_TOKEN atau TIKTOK_REFRESH_TOKEN belum diisi. TikTok akan dilewati; workflow tetap fokus YouTube."
-            fi
-          fi
-
-          if [ "$THREADS_UPLOAD_ENABLED" = "true" ] && [ -z "$THREADS_ACCESS_TOKEN" ]; then
-            echo "::warning::THREADS_ACCESS_TOKEN belum diisi. Threads akan dilewati; workflow tetap fokus YouTube."
-          fi
-
-          if [ -z "$GEMINI_API_KEY" ] && [ -z "$GEMINI_API_KEY_2" ] && [ -z "$GEMINI_API_KEY_3" ] && [ -z "$GEMINI_API_KEYS" ]; then
-            echo "::warning::Gemini key belum diisi. AI review/analisis akan memakai OpenAI atau fallback lokal."
-          fi
-          if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
-            echo "::warning::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi. Sistem akan fallback ke Gemini/lokal."
-          fi
-
-          if [ "$DEEPGRAM_ENABLED" != "1" ]; then
-            echo "::error::DEEPGRAM_ENABLED harus 1. Deepgram tetap primary untuk transkripsi."
-            missing=1
-          fi
-
-          if [ -z "$DEEPGRAM_API_KEYS" ]; then
-            echo "::error::DEEPGRAM_API_KEYS belum diisi di GitHub Secrets"
-            missing=1
-          fi
-
-          exit "$missing"
-
       - name: Debug effective config
+        if: ${{ github.event_name == 'workflow_dispatch' || vars.DEBUG_WORKFLOW == 'true' }}
         shell: bash
         run: |
           echo "GRAPH_API_VERSION=$GRAPH_API_VERSION"
@@ -942,7 +894,7 @@ jobs:
           fi
 
       - name: Test YouTube cookies before automation
-        if: ${{ env.YTDLP_COOKIES_TXT != '' }}
+        if: ${{ env.YTDLP_COOKIES_TXT != '' && (github.event_name == 'workflow_dispatch' || vars.TEST_YOUTUBE_COOKIES == 'true') }}
         working-directory: clipper
         shell: bash
         env:

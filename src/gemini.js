@@ -124,7 +124,7 @@ export async function generateGeminiText(prompt, options = {}) {
 }
 
 export async function generateAiText(prompt, options = {}) {
-  const provider = String(options.provider || config.ai.provider || "gemini").toLowerCase();
+  const provider = String(options.provider || config.ai.provider || "openai").toLowerCase();
 
   if (provider === "openai") {
     try {
@@ -132,9 +132,9 @@ export async function generateAiText(prompt, options = {}) {
       if (text) return text;
     } catch (error) {
       if (options.throwOnError) throw error;
-      console.warn(`OpenAI AI provider gagal, fallback ke Gemini: ${error.message}`);
+      console.warn(`OpenAI AI provider gagal: ${error.message}`);
     }
-    return generateGeminiText(prompt, options);
+    return "";
   }
 
   const geminiText = await generateGeminiText(prompt, options);

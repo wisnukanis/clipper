@@ -90,26 +90,29 @@ def parse_keys_from_env(*names):
 
 
 def cfg():
-    transcribe_provider = os.environ.get("TRANSCRIBE_PROVIDER", "offline").strip().lower()
+    transcribe_provider = os.environ.get("TRANSCRIBE_PROVIDER", "deepgram").strip().lower()
     if transcribe_provider not in {"offline", "auto", "deepgram"}:
         transcribe_provider = "offline"
 
     openai_models = parse_keys(os.environ.get("OPENAI_MODELS"))
-    openai_model = os.environ.get("OPENAI_MODEL", openai_models[0] if openai_models else "gpt-4.1-nano")
+    openai_model = os.environ.get("OPENAI_MODEL", "gpt-4.1-nano")
     openai_models = list(dict.fromkeys([
-        item for item in [*openai_models, openai_model, "gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"] if item
+        item for item in [openai_model, "gpt-4.1-nano", *openai_models, "gpt-5-nano", "gpt-4o-mini"] if item
     ]))
 
     return {
         "gemini_keys": parse_keys_from_env("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS"),
         "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
-        "ai_provider": os.environ.get("AI_PROVIDER", "gemini").strip().lower(),
+        "ai_provider": os.environ.get("AI_PROVIDER", "openai").strip().lower(),
         "openai_model": openai_model,
         "openai_models": openai_models,
         "ai_request_timeout": parse_int(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS"), 25),
         "ai_clip_selection": parse_int(os.environ.get("AI_CLIP_SELECTION_ENABLED"), 1),
-        "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 5),
-        "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 4000),
+        "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 8),
+        "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 7000),
+        "viral_strategy": parse_int(os.environ.get("VIRAL_STRATEGY_ENABLED"), 1),
+        "viral_strategy_required": parse_int(os.environ.get("VIRAL_STRATEGY_REQUIRED"), 0),
+        "min_viral_score_to_publish": parse_int(os.environ.get("MIN_VIRAL_SCORE_TO_PUBLISH"), 55),
         "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 1),
         "min_clip_seconds": parse_int(os.environ.get("MIN_CLIP_SECONDS"), 40),
         "max_clip_seconds": parse_int(os.environ.get("MAX_CLIP_SECONDS"), 60),
@@ -1019,7 +1022,7 @@ def extract_json(text):
 
     start = raw.find("[")
     if start < 0:
-        raise ValueError("Gemini tidak mengembalikan JSON array valid.")
+        raise ValueError("AI tidak mengembalikan JSON array valid.")
 
     data, _ = decoder.raw_decode(raw[start:])
     return data
@@ -1100,7 +1103,7 @@ def call_openai_text(prompt, config, model=None):
 
 
 def call_json_with_ai_fallback(prompt, config, label):
-    provider = str(config.get("ai_provider") or "gemini").lower()
+    provider = str(config.get("ai_provider") or "openai").lower()
     last_error = None
 
     def try_gemini():
@@ -1126,7 +1129,7 @@ def call_json_with_ai_fallback(prompt, config, label):
             if model in FAILED_OPENAI_MODELS:
                 continue
             try:
-                log_info(f"{label} fallback OpenAI {model}")
+                log_info(f"{label} memakai OpenAI {model}")
                 return extract_json(call_openai_text(prompt, config, model))
             except Exception as exc:
                 last_error = exc
@@ -1137,6 +1140,9 @@ def call_json_with_ai_fallback(prompt, config, label):
     result = try_openai() if provider == "openai" else try_gemini()
     if result is not None:
         return result
+
+    if provider == "openai":
+        raise RuntimeError(str(last_error or "OpenAI AI provider gagal."))
 
     result = try_gemini() if provider == "openai" else try_openai()
     if result is not None:
@@ -1220,6 +1226,54 @@ def local_clip_score(text, start, duration):
     score += min(len(words) / 12, 8)
     score += unique_ratio * 4
     return score
+
+
+def normalize_viral_score(value, local_score=0):
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        score = float(local_score or 0) * 3.2
+
+    if 0 < score <= 10:
+        score *= 10
+
+    return int(round(clamp(score, 0, 100)))
+
+
+def normalize_publish_decision(value, score, threshold):
+    decision = str(value or "").strip().lower()
+    if decision in {"publish", "strong_publish", "yes", "layak"}:
+        return "publish"
+    if decision in {"skip", "reject", "no", "tidak"}:
+        return "skip"
+    if threshold and score < threshold:
+        return "borderline"
+    return "publish" if score >= max(55, int(threshold or 0)) else "borderline"
+
+
+def normalize_ai_hashtags(value):
+    if isinstance(value, str):
+        items = re.split(r"[\s,]+", value)
+    elif isinstance(value, list):
+        items = value
+    else:
+        items = []
+
+    result = []
+    seen = set()
+    for item in items:
+        cleaned = re.sub(r"[^\w]", "", str(item or "").strip().lstrip("#"), flags=re.UNICODE)
+        if not cleaned:
+            continue
+        tag = f"#{cleaned}"
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(tag)
+        if len(result) >= 3:
+            break
+    return result
 
 
 def local_clip_title(text, index):
@@ -1328,7 +1382,8 @@ def candidate_to_clip(candidate, index=0, reason=""):
         "caption": text,
         "candidate_id": candidate.get("candidate_id") or index + 1,
         "clip_transcript": text,
-        "viral_score": int(float(candidate.get("local_score", 0))),
+        "selected_angle": local_clip_title(text, index),
+        "viral_score": normalize_viral_score(None, candidate.get("local_score", 0)),
         "publish_decision": "local_fallback",
     }
 
@@ -1344,14 +1399,27 @@ def find_important_clips(segments, config):
         log_warn("AI_CLIP_SELECTION_ENABLED=0. Pakai kandidat lokal offline.")
         return validate_clips(local_clips, segments, config)
 
-    if not config["gemini_keys"] and not config.get("openai_api_key"):
-        log_warn("GEMINI_API_KEYS dan OPENAI_API_KEY kosong. Pakai fallback analisis lokal offline.")
+    if not config.get("openai_api_key"):
+        log_warn("OPENAI_API_KEY kosong. Pakai fallback analisis lokal offline.")
         return validate_clips(local_clips, segments, config)
 
     log_info(
         f"Candidate clip lokal: {len(candidates)} kandidat. "
         f"AI hanya menerima potongan kandidat <= {config.get('ai_candidate_max_chars', 4000)} karakter."
     )
+
+    viral_rules = ""
+    if int(config.get("viral_strategy", 1)) == 1:
+        viral_rules = f"""
+Viral strategy wajib dipakai:
+- Beri viral_score 0-100 untuk tiap pilihan.
+- Pilih candidate dengan potensi retention paling kuat: konflik, rasa penasaran, emosi, pernyataan mengejutkan, atau insight yang bisa berdiri sendiri.
+- selected_angle harus menjelaskan sudut viral yang jelas, bukan kalimat umum.
+- publish_decision gunakan "publish" hanya jika score >= {config.get('min_viral_score_to_publish', 55)} atau hook sangat kuat; selain itu "borderline".
+- thumbnail_text wajib 6-12 kata, tegas, dan tidak clickbait palsu.
+- hashtags maksimal 3 dan relevan.
+- caption wajib berupa 2-3 kalimat lengkap. Jangan berakhir dengan koma, kata sambung, atau ellipsis.
+"""
 
     prompt = f"""
 Anda adalah editor video short-form profesional.
@@ -1369,6 +1437,7 @@ Kriteria:
 - Cocok untuk TikTok, Instagram Reels, dan YouTube Shorts.
 - Untuk tahap ini pilih hanya bagian paling kuat, jangan banyak-banyak.
 - Output harus JSON valid saja, tanpa markdown.
+{viral_rules}
 
 Format output:
 [
@@ -1378,7 +1447,12 @@ Format output:
     "start": 80,
     "end": 130,
     "hook": "Kalimat pembuka yang menarik",
-    "caption": "Caption posting singkat"
+    "caption": "Caption posting singkat yang kalimatnya lengkap dan tidak terputus.",
+    "selected_angle": "Sudut viral utama",
+    "thumbnail_text": "TEKS COVER YANG KUAT",
+    "viral_score": 78,
+    "publish_decision": "publish",
+    "hashtags": ["#PodcastIndonesia", "#Tokoh", "#Shorts"]
   }}
 ]
 
@@ -1419,6 +1493,19 @@ def validate_clips(clips, segments, config):
         if end <= start:
             continue
 
+        clip_transcript = (
+            clip.get("clip_transcript")
+            or clip.get("clipTranscript")
+            or segment_text_window(segments, start, end, max_chars=1200)
+        )
+        local_score = local_clip_score(clip_transcript, start, end - start)
+        viral_score = normalize_viral_score(clip.get("viral_score") or clip.get("viralScore"), local_score)
+        publish_decision = normalize_publish_decision(
+            clip.get("publish_decision") or clip.get("publishDecision"),
+            viral_score,
+            int(config.get("min_viral_score_to_publish") or 0),
+        )
+
         result.append(
             {
                 "title": clip.get("title") or f"Clip {index + 1}",
@@ -1428,14 +1515,27 @@ def validate_clips(clips, segments, config):
                 "hook": clip.get("hook") or "",
                 "caption": clip.get("caption") or "",
                 "thumbnail_text": clip.get("thumbnail_text") or clip.get("thumbnailText") or "",
-                "viral_score": clip.get("viral_score") or clip.get("viralScore") or 0,
-                "publish_decision": clip.get("publish_decision") or clip.get("publishDecision") or "",
+                "selected_angle": clip.get("selected_angle") or clip.get("selectedAngle") or "",
+                "viral_score": viral_score,
+                "publish_decision": publish_decision,
                 "candidate_id": clip.get("candidate_id") or clip.get("candidateId") or "",
-                "clip_transcript": clip.get("clip_transcript")
-                or clip.get("clipTranscript")
-                or segment_text_window(segments, start, end, max_chars=1200),
+                "hashtags": normalize_ai_hashtags(clip.get("hashtags") or clip.get("hashtag")),
+                "clip_transcript": clip_transcript,
             }
         )
+
+    if int(config.get("viral_strategy", 1)) == 1:
+        result.sort(key=lambda item: int(item.get("viral_score") or 0), reverse=True)
+        min_score = int(config.get("min_viral_score_to_publish") or 0)
+        if min_score > 0:
+            preferred = [
+                item for item in result
+                if int(item.get("viral_score") or 0) >= min_score or item.get("publish_decision") == "publish"
+            ]
+            if preferred:
+                result = preferred
+            elif int(config.get("viral_strategy_required", 0)) == 1:
+                raise ValueError(f"Tidak ada clip dengan viral_score >= {min_score}.")
 
     return result[: config["clip_count"]]
 
@@ -1444,8 +1544,8 @@ def review_clip_transcript_segments(segments, clip, config, job_id, index):
     if int(config.get("transcript_review", 1)) != 1:
         return segments, None
 
-    if not config.get("gemini_keys") and not config.get("openai_api_key"):
-        log_warn("Transcript review dilewati: GEMINI_API_KEYS dan OPENAI_API_KEY kosong.")
+    if not config.get("openai_api_key"):
+        log_warn("Transcript review dilewati: OPENAI_API_KEY kosong.")
         return segments, None
 
     clip_start = float(clip["start"])
@@ -3511,7 +3611,7 @@ def main():
             clips = validate_clips(cached_clips, segments, config)
             log_progress("clip_select", 32, note="cache")
         else:
-            log_step("Gemini mencari bagian penting dari transcript.")
+            log_step("AI mencari bagian paling kuat dari transcript.")
             log_progress("clip_select", 24, note="selecting")
             clips = find_important_clips(segments, config)
             log_progress("clip_select", 32, note="selected")
@@ -3561,8 +3661,10 @@ def main():
                 "transcriptSource": transcript_source,
                 "thumbnailText": clip.get("thumbnail_text", ""),
                 "viralScore": clip.get("viral_score", 0),
+                "selectedAngle": clip.get("selected_angle", ""),
                 "publishDecision": clip.get("publish_decision", ""),
                 "candidateId": clip.get("candidate_id", ""),
+                "hashtags": clip.get("hashtags", []),
                 "clipTranscript": clip.get("clip_transcript", ""),
                 "sourceClipPath": str(source_clip.relative_to(ROOT)),
                 "rawClipPath": str(raw_clip.relative_to(ROOT)),

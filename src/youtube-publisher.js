@@ -344,8 +344,8 @@ function buildYoutubeHashtags({ theme, person, caption, context }) {
     "#PodcastIndonesia",
     "#Motivasi"
   ];
-  const values = [...candidates, ...fromCaption].filter(Boolean);
-  return uniqueNormalized(values).slice(0, 6);
+  const values = [...candidates, ...fromCaption, "#PodcastIndonesia", "#Indonesia"].filter(Boolean);
+  return uniqueNormalized(values).slice(0, 3);
 }
 
 function compactDescriptionParts(parts) {

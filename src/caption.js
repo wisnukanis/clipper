@@ -42,7 +42,7 @@ function collectText(value, texts) {
 
 export async function generateCaption({ job, output, promptTemplate, clipperRoot, aiProvider = "" }) {
   const quickHashtags = buildDynamicHashtags({ job, output, promptTemplate });
-  if (hasStrategyCaption(output)) {
+  if (hasStrategyCaption(output) && isCompleteCaption(output.caption)) {
     return ensureCaptionHashtags(output.caption, output, promptTemplate, quickHashtags);
   }
 
@@ -57,7 +57,9 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
     "- Ringkas, natural, emosional, dan sesuai transkrip.",
     "- Jangan mengarang fakta di luar konteks.",
     "- Tambahkan CTA ringan.",
-    "- Akhiri dengan 4 sampai 6 hashtag relevan: pakai #PodcastIndonesia #PodcastArtis #ReelsIndonesia lalu tambah hashtag tokoh/topik dan #Viral jika cocok.",
+    "- Caption harus selesai utuh. Jangan akhiri dengan kalimat terpotong, koma, titik dua, kata sambung, atau ellipsis.",
+    "- Jangan menyalin mentah transkrip yang terpotong; rangkum jadi kalimat lengkap.",
+    "- Akhiri dengan tepat 3 hashtag relevan. Prioritaskan 1 hashtag konteks/tokoh/topik jika ada.",
     "",
     `Tema: ${job.theme}`,
     `Gaya: ${promptTemplate?.hook_style || "natural emotional"}`,
@@ -71,8 +73,8 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
     "Tulis caption final saja tanpa markdown."
   ].join("\n");
 
-  const text = await generateAiText(prompt, { maxOutputTokens: 700, provider: aiProvider });
-  return ensureCaptionHashtags(text || fallback, output, promptTemplate, dynamicHashtags);
+  const text = await generateAiText(prompt, { maxOutputTokens: 900, provider: aiProvider });
+  return ensureCaptionHashtags(text || fallback, output, promptTemplate, dynamicHashtags, fallback);
 }
 
 export async function generateThumbnailText({ job, output, promptTemplate, aiProvider = "" }) {
@@ -137,10 +139,15 @@ function hasStrategyCaption(output) {
 }
 
 function fallbackCaption(output, promptTemplate, dynamicHashtags = []) {
-  const hook = output.hook || output.title || "Ada bagian menarik dari obrolan ini.";
-  const body = output.caption || output.reason || "Potongan ini diambil dari momen yang paling kuat di podcast.";
-  const cta = promptTemplate?.cta || "Menurut kamu, bagian paling relate yang mana?";
-  const tags = mergeHashtags(BASE_HASHTAGS, dynamicHashtags, ["#Viral"]).slice(0, 6).join(" ");
+  const hook = completeSentence(output.hook || output.title || "Ada bagian menarik dari obrolan ini.");
+  const body = completeSentence(
+    output.reason
+    || output.selectedAngle
+    || output.caption
+    || "Potongan ini diambil dari momen yang paling kuat di podcast."
+  );
+  const cta = completeSentence(promptTemplate?.cta || "Menurut kamu, bagian paling relate yang mana?");
+  const tags = captionHashtags({ dynamicHashtags, output, promptTemplate }).join(" ");
   return `${hook}\n\n${body}\n\n${cta}\n\n${tags}`;
 }
 
@@ -180,23 +187,80 @@ function isStrongFrameQuote(value) {
   return words.length >= 5 && words.join("").length >= 16;
 }
 
-function ensureCaptionHashtags(caption, output, promptTemplate, dynamicHashtags = []) {
+function ensureCaptionHashtags(caption, output, promptTemplate, dynamicHashtags = [], fallback = "") {
   const cleaned = String(caption || "").trim();
+  const hashtags = captionHashtags({ caption: cleaned, dynamicHashtags, output, promptTemplate });
+  if (!hashtags.length) return cleaned;
+  const body = completeCaptionBody(stripHashtags(cleaned), stripHashtags(fallback));
+  return `${body || cleaned}\n\n${hashtags.join(" ")}`.trim();
+}
+
+function completeCaptionBody(value, fallback = "") {
+  const cleaned = normalizeCaptionBody(value);
+  if (isCompleteCaption(cleaned)) return cleaned;
+
+  const trimmed = trimToLastCompleteSentence(cleaned);
+  if (isCompleteCaption(trimmed)) return trimmed;
+
+  const fallbackCleaned = normalizeCaptionBody(fallback);
+  if (isCompleteCaption(fallbackCleaned)) return fallbackCleaned;
+
+  return completeSentence(fallbackCleaned || cleaned || "Ada bagian menarik dari obrolan ini.");
+}
+
+function normalizeCaptionBody(value) {
+  return String(value || "")
+    .replace(/\s*(?:\.{3}|…)\s*$/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .trim();
+}
+
+function isCompleteCaption(value) {
+  const cleaned = normalizeCaptionBody(value);
+  if (!cleaned) return false;
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length < 6) return false;
+  const lastLine = cleaned.split(/\n+/).map((line) => line.trim()).filter(Boolean).pop() || "";
+  return !INCOMPLETE_CAPTION_END_RE.test(lastLine);
+}
+
+function trimToLastCompleteSentence(value) {
+  const cleaned = normalizeCaptionBody(value);
+  const end = Math.max(cleaned.lastIndexOf("."), cleaned.lastIndexOf("?"), cleaned.lastIndexOf("!"));
+  if (end < 20) return "";
+  return cleaned.slice(0, end + 1).trim();
+}
+
+function completeSentence(value) {
+  const cleaned = normalizeCaptionBody(value)
+    .replace(INCOMPLETE_CAPTION_END_RE, "")
+    .trim();
+  if (!cleaned) return "";
+  return /[.!?]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+}
+
+function captionHashtags({ caption = "", dynamicHashtags = [], output, promptTemplate } = {}) {
   const outputHashtags = normalizeHashtags(output?.hashtags || []);
-  const existingHashtags = normalizeHashtags(extractHashtags(cleaned));
+  const existingHashtags = normalizeHashtags(extractHashtags(caption));
   const contextHashtags = normalizeHashtags(dynamicHashtags);
   const templateHashtags = normalizeHashtags(promptTemplate?.hashtag_template || []);
-  const hashtags = mergeHashtags(BASE_HASHTAGS, contextHashtags, outputHashtags, existingHashtags, templateHashtags, ["#Viral"])
-    .slice(0, 6);
-  if (!hashtags.length) return cleaned;
-  const body = stripHashtags(cleaned);
-  return `${body || cleaned}\n\n${hashtags.join(" ")}`.trim();
+  return mergeHashtags(
+    ["#PodcastIndonesia"],
+    contextHashtags,
+    outputHashtags,
+    existingHashtags,
+    templateHashtags,
+    BASE_HASHTAGS.slice(1),
+    ["#Viral"]
+  ).slice(0, HASHTAG_LIMIT);
 }
 
 function buildDynamicHashtags({ job, output, context = "" }) {
   const provided = normalizeHashtags(output?.hashtags || [])
     .filter((tag) => !isGenericHashtag(tag));
-  if (provided.length >= 4) return provided.slice(0, 6);
+  if (provided.length >= 1) return provided.slice(0, HASHTAG_LIMIT);
 
   const directFields = [
     output?.selectedAngle,
@@ -221,7 +285,7 @@ function buildDynamicHashtags({ job, output, context = "" }) {
 
   return normalizeHashtags(candidates)
     .filter((tag) => !isGenericHashtag(tag))
-    .slice(0, 6);
+    .slice(0, HASHTAG_LIMIT);
 }
 
 function addHashtagCandidate(candidates, value) {
@@ -385,6 +449,10 @@ const BASE_HASHTAGS = [
   "#PodcastArtis",
   "#ReelsIndonesia"
 ];
+
+const HASHTAG_LIMIT = 3;
+
+const INCOMPLETE_CAPTION_END_RE = /(?:\.{3}|…|[,;:]|\s[-–]|\b(?:dan|atau|karena|yang|untuk|dengan|ke|di|dari|agar|supaya|kalau|tapi|jadi|sehingga|lalu|terus|bahwa|seperti|saat|ketika|biar))$/i;
 
 const STOPWORDS = new Set([
   ...GENERIC_HASHTAGS,

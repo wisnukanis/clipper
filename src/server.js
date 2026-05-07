@@ -198,15 +198,13 @@ const envGroups = [
     id: "ai",
     title: "AI & Transcript",
     fields: [
-      field("GEMINI_API_KEY", "Gemini key 1", true),
-      field("GEMINI_API_KEY_2", "Gemini key 2", true),
-      field("GEMINI_API_KEY_3", "Gemini key 3", true),
-      field("GEMINI_API_KEYS", "Gemini keys list", true),
-      field("GEMINI_MODEL", "Gemini model"),
       field("AI_PROVIDER", "AI provider"),
       field("OPENAI_API_KEY", "OpenAI key", true),
       field("OPENAI_MODEL", "OpenAI model"),
+      field("OPENAI_MODELS", "OpenAI fallback models"),
+      field("OPENAI_TRANSCRIBE_MODEL", "OpenAI transcript fallback model"),
       field("DEEPGRAM_ENABLED", "Deepgram enabled"),
+      field("TRANSCRIBE_PROVIDER", "Transcript provider"),
       field("DEEPGRAM_API_KEYS", "Deepgram keys", true),
       field("DEEPGRAM_MODEL", "Deepgram model"),
       field("DEEPGRAM_TIMEOUT_SECONDS", "Deepgram timeout")

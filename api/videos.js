@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         url: video.url,
         range: video.manual_range || "",
         force_reprocess: video.force_reprocess ? "true" : "false",
-        ai_provider: video.ai_provider || "gemini",
+        ai_provider: video.ai_provider || process.env.AI_PROVIDER || "openai",
         quality_profile: video.quality_profile || "standard",
         deepgram_enabled: "1",
         scene_mode: video.scene_mode || "podcast",

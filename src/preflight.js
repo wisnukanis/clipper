@@ -236,9 +236,13 @@ async function checkOpenAi(online, required = false) {
 }
 
 async function aiChecks(online) {
-  const gemini = await checkGemini(online, false);
-  const openai = await checkOpenAi(online, false);
-  return [gemini, openai];
+  if (config.ai.provider === "openai") {
+    return [await checkOpenAi(online, false)];
+  }
+  if (config.ai.provider === "gemini") {
+    return [await checkGemini(online, false)];
+  }
+  return [await checkOpenAi(online, false)];
 }
 
 function missingRemoteConfig() {

@@ -66,9 +66,9 @@ function encodePathSegment(value) {
 
 function buildConfig() {
   const geminiApiKeys = listEnv("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS");
-  const aiProvider = cleanText(process.env.AI_PROVIDER || "gemini").toLowerCase();
+  const aiProvider = cleanText(process.env.AI_PROVIDER || "openai").toLowerCase();
   const openaiModels = listEnv("OPENAI_MODELS");
-  const openaiModel = cleanText(process.env.OPENAI_MODEL || openaiModels[0] || "gpt-4.1-nano");
+  const openaiModel = cleanText(process.env.OPENAI_MODEL || "gpt-4.1-nano");
   const deepgramApiKeys = cleanText(process.env.DEEPGRAM_API_KEYS)
     ? listEnv("DEEPGRAM_API_KEYS")
     : listEnv("DEEPGRAM_API_KEY");
@@ -187,12 +187,12 @@ function buildConfig() {
       requestTimeoutMs: numberEnv("AI_REQUEST_TIMEOUT_SECONDS", 25) * 1000
     },
     ai: {
-      provider: ["gemini", "openai"].includes(aiProvider) ? aiProvider : "gemini"
+      provider: ["gemini", "openai"].includes(aiProvider) ? aiProvider : "openai"
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || "",
       model: openaiModel,
-      models: uniqueList([...openaiModels, openaiModel, "gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"]),
+      models: uniqueList([openaiModel, "gpt-4.1-nano", ...openaiModels, "gpt-5-nano", "gpt-4o-mini"]),
       temperature: numberEnv("OPENAI_TEMPERATURE", 0.45),
       requestTimeoutMs: numberEnv("AI_REQUEST_TIMEOUT_SECONDS", 25) * 1000
     },

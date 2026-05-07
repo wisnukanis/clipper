@@ -37,10 +37,13 @@ permissions:
 
 jobs:
   cleanup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     env:
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      NPM_CONFIG_PREFER_OFFLINE: "true"
       UPLOAD_DRIVER: sftp
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
       SFTP_HOST: ${{ secrets.SFTP_HOST || secrets.FTP_HOST }}
@@ -70,6 +73,15 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Restore Node modules cache
+        id: node-modules-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node20-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-${{ runner.arch }}-node20-
+
       - name: Validate SFTP secrets
         shell: bash
         run: |
@@ -88,7 +100,8 @@ jobs:
           exit "$missing"
 
       - name: Install Node dependencies
-        run: npm ci
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
 
       - name: Run SFTP cleanup
         shell: bash

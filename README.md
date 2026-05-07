@@ -788,7 +788,7 @@ Contoh `.env.example`:
 LOCAL_PORT=8787
 PUBLIC_BASE_URL=https://www.example.com/ig-generated
 UPLOAD_DRIVER=sftp
-AI_PROVIDER=gemini
+AI_PROVIDER=openai
 
 GEMINI_API_KEY=
 GEMINI_API_KEY_2=
@@ -1016,7 +1016,7 @@ Jumlah maksimal polling container Threads sebelum dianggap belum siap. Default: 
 
 #### `AI_PROVIDER`
 
-Provider AI untuk caption dan teks thumbnail: `gemini` atau `openai`. Analisis transkrip/highlight di clipper tetap memakai Gemini.
+Provider AI untuk caption, thumbnail, review subtitle, dan pemilihan highlight. Default produksi: `openai`. Transkripsi tetap memakai Deepgram.
 
 #### `OPENAI_API_KEY`
 
