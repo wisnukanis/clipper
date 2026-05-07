@@ -1249,6 +1249,10 @@ VIDEO_LANGUAGE=id
 DOWNLOAD_MAX_HEIGHT=720
 DOWNLOAD_COMPRESS_CRF=30
 FINAL_RENDER_CRF=27
+BACKGROUND_MUSIC_ENABLED=0
+BACKGROUND_MUSIC_FILE=assets/music/backsound.mp3
+BACKGROUND_MUSIC_VOLUME=0.08
+BACKGROUND_MUSIC_ORIGINAL_VOLUME=1.0
 
 YTDLP_COOKIES_FILE=cookies.txt
 YTDLP_COOKIES_FROM_BROWSER=
@@ -1367,6 +1371,22 @@ CRF kompresi awal.
 #### `FINAL_RENDER_CRF`
 
 CRF render final.
+
+#### `BACKGROUND_MUSIC_ENABLED`
+
+Aktifkan backsound lokal saat render final. Default `0`.
+
+#### `BACKGROUND_MUSIC_FILE`
+
+Path file audio backsound yang kamu punya hak pakainya, misalnya `assets/music/backsound.mp3`.
+
+#### `BACKGROUND_MUSIC_VOLUME`
+
+Volume backsound. Default `0.08`, cukup pelan agar suara podcast tetap utama.
+
+#### `BACKGROUND_MUSIC_ORIGINAL_VOLUME`
+
+Volume audio asli video. Default `1.0`.
 
 #### `YTDLP_COOKIES_FILE`
 

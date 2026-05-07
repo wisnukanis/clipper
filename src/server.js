@@ -127,7 +127,11 @@ const envGroups = [
       field("VIDEO_FRAME_ASSET", "Frame asset"),
       field("VIDEO_WATERMARK_ASSET", "Watermark asset"),
       field("VIDEO_EFFECT_CRF", "Effect CRF"),
-      field("VIDEO_EFFECT_PRESET", "Effect preset")
+      field("VIDEO_EFFECT_PRESET", "Effect preset"),
+      field("BACKGROUND_MUSIC_ENABLED", "Backsound enabled"),
+      field("BACKGROUND_MUSIC_FILE", "Backsound file"),
+      field("BACKGROUND_MUSIC_VOLUME", "Backsound volume"),
+      field("BACKGROUND_MUSIC_ORIGINAL_VOLUME", "Original audio volume")
     ]
   },
   {
@@ -287,6 +291,9 @@ app.get("/api/state", async (_req, res) => {
       videoFilterEnabled: config.videoEffects.filterEnabled,
       videoWatermarkEnabled: config.videoEffects.watermarkEnabled,
       videoLowerThirdEnabled: config.videoEffects.lowerThirdEnabled,
+      backgroundMusicEnabled: boolInput(process.env.BACKGROUND_MUSIC_ENABLED, false),
+      backgroundMusicFile: process.env.BACKGROUND_MUSIC_FILE || "",
+      backgroundMusicVolume: process.env.BACKGROUND_MUSIC_VOLUME || "0.08",
       aiProvider: config.ai.provider,
       subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
       subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "550"

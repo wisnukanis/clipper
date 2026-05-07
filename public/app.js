@@ -422,11 +422,11 @@ function renderDailyBars(series) {
 
 function renderPlatforms(cfg, stats) {
   const items = [
-    ["Instagram", cfg.instagramEnabled, cfg.instagramEnabled ? "on" : "off"],
-    ["Facebook", cfg.facebookEnabled, cfg.facebookEnabled ? "on" : "off"],
-    ["YouTube", cfg.youtubeEnabled, cfg.youtubeEnabled ? "on" : "off"],
-    ["TikTok", cfg.tiktokEnabled, cfg.tiktokEnabled ? "on" : "off"],
-    ["Threads", cfg.threadsEnabled, cfg.threadsEnabled ? "on" : "off"],
+    platformItem("Instagram", cfg.instagramEnabled, stats, "instagram"),
+    platformItem("Facebook", cfg.facebookEnabled, stats, "facebook"),
+    platformItem("YouTube", cfg.youtubeEnabled, stats, "youtube"),
+    platformItem("TikTok", cfg.tiktokEnabled, stats, "tiktok"),
+    platformItem("Threads", cfg.threadsEnabled, stats, "threads"),
     ["Storage", Boolean(cfg.uploadDriver), (cfg.uploadDriver || "local").toUpperCase()],
     ["Publish", cfg.autoPublish && !cfg.dryRun, cfg.dryRun ? "dry-run" : cfg.autoPublish ? "auto" : "manual"],
     ["Queue cap", stats.activeQueue <= stats.dailyLimit, `${stats.dailyLimit}/day`]
@@ -438,6 +438,38 @@ function renderPlatforms(cfg, stats) {
     </article>
   `).join("");
   els.platformCaption.textContent = stats.failedJobs ? `${stats.failedJobs} issue` : "Live";
+}
+
+function platformItem(label, envEnabled, stats, key) {
+  const activity = platformActivity(stats.jobs, key);
+  if (activity.active) {
+    return [label, true, envEnabled ? activity.value : "via Action"];
+  }
+  return [label, envEnabled, envEnabled ? "on" : "off"];
+}
+
+function platformActivity(jobs = [], key) {
+  const idKeys = {
+    instagram: ["instagram_media_id"],
+    facebook: ["facebook_video_id", "facebook_post_id", "facebook_url"],
+    youtube: ["youtube_video_id", "youtube_url"],
+    tiktok: ["tiktok_publish_id"],
+    threads: ["threads_media_id", "threads_url"]
+  };
+  const statusKey = `${key}_status`;
+  const activeStatuses = new Set(["published", "submitted", "processing", "queued"]);
+  const sorted = [...jobs].sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")));
+  const match = sorted.find((job) => {
+    const hasId = (idKeys[key] || []).some((field) => Boolean(job[field]));
+    const status = String(job[statusKey] || "").toLowerCase();
+    return hasId || activeStatuses.has(status);
+  });
+  if (!match) return { active: false, value: "off" };
+  const status = String(match[statusKey] || "").toLowerCase();
+  if (status === "submitted") return { active: true, value: "submitted" };
+  if (status === "queued") return { active: true, value: "queued" };
+  if (status === "processing") return { active: true, value: "processing" };
+  return { active: true, value: "active" };
 }
 
 function renderConsole(run) {
@@ -765,6 +797,7 @@ function effectSummary(cfg) {
   if (cfg.videoFilterEnabled) items.push("filter");
   if (cfg.videoWatermarkEnabled) items.push("wm");
   if (cfg.videoLowerThirdEnabled) items.push("quote");
+  if (cfg.backgroundMusicEnabled) items.push("music");
   return items.length ? items.join("+") : "manual";
 }
 

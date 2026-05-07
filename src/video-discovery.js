@@ -919,11 +919,12 @@ export async function discoverAndQueueVideos(options = {}) {
   const queueMaintenance = await expireOldAutoDiscoveryQueue(targetDate);
   const dailyQueueLimit = autoDiscoveryDailyQueueLimit();
   const currentDailyQueue = countDailyAutoDiscoveryQueue(queueMaintenance.videos, targetDate);
+  const ignoreDailyQueueLimit = options.ignoreDailyQueueLimit === true;
   const remainingDailyQueueSlots = dailyQueueLimit > 0
     ? Math.max(0, dailyQueueLimit - currentDailyQueue)
     : Number.POSITIVE_INFINITY;
 
-  if (dailyQueueLimit > 0 && remainingDailyQueueSlots <= 0) {
+  if (dailyQueueLimit > 0 && remainingDailyQueueSlots <= 0 && !ignoreDailyQueueLimit) {
     console.log(
       `AUTO DISCOVERY skip: queue harian ${targetDate} sudah ${currentDailyQueue}/${dailyQueueLimit}.`
     );
@@ -940,7 +941,9 @@ export async function discoverAndQueueVideos(options = {}) {
   const queries = listEnv("AUTO_DISCOVER_QUERY", DEFAULT_QUERIES);
   const maxResults = numberEnv("AUTO_DISCOVER_MAX_RESULTS", 4, 1, 25);
   const requestedAddCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 1, 1, 10);
-  const addCount = Math.min(requestedAddCount, remainingDailyQueueSlots);
+  const addCount = ignoreDailyQueueLimit
+    ? requestedAddCount
+    : Math.min(requestedAddCount, remainingDailyQueueSlots);
   const minDuration = numberEnv("AUTO_DISCOVER_MIN_DURATION_SECONDS", 600, 0, 86400);
   const maxDuration = numberEnv("AUTO_DISCOVER_MAX_DURATION_SECONDS", 10800, 60, 86400);
   const minViews = numberEnv("AUTO_DISCOVER_MIN_VIEWS", 25000, 0, 1000000000);

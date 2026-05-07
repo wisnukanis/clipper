@@ -118,6 +118,10 @@ def cfg():
         "download_max_height": parse_int(os.environ.get("DOWNLOAD_MAX_HEIGHT"), 720),
         "download_crf": parse_int(os.environ.get("DOWNLOAD_COMPRESS_CRF"), 30),
         "final_crf": parse_int(os.environ.get("FINAL_RENDER_CRF"), 27),
+        "background_music_enabled": parse_int(os.environ.get("BACKGROUND_MUSIC_ENABLED"), 0),
+        "background_music_file": os.environ.get("BACKGROUND_MUSIC_FILE", ""),
+        "background_music_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_VOLUME"), 0.08),
+        "background_music_original_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_ORIGINAL_VOLUME"), 1.0),
         "subtitle_offset": parse_float(os.environ.get("SUBTITLE_OFFSET_SECONDS"), 0.0),
         "smart_crop": parse_int(os.environ.get("SMART_CROP_ENABLED"), 1),
         "smart_crop_mode": os.environ.get("SMART_CROP_MODE", "auto"),
@@ -3377,6 +3381,7 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
                 confidence_rise_alpha=float(config.get("dynamic_zoom_confidence_rise", 0.24)),
                 transition_lead_seconds=float(config.get("dynamic_zoom_transition_lead", 0.25)),
             )
+            apply_background_music(final_clip, config, job_id, index)
             log_progress(
                 "render",
                 progress_base + progress_span * 0.98,
@@ -3399,6 +3404,7 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
             note="ffmpeg",
         )
         run_render(source_clip, final_clip, subtitle_vf, config)
+        apply_background_music(final_clip, config, job_id, index)
         log_progress(
             "render",
             progress_base + progress_span * 0.98,
@@ -3411,9 +3417,11 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
         log_warn(f"Render smart/subtitle gagal, coba crop tengah dengan subtitle: {exc}")
         try:
             run_render(source_clip, final_clip, f"{centered_vf},subtitles='{subtitle_path}'", config)
+            apply_background_music(final_clip, config, job_id, index)
         except subprocess.CalledProcessError as fallback_exc:
             log_warn(f"Render subtitle gagal, fallback tanpa hardsub: {fallback_exc}")
             run_render(source_clip, final_clip, centered_vf, config)
+            apply_background_music(final_clip, config, job_id, index)
 
     log_progress(
         "render",
@@ -3476,6 +3484,107 @@ def run_render(source_clip, final_clip, vf, config):
             str(final_clip),
         ]
     )
+
+
+def resolve_background_music_path(config):
+    if int(config.get("background_music_enabled", 0)) != 1:
+        return None
+    raw = str(config.get("background_music_file") or "").strip()
+    if not raw:
+        log_warn("BACKGROUND_MUSIC_ENABLED=1 tapi BACKGROUND_MUSIC_FILE kosong.")
+        return None
+    path = Path(raw)
+    candidates = [path] if path.is_absolute() else [ROOT.parent / path, ROOT / path]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    log_warn(f"File backsound tidak ditemukan: {raw}")
+    return None
+
+
+def has_audio_stream(video_path):
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                str(video_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return bool((result.stdout or "").strip())
+    except Exception:
+        return True
+
+
+def apply_background_music(video_path, config, job_id, index):
+    music_path = resolve_background_music_path(config)
+    if not music_path:
+        return
+
+    video_path = Path(video_path)
+    mixed_path = ROOT / "temp" / f"{job_id}-clip-{index + 1:02d}-backsound.mp4"
+    music_volume = max(0.0, min(1.0, float(config.get("background_music_volume", 0.08))))
+    original_volume = max(0.0, min(2.0, float(config.get("background_music_original_volume", 1.0))))
+    source_has_audio = has_audio_stream(video_path)
+
+    if source_has_audio:
+        filter_complex = (
+            f"[0:a]volume={original_volume},aresample=48000[a0];"
+            f"[1:a]volume={music_volume},aresample=48000[a1];"
+            "[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        )
+    else:
+        filter_complex = f"[1:a]volume={music_volume},aresample=48000[aout]"
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        "-stream_loop",
+        "-1",
+        "-i",
+        str(music_path),
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "0:v:0",
+        "-map",
+        "[aout]",
+        "-map_metadata",
+        "-1",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-ar",
+        "48000",
+        "-ac",
+        "2",
+        "-b:a",
+        "128k",
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        str(mixed_path),
+    ]
+
+    try:
+        log_info(f"Mix backsound: {music_path.name} volume={music_volume}")
+        run(cmd)
+        mixed_path.replace(video_path)
+    except Exception as exc:
+        log_warn(f"Mix backsound gagal, pakai audio original: {exc}")
 
 
 def parse_range(value, index):

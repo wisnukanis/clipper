@@ -73,7 +73,8 @@ export async function runWorkflow(options = {}) {
     try {
       discoveryResult = await discoverAndQueueVideos({
         theme: options.theme || config.defaultTheme,
-        targetDate: todayDate()
+        targetDate: todayDate(),
+        ignoreDailyQueueLimit: !options.scheduled
       });
       await appendLog("discovery_result", {
         skipped: Boolean(discoveryResult?.skipped),
@@ -96,12 +97,16 @@ export async function runWorkflow(options = {}) {
     if (discoveredVideoIds.length) {
       selection = await selectNextVideo({
         theme: options.theme || config.defaultTheme,
-        preferredVideoIds: discoveredVideoIds
+        preferredVideoIds: discoveredVideoIds,
+        forceReprocess: options.forceReprocess === true
       });
     }
 
     if (!selection) {
-      selection = await selectNextVideo({ theme: options.theme || config.defaultTheme });
+      selection = await selectNextVideo({
+        theme: options.theme || config.defaultTheme,
+        forceReprocess: options.forceReprocess === true
+      });
     }
   }
 

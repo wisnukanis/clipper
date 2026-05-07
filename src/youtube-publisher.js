@@ -187,18 +187,23 @@ export function buildYoutubeMetadata({ job, output, caption }) {
   const rawTitle = normalizeTitleWithPerson(config.youtube.titlePrefix, hook, person);
   const hashtags = buildYoutubeHashtags({ theme, person, caption, context });
   const firstLine = firstStrongLine(caption) || cleanText(output.clipTranscript || output.caption || hook).slice(0, 180);
-  const insight = cleanText(output.reason || output.selectedAngle || output.hook || hook);
+  const angle = cleanText(output.selectedAngle || output.reason || output.hook || hook);
+  const insight = cleanText(output.reason || output.hook || output.clipTranscript || hook).slice(0, 220);
   const dynamicTags = tagsFromCaption(caption);
+  const retentionLine = buildRetentionLine({ angle, theme });
 
   const descriptionParts = [
     firstLine,
     "",
-    `Topik: ${theme}`,
-    `Tokoh/Sumber: ${person}`,
-    output.title ? `Sumber: ${cleanText(output.title)}` : "",
-    insight ? `Pelajaran utama: ${insight}` : "",
+    retentionLine,
+    insight ? `Poin utama: ${insight}` : "",
+    angle && angle !== insight ? `Sudut clip: ${angle}` : "",
     "",
-    "Tonton sampai akhir untuk poin pentingnya.",
+    `Topik: ${theme}`,
+    `Sumber: ${person}`,
+    output.title ? `Referensi: ${cleanText(output.title)}` : "",
+    "",
+    "Tonton sampai akhir supaya konteksnya tidak setengah.",
     "",
     hashtags.join(" "),
     config.youtube.descriptionFooter
@@ -211,9 +216,13 @@ export function buildYoutubeMetadata({ job, output, caption }) {
     tags: normalizeTags([
       ...config.youtube.tags,
       ...dynamicTags,
+      "shorts indonesia",
+      "podcast indonesia",
+      "podcast viral",
+      "highlight podcast",
       theme,
       person,
-      ...keywordsFromText(`${hook} ${person} ${theme} ${output.title || ""} ${output.hook || ""}`)
+      ...keywordsFromText(`${hook} ${person} ${theme} ${angle} ${output.title || ""} ${output.hook || ""}`)
     ])
   };
 }
@@ -225,9 +234,10 @@ function sleep(ms) {
 function buildHookTitle({ job, output, caption, theme = "inspirasi" }) {
   const firstLine = firstStrongLine(caption);
   const candidates = [
+    output.thumbnailText,
+    output.selectedAngle,
     firstLine,
     output.hook,
-    output.thumbnailText,
     output.title,
     job.source_title,
     job.theme
@@ -243,9 +253,31 @@ function buildHookTitle({ job, output, caption, theme = "inspirasi" }) {
 function normalizeTitleWithPerson(prefix, hook, person) {
   const cleanHook = shortTopic(hook);
   const cleanPerson = cleanText(person);
-  const withPerson = [prefix, `${cleanHook} - ${cleanPerson}`, "#Shorts"].filter(Boolean).join(" ");
+  const personSuffix = cleanPerson && !cleanHook.toLowerCase().includes(cleanPerson.toLowerCase())
+    ? ` - ${cleanPerson}`
+    : "";
+  const withPerson = [prefix, `${cleanHook}${personSuffix}`, "#Shorts"].filter(Boolean).join(" ");
   if (withPerson.length <= 100) return withPerson;
   return [prefix, cleanHook, "#Shorts"].filter(Boolean).join(" ").slice(0, 100);
+}
+
+function buildRetentionLine({ angle, theme }) {
+  const cleanAngle = cleanText(angle);
+  if (cleanAngle && cleanAngle.length >= 18) {
+    return `Kenapa ini menarik: ${cleanAngle}`;
+  }
+  const fallback = {
+    bisnis: "Kenapa ini menarik: ada cara pandang bisnis yang jarang dibahas.",
+    leadership: "Kenapa ini menarik: ada pelajaran memimpin yang bisa langsung terasa.",
+    motivasi: "Kenapa ini menarik: pesannya sederhana, tapi bisa kena ke banyak orang.",
+    karir: "Kenapa ini menarik: ada nasihat karir yang sering luput.",
+    keuangan: "Kenapa ini menarik: ada sudut pandang uang yang penting dipahami.",
+    agama: "Kenapa ini menarik: pengingatnya singkat dan mudah direnungkan.",
+    keadilan: "Kenapa ini menarik: ada konflik dan sikap yang kuat.",
+    podcast: "Kenapa ini menarik: potongan obrolannya punya hook yang kuat.",
+    inspirasi: "Kenapa ini menarik: ada pesan yang mudah dibagikan."
+  };
+  return fallback[theme] || fallback.inspirasi;
 }
 
 function firstStrongLine(value) {
@@ -330,8 +362,32 @@ function detectPerson({ job, output, caption }) {
   const foundKnown = known.find((name) => new RegExp(`\\b${name.replace(/\s+/g, "\\s+")}\\b`, "i").test(text));
   if (foundKnown) return foundKnown;
 
-  const match = text.match(/\b[A-Z][\p{L}\p{N}]+(?:\s+[A-Z][\p{L}\p{N}]+){1,2}/u);
-  return match ? cleanText(match[0]) : "";
+  const matches = text.matchAll(/\b[A-Z][\p{L}\p{N}]+(?:\s+[A-Z][\p{L}\p{N}]+){1,2}/gu);
+  for (const match of matches) {
+    const name = cleanText(match[0]);
+    if (isLikelyPersonName(name)) return name;
+  }
+  return "";
+}
+
+function isLikelyPersonName(value) {
+  const generic = new Set([
+    "podcast",
+    "clip",
+    "shorts",
+    "indonesia",
+    "ternyata",
+    "rahasia",
+    "cerita",
+    "kenapa",
+    "momen",
+    "viral",
+    "highlight"
+  ]);
+  const words = cleanText(value).split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 3) return false;
+  if (generic.has(words[0].toLowerCase()) || generic.has(words[words.length - 1].toLowerCase())) return false;
+  return words.some((word) => !generic.has(word.toLowerCase()));
 }
 
 function buildYoutubeHashtags({ theme, person, caption, context }) {

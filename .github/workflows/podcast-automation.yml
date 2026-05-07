@@ -63,6 +63,18 @@ on:
         description: "Apply transparent logo watermark: true/false"
         required: false
         default: "true"
+      background_music_enabled:
+        description: "Mix local backsound: 0/1"
+        required: false
+        default: ""
+      background_music_file:
+        description: "Path backsound, example assets/music/backsound.mp3"
+        required: false
+        default: ""
+      background_music_volume:
+        description: "Backsound volume, example 0.08"
+        required: false
+        default: ""
       ai_provider:
         description: "AI teks dikunci ke OpenAI; input lama diabaikan"
         required: false
@@ -255,6 +267,10 @@ jobs:
       VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
       VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}
       VIDEO_EFFECT_PRESET: ${{ secrets.VIDEO_EFFECT_PRESET || 'veryfast' }}
+      BACKGROUND_MUSIC_ENABLED: ${{ github.event.inputs.background_music_enabled || secrets.BACKGROUND_MUSIC_ENABLED || '0' }}
+      BACKGROUND_MUSIC_FILE: ${{ github.event.inputs.background_music_file || secrets.BACKGROUND_MUSIC_FILE || '' }}
+      BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.08' }}
+      BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '1.0' }}
       THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Podcast | Highlight | Viral' }}
       THUMBNAIL_INTRO_ENABLED: ${{ secrets.THUMBNAIL_INTRO_ENABLED || 'true' }}
       THUMBNAIL_INTRO_SECONDS: ${{ secrets.THUMBNAIL_INTRO_SECONDS || '0.9' }}
@@ -410,7 +426,7 @@ jobs:
 
           exit "$missing"
 
-      - name: Enable social uploads when credentials exist
+      - name: Validate social upload toggles
         shell: bash
         run: |
           normalize_bool() {
@@ -421,21 +437,25 @@ jobs:
           }
 
           if normalize_bool "$INSTAGRAM_UPLOAD_ENABLED"; then
-            echo "INSTAGRAM_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
-          else
             if [ -n "$INSTAGRAM_IG_USER_ID" ] && [ -n "$INSTAGRAM_ACCESS_TOKEN" ]; then
-              echo "::notice::Instagram credential tersedia; INSTAGRAM_UPLOAD_ENABLED diaktifkan untuk run ini."
               echo "INSTAGRAM_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            else
+              echo "::notice::Instagram credential token belum lengkap; INSTAGRAM_UPLOAD_ENABLED dimatikan untuk run ini."
+              echo "INSTAGRAM_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
             fi
+          else
+            echo "INSTAGRAM_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
           fi
 
           if normalize_bool "$FACEBOOK_UPLOAD_ENABLED"; then
-            echo "FACEBOOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
-          else
             if [ -n "$FACEBOOK_PAGE_ID" ] && { [ -n "$FACEBOOK_PAGE_ACCESS_TOKEN" ] || [ -n "$FACEBOOK_USER_ACCESS_TOKEN" ]; }; then
-              echo "::notice::Facebook credential tersedia; FACEBOOK_UPLOAD_ENABLED diaktifkan untuk run ini."
               echo "FACEBOOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
+            else
+              echo "::notice::Facebook credential belum lengkap; FACEBOOK_UPLOAD_ENABLED dimatikan untuk run ini."
+              echo "FACEBOOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
             fi
+          else
+            echo "FACEBOOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
           fi
 
           if normalize_bool "$TIKTOK_UPLOAD_ENABLED"; then
@@ -446,10 +466,7 @@ jobs:
               echo "TIKTOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
             fi
           else
-            if [ -n "$TIKTOK_CLIENT_KEY" ] && [ -n "$TIKTOK_CLIENT_SECRET" ] && { [ -n "$TIKTOK_ACCESS_TOKEN" ] || [ -n "$TIKTOK_REFRESH_TOKEN" ]; }; then
-              echo "::notice::TikTok credential tersedia; TIKTOK_UPLOAD_ENABLED diaktifkan untuk run ini."
-              echo "TIKTOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
-            fi
+            echo "TIKTOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
           fi
 
           if normalize_bool "$THREADS_UPLOAD_ENABLED"; then
@@ -460,10 +477,7 @@ jobs:
               echo "THREADS_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
             fi
           else
-            if [ -n "$THREADS_ACCESS_TOKEN" ]; then
-              echo "::notice::Threads credential tersedia; THREADS_UPLOAD_ENABLED diaktifkan untuk run ini."
-              echo "THREADS_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
-            fi
+            echo "THREADS_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
           fi
 
       - name: Refresh Instagram token if possible
