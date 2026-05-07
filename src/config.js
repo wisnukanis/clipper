@@ -65,8 +65,6 @@ function encodePathSegment(value) {
 }
 
 function buildConfig() {
-  const geminiApiKeys = listEnv("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS");
-  const aiProvider = cleanText(process.env.AI_PROVIDER || "openai").toLowerCase();
   const openaiModels = listEnv("OPENAI_MODELS");
   const openaiModel = cleanText(process.env.OPENAI_MODEL || "gpt-4.1-nano");
   const deepgramApiKeys = cleanText(process.env.DEEPGRAM_API_KEYS)
@@ -179,15 +177,8 @@ function buildConfig() {
     },
     instagramIgUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
     instagramAccessToken: cleanText(process.env.INSTAGRAM_ACCESS_TOKEN),
-    gemini: {
-      apiKey: geminiApiKeys[0] || "",
-      apiKeys: geminiApiKeys,
-      model: cleanText(process.env.GEMINI_MODEL || "gemini-flash-latest"),
-      temperature: numberEnv("GEMINI_TEMPERATURE", 0.75),
-      requestTimeoutMs: numberEnv("AI_REQUEST_TIMEOUT_SECONDS", 25) * 1000
-    },
     ai: {
-      provider: ["gemini", "openai"].includes(aiProvider) ? aiProvider : "openai"
+      provider: "openai"
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || "",
@@ -195,12 +186,6 @@ function buildConfig() {
       models: uniqueList([openaiModel, "gpt-4.1-nano", ...openaiModels, "gpt-5-nano", "gpt-4o-mini"]),
       temperature: numberEnv("OPENAI_TEMPERATURE", 0.45),
       requestTimeoutMs: numberEnv("AI_REQUEST_TIMEOUT_SECONDS", 25) * 1000
-    },
-    clod: {
-      apiKey: process.env.CLOD_API_KEY || "",
-      baseUrl: cleanBaseUrl(process.env.CLOD_BASE_URL || "https://api.clod.io/v1"),
-      model: cleanText(process.env.CLOD_MODEL || "DeepSeek V3"),
-      temperature: numberEnv("CLOD_TEMPERATURE", 0.45)
     },
     deepgram: {
       enabled: boolEnv("DEEPGRAM_ENABLED", true),

@@ -13,7 +13,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FAILED_GEMINI_KEYS = set()
 FAILED_OPENAI_MODELS = set()
 
 
@@ -101,9 +100,7 @@ def cfg():
     ]))
 
     return {
-        "gemini_keys": parse_keys_from_env("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEYS"),
-        "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
-        "ai_provider": os.environ.get("AI_PROVIDER", "openai").strip().lower(),
+        "ai_provider": "openai",
         "openai_model": openai_model,
         "openai_models": openai_models,
         "ai_request_timeout": parse_int(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS"), 25),
@@ -900,16 +897,21 @@ def transcribe_audio(audio_path, job_id, config):
 
     if provider == "offline":
         log_info("TRANSCRIBE_PROVIDER=offline. Deepgram dilewati.")
+        config["last_transcript_source"] = "offline"
         return transcribe_offline(audio_path, job_id, config)
 
     if provider in {"auto", "deepgram"} and int(config.get("deepgram_enabled", 0)) == 1:
         if config.get("deepgram_keys"):
             try:
-                return transcribe_deepgram(audio_path, job_id, config)
+                result = transcribe_deepgram(audio_path, job_id, config)
+                config["last_transcript_source"] = "deepgram"
+                return result
             except Exception as exc:
                 log_warn(f"Deepgram gagal total: {exc}")
                 try:
-                    return transcribe_openai(audio_path, job_id, config)
+                    result = transcribe_openai(audio_path, job_id, config)
+                    config["last_transcript_source"] = "openai"
+                    return result
                 except Exception as openai_exc:
                     log_warn(f"OpenAI transcription fallback gagal: {openai_exc}")
                     if provider == "deepgram":
@@ -918,7 +920,9 @@ def transcribe_audio(audio_path, job_id, config):
         else:
             log_warn("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi.")
             try:
-                return transcribe_openai(audio_path, job_id, config)
+                result = transcribe_openai(audio_path, job_id, config)
+                config["last_transcript_source"] = "openai"
+                return result
             except Exception as openai_exc:
                 log_warn(f"OpenAI transcription fallback gagal: {openai_exc}")
     elif provider == "deepgram":
@@ -926,6 +930,7 @@ def transcribe_audio(audio_path, job_id, config):
     else:
         log_warn("TRANSCRIBE_PROVIDER=auto tanpa Deepgram aktif. Pakai faster-whisper offline.")
 
+    config["last_transcript_source"] = "offline"
     return transcribe_offline(audio_path, job_id, config)
 
 
@@ -1028,39 +1033,6 @@ def extract_json(text):
     return data
 
 
-def call_gemini(prompt, api_key, model, timeout=25):
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    payload = json.dumps(
-        {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": 0.2,
-                "responseMimeType": "application/json",
-            },
-        }
-    ).encode("utf-8")
-
-    request = urllib.request.Request(
-        endpoint,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "X-goog-api-key": api_key,
-        },
-        method="POST",
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=max(5, int(timeout or 25))) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"Gemini HTTP {exc.code}: {detail}") from exc
-
-    parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-    return "".join(part.get("text", "") for part in parts)
-
-
 def openai_output_text(data):
     if data.get("output_text"):
         return str(data.get("output_text")).strip()
@@ -1103,23 +1075,7 @@ def call_openai_text(prompt, config, model=None):
 
 
 def call_json_with_ai_fallback(prompt, config, label):
-    provider = str(config.get("ai_provider") or "openai").lower()
     last_error = None
-
-    def try_gemini():
-        nonlocal last_error
-        for index, key in enumerate(config.get("gemini_keys") or []):
-            cache_key = f"{config['gemini_model']}:{index}:{str(key)[-8:]}"
-            if cache_key in FAILED_GEMINI_KEYS:
-                continue
-            try:
-                log_info(f"{label} memakai Gemini key {index + 1}/{len(config.get('gemini_keys') or [])}")
-                return extract_json(call_gemini(prompt, key, config["gemini_model"], config.get("ai_request_timeout", 25)))
-            except Exception as exc:
-                last_error = exc
-                FAILED_GEMINI_KEYS.add(cache_key)
-                log_warn(f"Gemini gagal: {exc}")
-        return None
 
     def try_openai():
         nonlocal last_error
@@ -1137,18 +1093,11 @@ def call_json_with_ai_fallback(prompt, config, label):
                 log_warn(f"OpenAI {model} gagal: {exc}")
         return None
 
-    result = try_openai() if provider == "openai" else try_gemini()
+    result = try_openai()
     if result is not None:
         return result
 
-    if provider == "openai":
-        raise RuntimeError(str(last_error or "OpenAI AI provider gagal."))
-
-    result = try_gemini() if provider == "openai" else try_openai()
-    if result is not None:
-        return result
-
-    raise RuntimeError(str(last_error or "Semua AI provider gagal."))
+    raise RuntimeError(str(last_error or "OpenAI AI provider gagal."))
 
 
 def segment_text_window(segments, start, end, max_chars=180):
@@ -1599,7 +1548,7 @@ Segmen subtitle:
 {json.dumps(items, ensure_ascii=False, indent=2)}
 """
 
-        fixed_items = call_gemini_for_transcript_review(prompt, config)
+        fixed_items = call_openai_for_transcript_review(prompt, config)
         for item in fixed_items:
             try:
                 idx = int(item.get("i"))
@@ -1646,7 +1595,7 @@ Segmen subtitle:
     return reviewed, review_path
 
 
-def call_gemini_for_transcript_review(prompt, config):
+def call_openai_for_transcript_review(prompt, config):
     try:
         data = call_json_with_ai_fallback(prompt, config, "Review subtitle")
         return data if isinstance(data, list) else []
@@ -3593,7 +3542,7 @@ def main():
             audio_path = download_audio(args.url, job_id)
             log_progress("transcript", 8, note="audio_ready")
             segments = transcribe_audio(audio_path, job_id, config)
-            transcript_source = config.get("transcribe_provider", "offline")
+            transcript_source = config.get("last_transcript_source") or config.get("transcribe_provider", "offline")
             log_progress("transcript", 22, note=transcript_source)
 
     if not segments and not args.range:

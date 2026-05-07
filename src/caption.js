@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateAiText } from "./gemini.js";
+import { generateAiText } from "./ai.js";
 
 async function readClipContext(clipperRoot, output) {
   const parts = [output.title, output.hook, output.caption, output.reason].filter(Boolean);

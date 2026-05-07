@@ -156,48 +156,6 @@ async function checkDeepgram(online) {
   );
 }
 
-async function checkGemini(online, required = true) {
-  if (!config.gemini.apiKeys.length) {
-    return checkResult("Gemini", false, "GEMINI_API_KEYS / GEMINI_API_KEY belum diisi", required);
-  }
-
-  if (!online) {
-    return checkResult("Gemini", true, `${config.gemini.apiKeys.length} key terkonfigurasi`, required);
-  }
-
-  const results = await Promise.all(config.gemini.apiKeys.map(async (apiKey, index) => {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.gemini.model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    try {
-      await fetchJson(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: "Balas OK saja." }] }],
-          generationConfig: { maxOutputTokens: 4, temperature: 0 }
-        })
-      });
-      return { ok: true, index };
-    } catch (error) {
-      return { ok: false, index, error };
-    }
-  }));
-
-  const validCount = results.filter((result) => result.ok).length;
-  const failures = results
-    .filter((result) => !result.ok)
-    .map((result) => `key ${result.index + 1}: ${result.error.message}`);
-
-  if (!validCount) {
-    return checkResult("Gemini", false, failures.join("; "), required);
-  }
-
-  const detail = failures.length
-    ? `${validCount}/${config.gemini.apiKeys.length} key valid; gagal: ${failures.join("; ")}`
-    : `${validCount} key valid, model ${config.gemini.model}`;
-
-  return checkResult("Gemini", true, detail, required);
-}
-
 async function checkOpenAi(online, required = false) {
   if (!config.openai.apiKey) {
     return checkResult("OpenAI API", false, "OPENAI_API_KEY belum diisi", required);
@@ -236,12 +194,6 @@ async function checkOpenAi(online, required = false) {
 }
 
 async function aiChecks(online) {
-  if (config.ai.provider === "openai") {
-    return [await checkOpenAi(online, false)];
-  }
-  if (config.ai.provider === "gemini") {
-    return [await checkGemini(online, false)];
-  }
   return [await checkOpenAi(online, false)];
 }
 

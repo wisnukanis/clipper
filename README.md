@@ -82,7 +82,7 @@ yt-dlp
 FFmpeg
 Python
 Deepgram
-Gemini
+OpenAI
 OpenCV
 MediaPipe
 cookies YouTube
@@ -790,22 +790,12 @@ PUBLIC_BASE_URL=https://www.example.com/ig-generated
 UPLOAD_DRIVER=sftp
 AI_PROVIDER=openai
 
-GEMINI_API_KEY=
-GEMINI_API_KEY_2=
-GEMINI_API_KEY_3=
-GEMINI_API_KEYS=
-GEMINI_MODEL=gemini-flash-latest
-GEMINI_TEMPERATURE=0.85
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-nano
 OPENAI_MODELS=gpt-4.1-nano,gpt-5-nano,gpt-4o-mini
 OPENAI_TEMPERATURE=0.45
 OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 AI_REQUEST_TIMEOUT_SECONDS=25
-CLOD_API_KEY=
-CLOD_BASE_URL=https://api.clod.io/v1
-CLOD_MODEL=DeepSeek V3
-CLOD_TEMPERATURE=0.45
 
 SFTP_HOST=
 SFTP_PORT=65002
@@ -1016,11 +1006,11 @@ Jumlah maksimal polling container Threads sebelum dianggap belum siap. Default: 
 
 #### `AI_PROVIDER`
 
-Provider AI untuk caption, thumbnail, review subtitle, dan pemilihan highlight. Default produksi: `openai`. Transkripsi tetap memakai Deepgram.
+Provider AI untuk caption, thumbnail, review subtitle, dan pemilihan highlight dikunci ke `openai`. Transkripsi tetap memakai Deepgram, lalu fallback ke OpenAI hanya jika Deepgram gagal.
 
 #### `OPENAI_API_KEY`
 
-API key OpenAI untuk opsi `AI_PROVIDER=openai`.
+API key OpenAI untuk semua AI teks.
 
 #### `OPENAI_MODEL`
 
@@ -1036,43 +1026,7 @@ Fallback transkripsi OpenAI jika semua key Deepgram gagal. Default: `gpt-4o-mini
 
 #### `AI_REQUEST_TIMEOUT_SECONDS`
 
-Timeout AI teks per request agar workflow tidak lama saat Gemini/OpenAI sedang gagal. Default: `25`.
-
-#### `GEMINI_API_KEY`
-
-API key utama Gemini.
-
-#### `GEMINI_API_KEY_2`, `GEMINI_API_KEY_3`
-
-Key cadangan jika key utama limit atau error.
-
-#### `GEMINI_API_KEYS`
-
-Daftar banyak key dalam satu variabel.
-
-#### `GEMINI_MODEL`
-
-Model Gemini yang digunakan.
-
-#### `GEMINI_TEMPERATURE`
-
-Mengatur kreativitas AI.
-
-#### `CLOD_API_KEY`
-
-API key CLOD sebagai fallback jika Gemini sedang limit atau error.
-
-#### `CLOD_BASE_URL`
-
-Endpoint OpenAI-compatible CLOD. Default: `https://api.clod.io/v1`.
-
-#### `CLOD_MODEL`
-
-Model CLOD yang dipakai untuk fallback caption, thumbnail, highlight, dan review transkrip.
-
-#### `CLOD_TEMPERATURE`
-
-Mengatur kreativitas output CLOD.
+Timeout AI teks per request agar workflow tidak lama saat OpenAI sedang gagal. Default: `25`.
 
 #### `FTP_HOST`
 
@@ -1281,11 +1235,8 @@ DEEPGRAM_TIMEOUT_SECONDS=900
 DEEPGRAM_AUDIO_BITRATE=32k
 DEEPGRAM_AUDIO_SAMPLE_RATE=16000
 
-GEMINI_API_KEYS=
-GEMINI_MODEL=gemini-flash-latest
-CLOD_API_KEY=
-CLOD_BASE_URL=https://api.clod.io/v1
-CLOD_MODEL=DeepSeek V3
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-nano
 
 CLIP_COUNT=1
 MIN_CLIP_SECONDS=40
@@ -1377,13 +1328,9 @@ Bitrate audio sementara yang dikirim ke Deepgram.
 
 Sample rate audio sementara yang dikirim ke Deepgram.
 
-#### `GEMINI_API_KEYS`
+#### `OPENAI_API_KEY`
 
-Key Gemini untuk analisis transkrip dan pemilihan highlight.
-
-#### `GEMINI_MODEL`
-
-Model Gemini.
+Key OpenAI untuk analisis transkrip, review subtitle, caption, thumbnail, dan pemilihan highlight.
 
 #### `CLIP_COUNT`
 
@@ -1788,8 +1735,7 @@ access token
 FTP password
 Meta App Secret
 Deepgram key
-Gemini key
-CLOD key
+OpenAI key
 YouTube refresh token
 Facebook Page access token
 ```
