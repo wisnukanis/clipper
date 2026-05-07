@@ -146,7 +146,7 @@ jobs:
       FACEBOOK_VIDEO_STATE: ${{ secrets.FACEBOOK_VIDEO_STATE || 'PUBLISHED' }}
       FACEBOOK_TITLE_PREFIX: ${{ secrets.FACEBOOK_TITLE_PREFIX }}
 
-      YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'false' }}
+      YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'true' }}
 
       TIKTOK_UPLOAD_PAUSED: ${{ secrets.TIKTOK_UPLOAD_PAUSED || 'true' }}
       TIKTOK_UPLOAD_ENABLED: ${{ secrets.TIKTOK_UPLOAD_ENABLED || 'false' }}
@@ -710,10 +710,7 @@ jobs:
             exit 0
           fi
 
-          if ! node src/youtube-check.js; then
-            echo "::warning::YouTube refresh token tidak valid. YOUTUBE_UPLOAD_ENABLED dimatikan untuk run ini; platform lain tetap lanjut."
-            echo "YOUTUBE_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
-          fi
+          node src/youtube-check.js
 
       - name: Refresh TikTok token if possible
         shell: bash
