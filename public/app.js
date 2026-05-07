@@ -71,6 +71,7 @@ const els = {
   barCaption: document.querySelector("#barCaption"),
   platformGrid: document.querySelector("#platformGrid"),
   platformCaption: document.querySelector("#platformCaption"),
+  youtubeReconnectBtn: document.querySelector("#youtubeReconnectBtn"),
   runForm: document.querySelector("#runForm"),
   videoForm: document.querySelector("#videoForm"),
   consoleOutput: document.querySelector("#consoleOutput"),
@@ -421,10 +422,11 @@ function renderDailyBars(series) {
 }
 
 function renderPlatforms(cfg, stats) {
+  const youtubeNeedsReconnect = youtubeReconnectIssue(stats.jobs);
   const items = [
     platformItem("Instagram", cfg.instagramEnabled, stats, "instagram"),
     platformItem("Facebook", cfg.facebookEnabled, stats, "facebook"),
-    platformItem("YouTube", cfg.youtubeEnabled, stats, "youtube"),
+    platformItem("YouTube", cfg.youtubeEnabled, stats, "youtube", youtubeNeedsReconnect ? "reconnect" : ""),
     platformItem("TikTok", cfg.tiktokEnabled, stats, "tiktok", cfg.tiktokPaused ? "paused" : ""),
     platformItem("Threads", cfg.threadsEnabled, stats, "threads"),
     ["Storage", Boolean(cfg.uploadDriver), (cfg.uploadDriver || "local").toUpperCase()],
@@ -438,6 +440,15 @@ function renderPlatforms(cfg, stats) {
     </article>
   `).join("");
   els.platformCaption.textContent = stats.failedJobs ? `${stats.failedJobs} issue` : "Live";
+}
+
+function youtubeReconnectIssue(jobs = []) {
+  const latest = [...jobs]
+    .sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")))
+    .find((job) => job.youtube_status || job.youtube_error || job.error_message || job.youtube_url);
+  if (!latest || latest.youtube_url) return false;
+  const text = `${latest.youtube_status || ""} ${latest.youtube_error || ""} ${latest.error_message || ""}`;
+  return /invalid_grant|refresh token|reconnect/i.test(text);
 }
 
 function platformItem(label, envEnabled, stats, key, forcedValue = "") {
@@ -717,6 +728,26 @@ els.resetQueueBtn?.addEventListener("click", async () => {
   }
 });
 
+els.youtubeReconnectBtn?.addEventListener("click", async () => {
+  const popup = window.open("about:blank", "_blank");
+  els.youtubeReconnectBtn.disabled = true;
+  els.runStatus.textContent = "oauth";
+  els.runDetail.textContent = "Membuka Google OAuth untuk YouTube.";
+  try {
+    const auth = await api("/api/youtube/auth-url");
+    if (popup) popup.location.href = auth.url;
+    else window.location.href = auth.url;
+    els.runDetail.textContent = `Login YouTube dibuka. Redirect URI: ${auth.redirectUri}`;
+    els.consoleOutput.textContent = `YouTube OAuth Redirect URI\n${auth.redirectUri}`;
+    els.consoleMeta.textContent = "YouTube OAuth";
+  } catch (error) {
+    if (popup) popup.close();
+    handleApiError(error);
+  } finally {
+    els.youtubeReconnectBtn.disabled = false;
+  }
+});
+
 els.videoForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   setSubmittersDisabled(true);
@@ -789,6 +820,16 @@ document.addEventListener("visibilitychange", () => {
   if (authVisible) return;
   refresh().catch((error) => handleApiError(error));
   schedulePoll();
+});
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type !== "youtube-reconnect") return;
+  els.runStatus.textContent = event.data.ok ? "connected" : "oauth failed";
+  els.runDetail.textContent = event.data.ok
+    ? "YouTube tersambung ulang. Jalankan Preflight untuk cek token."
+    : "Reconnect YouTube gagal. Lihat tab OAuth.";
+  refresh().catch((error) => handleApiError(error));
 });
 
 startClock();

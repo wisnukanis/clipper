@@ -146,6 +146,7 @@ function buildConfig() {
       clientId: cleanText(process.env.YOUTUBE_CLIENT_ID),
       clientSecret: process.env.YOUTUBE_CLIENT_SECRET || "",
       refreshToken: process.env.YOUTUBE_REFRESH_TOKEN || "",
+      redirectUri: cleanText(process.env.YOUTUBE_REDIRECT_URI),
       privacyStatus: cleanText(process.env.YOUTUBE_PRIVACY_STATUS || "public"),
       categoryId: cleanText(process.env.YOUTUBE_CATEGORY_ID || "22"),
       tags: listEnv("YOUTUBE_TAGS"),

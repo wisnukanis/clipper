@@ -33,6 +33,7 @@
     "basic-ftp": "^5.3.1",
     "dotenv": "^16.4.7",
     "express": "^5.2.1",
+    "libsodium-wrappers": "^0.7.15",
     "node-cron": "^4.2.1",
     "ssh2-sftp-client": "^12.1.1"
   }

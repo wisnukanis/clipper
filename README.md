@@ -856,6 +856,8 @@ YOUTUBE_UPLOAD_ENABLED=true
 YOUTUBE_CLIENT_ID=
 YOUTUBE_CLIENT_SECRET=
 YOUTUBE_REFRESH_TOKEN=
+YOUTUBE_REDIRECT_URI=
+YOUTUBE_OAUTH_STATE_SECRET=
 YOUTUBE_PRIVACY_STATUS=public
 YOUTUBE_CATEGORY_ID=22
 YOUTUBE_TAGS=podcast,shorts,indonesia
@@ -1150,6 +1152,16 @@ Credential YouTube Data API untuk upload video.
 
 Workflow `YouTube Token Maintenance` mengecek token ini setiap hari dengan menukar refresh token menjadi access token baru. Kalau check gagal, GitHub Actions akan merah supaya token bisa dibuat ulang sebelum jadwal produksi terganggu. Untuk token jangka panjang, pastikan OAuth consent screen Google Cloud sudah berstatus `In production`; status `Testing` dapat membuat refresh token kedaluwarsa setelah 7 hari.
 
+Dashboard menyediakan tombol `Reconnect YouTube`. Tombol ini membuka OAuth Google dengan `access_type=offline` dan `prompt=consent`, lalu callback `/api/youtube/callback` menukar `code` menjadi refresh token baru. Tambahkan redirect URI yang ditampilkan dashboard ke Google Cloud OAuth Client, misalnya `https://dashboard.emsa.pro/api/youtube/callback`. Jika `GH_REPO_SECRET_TOKEN` tersedia, refresh token baru otomatis disimpan ke GitHub Secret `YOUTUBE_REFRESH_TOKEN`.
+
+#### `YOUTUBE_REDIRECT_URI`
+
+Redirect URI OAuth YouTube. Jika kosong, dashboard memakai origin request dan path `/api/youtube/callback`.
+
+#### `YOUTUBE_OAUTH_STATE_SECRET`
+
+Secret opsional untuk tanda tangan state OAuth YouTube. Jika kosong, sistem memakai `AUTO_DASHBOARD_PIN` atau `YOUTUBE_CLIENT_SECRET`.
+
 #### `YOUTUBE_PRIVACY_STATUS`
 
 Status privacy upload YouTube: `public`, `unlisted`, atau `private`.
@@ -1220,7 +1232,7 @@ Jumlah hari sebelum expired untuk mulai refresh token.
 
 #### `GH_REPO_SECRET_TOKEN`
 
-GitHub Secret opsional untuk menyimpan token Instagram hasil refresh kembali ke `INSTAGRAM_ACCESS_TOKEN`. Isi dengan PAT yang punya akses mengubah repository secrets. Tanpa ini, GitHub Actions tetap bisa memakai token hasil refresh untuk run saat itu, tapi secret untuk run berikutnya tidak ikut berubah.
+GitHub Secret opsional untuk menyimpan token platform hasil refresh atau reconnect kembali ke repository secrets, termasuk `INSTAGRAM_ACCESS_TOKEN`, `YOUTUBE_REFRESH_TOKEN`, dan token platform lain yang didukung. Isi dengan PAT yang punya akses mengubah repository secrets. Tanpa ini, GitHub Actions tetap bisa memakai token hasil refresh untuk run saat itu, tapi secret untuk run berikutnya tidak ikut berubah.
 
 ---
 

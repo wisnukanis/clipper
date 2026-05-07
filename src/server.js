@@ -10,6 +10,14 @@ import { makeId, todayDate } from "./job-id.js";
 import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { runPreflight } from "./preflight.js";
 import { exchangeTikTokCode, publishToTikTok } from "./tiktok.js";
+import {
+  buildYoutubeAuthUrl,
+  exchangeYoutubeCode,
+  persistYoutubeReconnect,
+  renderYoutubeCallbackPage,
+  requestOrigin,
+  verifyYoutubeOAuthState
+} from "./youtube-oauth.js";
 
 await ensureProjectDirs();
 await downloadStateFromRemote().catch(() => {});
@@ -42,6 +50,7 @@ const sensitiveEnvKeys = new Set([
   "META_APP_SECRET",
   "YOUTUBE_CLIENT_SECRET",
   "YOUTUBE_REFRESH_TOKEN",
+  "YOUTUBE_OAUTH_STATE_SECRET",
   "OPENAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "DEEPGRAM_API_KEYS",
@@ -169,6 +178,8 @@ const envGroups = [
       field("YOUTUBE_CLIENT_ID", "Client ID"),
       field("YOUTUBE_CLIENT_SECRET", "Client secret", true),
       field("YOUTUBE_REFRESH_TOKEN", "Refresh token", true),
+      field("YOUTUBE_REDIRECT_URI", "Redirect URI"),
+      field("YOUTUBE_OAUTH_STATE_SECRET", "OAuth state secret", true),
       field("YOUTUBE_PRIVACY_STATUS", "Privacy status"),
       field("YOUTUBE_CATEGORY_ID", "Category ID"),
       field("YOUTUBE_TAGS", "Tags"),
@@ -242,6 +253,7 @@ app.use((req, res, next) => {
 
   if (!req.path.startsWith("/api/")) return next();
   if (req.path === "/api/auth") return next();
+  if (req.path === "/api/youtube/callback") return next();
 
   if (!config.dashboardPin) {
     res.status(403).json({ error: "AUTO_DASHBOARD_PIN wajib diisi untuk akses remote." });
@@ -416,6 +428,48 @@ app.post("/api/tiktok/demo-publish", async (req, res) => {
     res.json({ ok: true, job_id: job.job_id, result });
   } catch (error) {
     res.status(400).json({ error: error.message, apiCode: error.apiCode || "" });
+  }
+});
+
+app.get("/api/youtube/auth-url", (req, res) => {
+  try {
+    const auth = buildYoutubeAuthUrl({ origin: requestOrigin(req.headers) });
+    res.json({
+      url: auth.url,
+      redirectUri: auth.redirectUri,
+      scope: auth.scope
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get("/api/youtube/callback", async (req, res) => {
+  try {
+    if (req.query?.error) {
+      throw new Error(String(req.query.error_description || req.query.error));
+    }
+    const state = verifyYoutubeOAuthState(String(req.query?.state || ""));
+    const token = await exchangeYoutubeCode({
+      code: String(req.query?.code || ""),
+      redirectUri: state.redirectUri
+    });
+    if (!token.refreshToken) {
+      throw new Error("Google tidak mengembalikan refresh_token. Ulangi Reconnect YouTube dan pastikan prompt consent muncul.");
+    }
+    const persist = await persistYoutubeReconnect({
+      refreshToken: token.refreshToken,
+      persistLocal: true,
+      persistGithub: true
+    });
+    reloadConfigFromEnv();
+    res.type("html").send(renderYoutubeCallbackPage({ ok: true, token, persist }));
+  } catch (error) {
+    res.status(400).type("html").send(renderYoutubeCallbackPage({
+      ok: false,
+      error: error.message,
+      persist: {}
+    }));
   }
 });
 
