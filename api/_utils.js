@@ -179,7 +179,7 @@ export function configSummary() {
     backgroundMusicEnabled: boolEnv("BACKGROUND_MUSIC_ENABLED", true),
     backgroundMusicFile: clean(process.env.BACKGROUND_MUSIC_FILE || ""),
     backgroundMusicMapFile: clean(process.env.BACKGROUND_MUSIC_MAP_FILE || "assets/music/music-map.json"),
-    backgroundMusicVolume: clean(process.env.BACKGROUND_MUSIC_VOLUME || "0.05"),
+    backgroundMusicVolume: clean(process.env.BACKGROUND_MUSIC_VOLUME || "0.06"),
     subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "550"),
     vercelDashboard: true
