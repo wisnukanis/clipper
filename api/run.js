@@ -32,7 +32,8 @@ export default async function handler(req, res) {
       subtitle_margin_h: clean(body.subtitle_margin_h || process.env.SUBTITLE_MARGIN_H || "180"),
       use_frame: boolInput(body.use_frame, boolEnv("VIDEO_FRAME_ENABLED", true)) ? "true" : "false",
       use_filter: boolInput(body.use_filter, boolEnv("VIDEO_FILTER_ENABLED", true)) ? "true" : "false",
-      use_watermark: boolInput(body.use_watermark, boolEnv("VIDEO_WATERMARK_ENABLED", true)) ? "true" : "false"
+      use_watermark: boolInput(body.use_watermark, boolEnv("VIDEO_WATERMARK_ENABLED", true)) ? "true" : "false",
+      background_music_enabled: boolInput(body.use_music, boolEnv("BACKGROUND_MUSIC_ENABLED", true)) ? "1" : "0"
     };
 
     const dispatch = await dispatchWorkflow(inputs);

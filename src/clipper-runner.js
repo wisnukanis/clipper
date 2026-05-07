@@ -3,6 +3,12 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { config } from "./config.js";
 
+function boolInput(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
 export async function runClipper({ video, job, onLog = () => {} }) {
   const clipperRoot = config.clipper.rootDir;
   const scriptPath = path.join(clipperRoot, "scripts", "clipper.py");
@@ -35,7 +41,8 @@ export async function runClipper({ video, job, onLog = () => {} }) {
     SUBTITLE_MARGIN_H: String(video.subtitle_margin_h || process.env.SUBTITLE_MARGIN_H || 180),
     SCENE_MODE: sceneMode,
     SMART_CROP_MODE: sceneMode,
-    THEME: String(video.theme || job.theme || config.defaultTheme || "")
+    THEME: String(video.theme || job.theme || config.defaultTheme || ""),
+    BACKGROUND_MUSIC_ENABLED: boolInput(video.use_music ?? job.use_music, boolInput(process.env.BACKGROUND_MUSIC_ENABLED, true)) ? "1" : "0"
   };
 
   onLog(`Running clipper: ${config.clipper.pythonCommand} ${args.join(" ")}`);

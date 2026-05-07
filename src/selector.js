@@ -83,6 +83,7 @@ export async function addVideo(input) {
     use_frame: boolInput(input.use_frame, boolInput(process.env.VIDEO_FRAME_ENABLED, true)),
     use_filter: boolInput(input.use_filter, boolInput(process.env.VIDEO_FILTER_ENABLED, true)),
     use_watermark: boolInput(input.use_watermark, boolInput(process.env.VIDEO_WATERMARK_ENABLED, true)),
+    use_music: boolInput(input.use_music, boolInput(process.env.BACKGROUND_MUSIC_ENABLED, true)),
     force_reprocess: input.force_reprocess === true,
     source_title: input.source_title || "",
     channel_title: input.channel_title || "",
@@ -157,6 +158,7 @@ export async function createJobRecord({ video, theme, prompt }) {
     use_frame: video.use_frame,
     use_filter: video.use_filter,
     use_watermark: video.use_watermark,
+    use_music: video.use_music,
     created_at: now,
     updated_at: now,
     published_at: "",
@@ -189,6 +191,7 @@ export function normalizeVideo(video) {
     use_frame: boolInput(video.use_frame, boolInput(process.env.VIDEO_FRAME_ENABLED, true)),
     use_filter: boolInput(video.use_filter, boolInput(process.env.VIDEO_FILTER_ENABLED, true)),
     use_watermark: boolInput(video.use_watermark, boolInput(process.env.VIDEO_WATERMARK_ENABLED, true)),
+    use_music: boolInput(video.use_music, boolInput(process.env.BACKGROUND_MUSIC_ENABLED, true)),
     force_reprocess: video.force_reprocess === true,
     active: video.active !== false,
     status: video.status || "queued"

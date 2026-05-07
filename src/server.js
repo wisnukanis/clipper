@@ -297,7 +297,7 @@ app.get("/api/state", async (_req, res) => {
       backgroundMusicEnabled: boolInput(process.env.BACKGROUND_MUSIC_ENABLED, true),
       backgroundMusicFile: process.env.BACKGROUND_MUSIC_FILE || "",
       backgroundMusicMapFile: process.env.BACKGROUND_MUSIC_MAP_FILE || "assets/music/music-map.json",
-      backgroundMusicVolume: process.env.BACKGROUND_MUSIC_VOLUME || "0.08",
+      backgroundMusicVolume: process.env.BACKGROUND_MUSIC_VOLUME || "0.05",
       aiProvider: config.ai.provider,
       subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
       subtitleMarginV: process.env.SUBTITLE_MARGIN_V || "550"
@@ -535,6 +535,7 @@ app.post("/api/run", async (req, res) => {
     useFrame: boolInput(body.use_frame, config.videoEffects.frameEnabled),
     useFilter: boolInput(body.use_filter, config.videoEffects.filterEnabled),
     useWatermark: boolInput(body.use_watermark, config.videoEffects.watermarkEnabled),
+    useMusic: boolInput(body.use_music, boolInput(process.env.BACKGROUND_MUSIC_ENABLED, true)),
     subtitleFont: body.subtitle_font || "Segoe UI Semibold",
     subtitleFontSize: Number(body.subtitle_font_size || 46),
     subtitleMarginV: Number(body.subtitle_margin_v || 550),

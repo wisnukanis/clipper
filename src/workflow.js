@@ -319,6 +319,7 @@ async function createManualSelection(options) {
     use_frame: options.useFrame,
     use_filter: options.useFilter,
     use_watermark: options.useWatermark,
+    use_music: options.useMusic,
     force_reprocess: options.forceReprocess === true,
     notes: "Ditambahkan dari CLI/manual run"
   });

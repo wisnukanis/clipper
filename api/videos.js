@@ -42,7 +42,8 @@ export default async function handler(req, res) {
         subtitle_margin_h: String(video.subtitle_margin_h || 180),
         use_frame: video.use_frame ? "true" : "false",
         use_filter: video.use_filter ? "true" : "false",
-        use_watermark: video.use_watermark ? "true" : "false"
+        use_watermark: video.use_watermark ? "true" : "false",
+        background_music_enabled: video.use_music ? "1" : "0"
       });
     }
 

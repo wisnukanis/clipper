@@ -121,7 +121,7 @@ def cfg():
         "background_music_enabled": parse_int(os.environ.get("BACKGROUND_MUSIC_ENABLED"), 0),
         "background_music_file": os.environ.get("BACKGROUND_MUSIC_FILE", "auto"),
         "background_music_map_file": os.environ.get("BACKGROUND_MUSIC_MAP_FILE", "assets/music/music-map.json"),
-        "background_music_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_VOLUME"), 0.08),
+        "background_music_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_VOLUME"), 0.05),
         "background_music_original_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_ORIGINAL_VOLUME"), 1.0),
         "theme": os.environ.get("THEME", ""),
         "subtitle_offset": parse_float(os.environ.get("SUBTITLE_OFFSET_SECONDS"), 0.0),
@@ -3569,7 +3569,7 @@ def select_music_track(config, clip):
             "id": "manual",
             "label": "Manual",
             "file": raw_file,
-            "volume": config.get("background_music_volume", 0.08),
+            "volume": config.get("background_music_volume", 0.05),
         }, None
 
     music_map, map_path = load_background_music_map(config)
@@ -3579,7 +3579,7 @@ def select_music_track(config, clip):
                 "id": "manual",
                 "label": "Manual",
                 "file": raw_file,
-                "volume": config.get("background_music_volume", 0.08),
+                "volume": config.get("background_music_volume", 0.05),
             }, None
         return {}, None
 
@@ -3656,7 +3656,7 @@ def apply_background_music(video_path, config, job_id, index, clip=None):
 
     video_path = Path(video_path)
     mixed_path = ROOT / "temp" / f"{job_id}-clip-{index + 1:02d}-backsound.mp4"
-    track_volume = parse_float(music_selection.get("volume"), config.get("background_music_volume", 0.08))
+    track_volume = parse_float(music_selection.get("volume"), config.get("background_music_volume", 0.05))
     music_volume = max(0.0, min(1.0, float(track_volume)))
     original_volume = max(0.0, min(2.0, float(config.get("background_music_original_volume", 1.0))))
     source_has_audio = has_audio_stream(video_path)

@@ -179,7 +179,7 @@ export function configSummary() {
     backgroundMusicEnabled: boolEnv("BACKGROUND_MUSIC_ENABLED", true),
     backgroundMusicFile: clean(process.env.BACKGROUND_MUSIC_FILE || ""),
     backgroundMusicMapFile: clean(process.env.BACKGROUND_MUSIC_MAP_FILE || "assets/music/music-map.json"),
-    backgroundMusicVolume: clean(process.env.BACKGROUND_MUSIC_VOLUME || "0.08"),
+    backgroundMusicVolume: clean(process.env.BACKGROUND_MUSIC_VOLUME || "0.05"),
     subtitleFont: clean(process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),
     subtitleMarginV: clean(process.env.SUBTITLE_MARGIN_V || "550"),
     vercelDashboard: true
@@ -301,6 +301,7 @@ export function buildVideo(input) {
     use_frame: boolInput(input.use_frame, boolEnv("VIDEO_FRAME_ENABLED", true)),
     use_filter: boolInput(input.use_filter, boolEnv("VIDEO_FILTER_ENABLED", true)),
     use_watermark: boolInput(input.use_watermark, boolEnv("VIDEO_WATERMARK_ENABLED", true)),
+    use_music: boolInput(input.use_music, boolEnv("BACKGROUND_MUSIC_ENABLED", true)),
     force_reprocess: input.force_reprocess === true,
     created_at: input.created_at || now,
     updated_at: now
