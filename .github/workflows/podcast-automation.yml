@@ -702,6 +702,19 @@ jobs:
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
 
+      - name: Validate YouTube token if possible
+        shell: bash
+        run: |
+          if [ "$YOUTUBE_UPLOAD_ENABLED" != "true" ]; then
+            echo "YouTube upload disabled."
+            exit 0
+          fi
+
+          if ! node src/youtube-check.js; then
+            echo "::warning::YouTube refresh token tidak valid. YOUTUBE_UPLOAD_ENABLED dimatikan untuk run ini; platform lain tetap lanjut."
+            echo "YOUTUBE_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
+          fi
+
       - name: Refresh TikTok token if possible
         shell: bash
         run: |
