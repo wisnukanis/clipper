@@ -425,7 +425,7 @@ function renderPlatforms(cfg, stats) {
     platformItem("Instagram", cfg.instagramEnabled, stats, "instagram"),
     platformItem("Facebook", cfg.facebookEnabled, stats, "facebook"),
     platformItem("YouTube", cfg.youtubeEnabled, stats, "youtube"),
-    platformItem("TikTok", cfg.tiktokEnabled, stats, "tiktok"),
+    platformItem("TikTok", cfg.tiktokEnabled, stats, "tiktok", cfg.tiktokPaused ? "paused" : ""),
     platformItem("Threads", cfg.threadsEnabled, stats, "threads"),
     ["Storage", Boolean(cfg.uploadDriver), (cfg.uploadDriver || "local").toUpperCase()],
     ["Publish", cfg.autoPublish && !cfg.dryRun, cfg.dryRun ? "dry-run" : cfg.autoPublish ? "auto" : "manual"],
@@ -440,7 +440,8 @@ function renderPlatforms(cfg, stats) {
   els.platformCaption.textContent = stats.failedJobs ? `${stats.failedJobs} issue` : "Live";
 }
 
-function platformItem(label, envEnabled, stats, key) {
+function platformItem(label, envEnabled, stats, key, forcedValue = "") {
+  if (forcedValue) return [label, false, forcedValue];
   const activity = platformActivity(stats.jobs, key);
   if (activity.active) {
     return [label, true, envEnabled ? activity.value : "via Action"];

@@ -1249,8 +1249,9 @@ VIDEO_LANGUAGE=id
 DOWNLOAD_MAX_HEIGHT=720
 DOWNLOAD_COMPRESS_CRF=30
 FINAL_RENDER_CRF=27
-BACKGROUND_MUSIC_ENABLED=0
-BACKGROUND_MUSIC_FILE=assets/music/backsound.mp3
+BACKGROUND_MUSIC_ENABLED=1
+BACKGROUND_MUSIC_FILE=auto
+BACKGROUND_MUSIC_MAP_FILE=assets/music/music-map.json
 BACKGROUND_MUSIC_VOLUME=0.08
 BACKGROUND_MUSIC_ORIGINAL_VOLUME=1.0
 
@@ -1374,11 +1375,15 @@ CRF render final.
 
 #### `BACKGROUND_MUSIC_ENABLED`
 
-Aktifkan backsound lokal saat render final. Default `0`.
+Aktifkan backsound lokal saat render final. Default workflow `1`.
 
 #### `BACKGROUND_MUSIC_FILE`
 
-Path file audio backsound yang kamu punya hak pakainya, misalnya `assets/music/backsound.mp3`.
+Path file audio backsound. Pakai `auto` agar renderer memilih dari `assets/music/music-map.json` berdasarkan tema dan kata kunci clip.
+
+#### `BACKGROUND_MUSIC_MAP_FILE`
+
+Path map backsound otomatis. Default `assets/music/music-map.json`.
 
 #### `BACKGROUND_MUSIC_VOLUME`
 

@@ -399,6 +399,9 @@ async function checkThreads(online, required = false) {
 
 async function checkTikTok(online, required = false) {
   if (!config.tiktok.enabled) {
+    if (config.tiktok.paused) {
+      return checkResult("TikTok Content Posting API", true, "TIKTOK_UPLOAD_PAUSED=true", false);
+    }
     return checkResult("TikTok Content Posting API", true, "TIKTOK_UPLOAD_ENABLED=false", false);
   }
 

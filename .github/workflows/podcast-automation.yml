@@ -66,11 +66,15 @@ on:
       background_music_enabled:
         description: "Mix local backsound: 0/1"
         required: false
-        default: ""
+        default: "1"
       background_music_file:
-        description: "Path backsound, example assets/music/backsound.mp3"
+        description: "Path backsound, use auto for theme mapping"
         required: false
-        default: ""
+        default: "auto"
+      background_music_map_file:
+        description: "Backsound mapping JSON"
+        required: false
+        default: "assets/music/music-map.json"
       background_music_volume:
         description: "Backsound volume, example 0.08"
         required: false
@@ -144,6 +148,7 @@ jobs:
 
       YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'false' }}
 
+      TIKTOK_UPLOAD_PAUSED: ${{ secrets.TIKTOK_UPLOAD_PAUSED || 'true' }}
       TIKTOK_UPLOAD_ENABLED: ${{ secrets.TIKTOK_UPLOAD_ENABLED || 'false' }}
       TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
       TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
@@ -267,8 +272,9 @@ jobs:
       VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
       VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}
       VIDEO_EFFECT_PRESET: ${{ secrets.VIDEO_EFFECT_PRESET || 'veryfast' }}
-      BACKGROUND_MUSIC_ENABLED: ${{ github.event.inputs.background_music_enabled || secrets.BACKGROUND_MUSIC_ENABLED || '0' }}
-      BACKGROUND_MUSIC_FILE: ${{ github.event.inputs.background_music_file || secrets.BACKGROUND_MUSIC_FILE || '' }}
+      BACKGROUND_MUSIC_ENABLED: ${{ github.event.inputs.background_music_enabled || secrets.BACKGROUND_MUSIC_ENABLED || '1' }}
+      BACKGROUND_MUSIC_FILE: ${{ github.event.inputs.background_music_file || secrets.BACKGROUND_MUSIC_FILE || 'auto' }}
+      BACKGROUND_MUSIC_MAP_FILE: ${{ github.event.inputs.background_music_map_file || secrets.BACKGROUND_MUSIC_MAP_FILE || 'assets/music/music-map.json' }}
       BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.08' }}
       BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '1.0' }}
       THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Podcast | Highlight | Viral' }}
@@ -458,7 +464,10 @@ jobs:
             echo "FACEBOOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
           fi
 
-          if normalize_bool "$TIKTOK_UPLOAD_ENABLED"; then
+          if normalize_bool "$TIKTOK_UPLOAD_PAUSED"; then
+            echo "::notice::TikTok upload dipause sampai app disetujui; TIKTOK_UPLOAD_ENABLED dimatikan untuk run ini."
+            echo "TIKTOK_UPLOAD_ENABLED=false" >> "$GITHUB_ENV"
+          elif normalize_bool "$TIKTOK_UPLOAD_ENABLED"; then
             if [ -n "$TIKTOK_ACCESS_TOKEN" ] || [ -n "$TIKTOK_REFRESH_TOKEN" ]; then
               echo "TIKTOK_UPLOAD_ENABLED=true" >> "$GITHUB_ENV"
             else
@@ -846,6 +855,7 @@ jobs:
           else
             echo "YOUTUBE_API_KEY=not_set"
           fi
+          echo "TIKTOK_UPLOAD_PAUSED=$TIKTOK_UPLOAD_PAUSED"
           echo "TIKTOK_UPLOAD_ENABLED=$TIKTOK_UPLOAD_ENABLED"
           echo "TIKTOK_PUBLISH_MODE=$TIKTOK_PUBLISH_MODE"
           echo "TIKTOK_PRIVACY_LEVEL=$TIKTOK_PRIVACY_LEVEL"
@@ -857,6 +867,9 @@ jobs:
           echo "OPENAI_MODEL=$OPENAI_MODEL"
           echo "OPENAI_MODELS=$OPENAI_MODELS"
           echo "OPENAI_TRANSCRIBE_MODEL=$OPENAI_TRANSCRIBE_MODEL"
+          echo "BACKGROUND_MUSIC_ENABLED=$BACKGROUND_MUSIC_ENABLED"
+          echo "BACKGROUND_MUSIC_FILE=$BACKGROUND_MUSIC_FILE"
+          echo "BACKGROUND_MUSIC_MAP_FILE=$BACKGROUND_MUSIC_MAP_FILE"
           if [ -n "$OPENAI_API_KEY" ]; then
             echo "OPENAI_API_KEY=configured"
           else

@@ -82,6 +82,7 @@ function buildConfig() {
     .replace(/\\n/g, "\n")
     .trim();
   const remoteDefaultPort = uploadDriver === "sftp" ? 65002 : 21;
+  const tiktokUploadPaused = boolEnv("TIKTOK_UPLOAD_PAUSED", true);
 
   return {
     rootDir,
@@ -152,7 +153,8 @@ function buildConfig() {
       descriptionFooter: cleanText(process.env.YOUTUBE_DESCRIPTION_FOOTER)
     },
     tiktok: {
-      enabled: boolEnv("TIKTOK_UPLOAD_ENABLED", false),
+      enabled: !tiktokUploadPaused && boolEnv("TIKTOK_UPLOAD_ENABLED", false),
+      paused: tiktokUploadPaused,
       clientKey: cleanText(process.env.TIKTOK_CLIENT_KEY),
       clientSecret: process.env.TIKTOK_CLIENT_SECRET || "",
       accessToken: process.env.TIKTOK_ACCESS_TOKEN || "",

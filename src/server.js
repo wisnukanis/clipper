@@ -130,6 +130,7 @@ const envGroups = [
       field("VIDEO_EFFECT_PRESET", "Effect preset"),
       field("BACKGROUND_MUSIC_ENABLED", "Backsound enabled"),
       field("BACKGROUND_MUSIC_FILE", "Backsound file"),
+      field("BACKGROUND_MUSIC_MAP_FILE", "Backsound map"),
       field("BACKGROUND_MUSIC_VOLUME", "Backsound volume"),
       field("BACKGROUND_MUSIC_ORIGINAL_VOLUME", "Original audio volume")
     ]
@@ -178,6 +179,7 @@ const envGroups = [
     id: "tiktok",
     title: "TikTok",
     fields: [
+      field("TIKTOK_UPLOAD_PAUSED", "Upload paused"),
       field("TIKTOK_UPLOAD_ENABLED", "Upload enabled"),
       field("TIKTOK_CLIENT_KEY", "Client key"),
       field("TIKTOK_CLIENT_SECRET", "Client secret", true),
@@ -286,13 +288,15 @@ app.get("/api/state", async (_req, res) => {
       facebookEnabled: config.facebook.enabled,
       youtubeEnabled: config.youtube.enabled,
       tiktokEnabled: config.tiktok.enabled,
+      tiktokPaused: config.tiktok.paused,
       threadsEnabled: config.threads.enabled,
       videoFrameEnabled: config.videoEffects.frameEnabled,
       videoFilterEnabled: config.videoEffects.filterEnabled,
       videoWatermarkEnabled: config.videoEffects.watermarkEnabled,
       videoLowerThirdEnabled: config.videoEffects.lowerThirdEnabled,
-      backgroundMusicEnabled: boolInput(process.env.BACKGROUND_MUSIC_ENABLED, false),
+      backgroundMusicEnabled: boolInput(process.env.BACKGROUND_MUSIC_ENABLED, true),
       backgroundMusicFile: process.env.BACKGROUND_MUSIC_FILE || "",
+      backgroundMusicMapFile: process.env.BACKGROUND_MUSIC_MAP_FILE || "assets/music/music-map.json",
       backgroundMusicVolume: process.env.BACKGROUND_MUSIC_VOLUME || "0.08",
       aiProvider: config.ai.provider,
       subtitleFont: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
@@ -356,6 +360,7 @@ app.get("/api/tiktok/demo-status", async (_req, res) => {
     configured: Boolean(config.tiktok.clientKey && config.tiktok.clientSecret && config.tiktok.redirectUri),
     connected: Boolean(config.tiktok.accessToken || config.tiktok.refreshToken),
     uploadEnabled: config.tiktok.enabled,
+    paused: config.tiktok.paused,
     publishMode: config.tiktok.publishMode,
     privacyLevel: config.tiktok.privacyLevel,
     redirectUri: config.tiktok.redirectUri,
@@ -391,6 +396,8 @@ app.post("/api/tiktok/exchange", async (req, res) => {
 
 app.post("/api/tiktok/demo-publish", async (req, res) => {
   try {
+    if (config.tiktok.paused) throw new Error("TikTok upload dipause sampai app disetujui.");
+    if (!config.tiktok.enabled) throw new Error("TIKTOK_UPLOAD_ENABLED=false.");
     const job = await latestTikTokDemoJob(String(req.body?.job_id || "").trim());
     if (!job) throw new Error("Belum ada video dengan public_video_url untuk demo TikTok.");
     const result = await publishToTikTok({

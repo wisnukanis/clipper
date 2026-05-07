@@ -34,7 +34,8 @@ export async function runClipper({ video, job, onLog = () => {} }) {
     SUBTITLE_MARGIN_V: String(subtitleMarginV),
     SUBTITLE_MARGIN_H: String(video.subtitle_margin_h || process.env.SUBTITLE_MARGIN_H || 180),
     SCENE_MODE: sceneMode,
-    SMART_CROP_MODE: sceneMode
+    SMART_CROP_MODE: sceneMode,
+    THEME: String(video.theme || job.theme || config.defaultTheme || "")
   };
 
   onLog(`Running clipper: ${config.clipper.pythonCommand} ${args.join(" ")}`);

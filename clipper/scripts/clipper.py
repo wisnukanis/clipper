@@ -119,9 +119,11 @@ def cfg():
         "download_crf": parse_int(os.environ.get("DOWNLOAD_COMPRESS_CRF"), 30),
         "final_crf": parse_int(os.environ.get("FINAL_RENDER_CRF"), 27),
         "background_music_enabled": parse_int(os.environ.get("BACKGROUND_MUSIC_ENABLED"), 0),
-        "background_music_file": os.environ.get("BACKGROUND_MUSIC_FILE", ""),
+        "background_music_file": os.environ.get("BACKGROUND_MUSIC_FILE", "auto"),
+        "background_music_map_file": os.environ.get("BACKGROUND_MUSIC_MAP_FILE", "assets/music/music-map.json"),
         "background_music_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_VOLUME"), 0.08),
         "background_music_original_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_ORIGINAL_VOLUME"), 1.0),
+        "theme": os.environ.get("THEME", ""),
         "subtitle_offset": parse_float(os.environ.get("SUBTITLE_OFFSET_SECONDS"), 0.0),
         "smart_crop": parse_int(os.environ.get("SMART_CROP_ENABLED"), 1),
         "smart_crop_mode": os.environ.get("SMART_CROP_MODE", "auto"),
@@ -3381,7 +3383,7 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
                 confidence_rise_alpha=float(config.get("dynamic_zoom_confidence_rise", 0.24)),
                 transition_lead_seconds=float(config.get("dynamic_zoom_transition_lead", 0.25)),
             )
-            apply_background_music(final_clip, config, job_id, index)
+            music_info = apply_background_music(final_clip, config, job_id, index, clip)
             log_progress(
                 "render",
                 progress_base + progress_span * 0.98,
@@ -3390,7 +3392,7 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
                 total=total_clips,
                 note="dynamic_zoom_done",
             )
-            return source_clip, final_clip, crop_path
+            return source_clip, final_clip, crop_path, music_info
         except Exception as exc:
             log_warn(f"Dynamic-zoom render gagal: {exc}. Fallback ke single-pass.")
 
@@ -3404,7 +3406,7 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
             note="ffmpeg",
         )
         run_render(source_clip, final_clip, subtitle_vf, config)
-        apply_background_music(final_clip, config, job_id, index)
+        music_info = apply_background_music(final_clip, config, job_id, index, clip)
         log_progress(
             "render",
             progress_base + progress_span * 0.98,
@@ -3417,11 +3419,11 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
         log_warn(f"Render smart/subtitle gagal, coba crop tengah dengan subtitle: {exc}")
         try:
             run_render(source_clip, final_clip, f"{centered_vf},subtitles='{subtitle_path}'", config)
-            apply_background_music(final_clip, config, job_id, index)
+            music_info = apply_background_music(final_clip, config, job_id, index, clip)
         except subprocess.CalledProcessError as fallback_exc:
             log_warn(f"Render subtitle gagal, fallback tanpa hardsub: {fallback_exc}")
             run_render(source_clip, final_clip, centered_vf, config)
-            apply_background_music(final_clip, config, job_id, index)
+            music_info = apply_background_music(final_clip, config, job_id, index, clip)
 
     log_progress(
         "render",
@@ -3431,7 +3433,7 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
         total=total_clips,
         note="render_done",
     )
-    return source_clip, final_clip, crop_path
+    return source_clip, final_clip, crop_path, music_info
 
 
 def run_render(source_clip, final_clip, vf, config):
@@ -3486,20 +3488,141 @@ def run_render(source_clip, final_clip, vf, config):
     )
 
 
-def resolve_background_music_path(config):
-    if int(config.get("background_music_enabled", 0)) != 1:
-        return None
-    raw = str(config.get("background_music_file") or "").strip()
-    if not raw:
-        log_warn("BACKGROUND_MUSIC_ENABLED=1 tapi BACKGROUND_MUSIC_FILE kosong.")
-        return None
-    path = Path(raw)
-    candidates = [path] if path.is_absolute() else [ROOT.parent / path, ROOT / path]
-    for candidate in candidates:
+def repo_relative_path(path):
+    path = Path(path)
+    for base in (ROOT.parent, ROOT):
+        try:
+            return str(path.resolve().relative_to(base.resolve())).replace("\\", "/")
+        except ValueError:
+            continue
+    return str(path)
+
+
+def resolve_path_candidates(raw, base_dir=None):
+    path = Path(str(raw or "").strip())
+    if not str(path):
+        return []
+    if path.is_absolute():
+        return [path]
+    candidates = []
+    if base_dir:
+        candidates.append(Path(base_dir) / path)
+    candidates.extend([ROOT.parent / path, ROOT / path])
+    return candidates
+
+
+def first_existing_file(raw, base_dir=None):
+    for candidate in resolve_path_candidates(raw, base_dir):
         if candidate.exists() and candidate.is_file():
             return candidate
-    log_warn(f"File backsound tidak ditemukan: {raw}")
     return None
+
+
+def normalize_music_text(value):
+    return re.sub(r"\s+", " ", str(value or "").lower()).strip()
+
+
+def clip_music_context(config, clip):
+    parts = [
+        config.get("theme", ""),
+        (clip or {}).get("title", ""),
+        (clip or {}).get("hook", ""),
+        (clip or {}).get("reason", ""),
+        (clip or {}).get("caption", ""),
+        (clip or {}).get("selected_angle", ""),
+        (clip or {}).get("selectedAngle", ""),
+        (clip or {}).get("clip_transcript", ""),
+    ]
+    return normalize_music_text(" ".join(str(part) for part in parts if part))
+
+
+def load_background_music_map(config):
+    raw = str(config.get("background_music_map_file") or "").strip()
+    if not raw:
+        return None, None
+    path = first_existing_file(raw)
+    if not path:
+        log_warn(f"Map backsound tidak ditemukan: {raw}")
+        return None, None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data, path
+    except Exception as exc:
+        log_warn(f"Map backsound gagal dibaca: {exc}")
+        return None, path
+
+
+def default_music_track(music_map):
+    tracks = music_map.get("tracks") or []
+    default_id = str(music_map.get("default") or "").strip()
+    if default_id:
+        for track in tracks:
+            if default_id in {str(track.get("id") or ""), str(track.get("file") or "")}:
+                return track
+    return tracks[0] if tracks else {}
+
+
+def select_music_track(config, clip):
+    raw_file = str(config.get("background_music_file") or "").strip()
+    if raw_file and raw_file.lower() not in {"auto", "theme", "content"}:
+        return {
+            "id": "manual",
+            "label": "Manual",
+            "file": raw_file,
+            "volume": config.get("background_music_volume", 0.08),
+        }, None
+
+    music_map, map_path = load_background_music_map(config)
+    if not music_map:
+        if raw_file and raw_file.lower() not in {"auto", "theme", "content"}:
+            return {
+                "id": "manual",
+                "label": "Manual",
+                "file": raw_file,
+                "volume": config.get("background_music_volume", 0.08),
+            }, None
+        return {}, None
+
+    text = clip_music_context(config, clip)
+    theme = normalize_music_text(config.get("theme", ""))
+    tracks = music_map.get("tracks") or []
+    selected = default_music_track(music_map)
+    best_score = -1
+
+    for track in tracks:
+        score = int(track.get("priority") or 0)
+        for item in track.get("themes") or []:
+            needle = normalize_music_text(item)
+            if needle and (needle in theme or needle in text):
+                score += 8
+        for keyword in track.get("keywords") or []:
+            needle = normalize_music_text(keyword)
+            if needle and needle in text:
+                score += 3
+        if score > best_score:
+            best_score = score
+            selected = track
+
+    return selected or {}, map_path
+
+
+def resolve_background_music_path(config, clip=None):
+    if int(config.get("background_music_enabled", 0)) != 1:
+        return None, {}
+
+    selection, map_path = select_music_track(config, clip)
+    raw = str(selection.get("file") or "").strip()
+    if not raw:
+        log_warn("BACKGROUND_MUSIC_ENABLED=1 tapi file backsound kosong.")
+        return None, {}
+
+    base_dir = map_path.parent if map_path else None
+    path = first_existing_file(raw, base_dir=base_dir)
+    if path:
+        return path, selection
+
+    log_warn(f"File backsound tidak ditemukan: {raw}")
+    return None, selection
 
 
 def has_audio_stream(video_path):
@@ -3526,14 +3649,15 @@ def has_audio_stream(video_path):
         return True
 
 
-def apply_background_music(video_path, config, job_id, index):
-    music_path = resolve_background_music_path(config)
+def apply_background_music(video_path, config, job_id, index, clip=None):
+    music_path, music_selection = resolve_background_music_path(config, clip)
     if not music_path:
-        return
+        return None
 
     video_path = Path(video_path)
     mixed_path = ROOT / "temp" / f"{job_id}-clip-{index + 1:02d}-backsound.mp4"
-    music_volume = max(0.0, min(1.0, float(config.get("background_music_volume", 0.08))))
+    track_volume = parse_float(music_selection.get("volume"), config.get("background_music_volume", 0.08))
+    music_volume = max(0.0, min(1.0, float(track_volume)))
     original_volume = max(0.0, min(2.0, float(config.get("background_music_original_volume", 1.0))))
     source_has_audio = has_audio_stream(video_path)
 
@@ -3583,8 +3707,16 @@ def apply_background_music(video_path, config, job_id, index):
         log_info(f"Mix backsound: {music_path.name} volume={music_volume}")
         run(cmd)
         mixed_path.replace(video_path)
+        return {
+            "id": music_selection.get("id") or music_path.stem,
+            "label": music_selection.get("label") or music_path.stem,
+            "file": repo_relative_path(music_path),
+            "mood": music_selection.get("mood") or "",
+            "volume": music_volume,
+        }
     except Exception as exc:
         log_warn(f"Mix backsound gagal, pakai audio original: {exc}")
+        return None
 
 
 def parse_range(value, index):
@@ -3686,7 +3818,7 @@ def main():
         log_progress("subtitle", clip_base + clip_span * 0.28, stage_pct=60, clip=index + 1, total=total_clips, note="ass")
         ass_path = create_ass(subtitle_segments, clip, index, config, job_id)
         log_progress("subtitle", clip_base + clip_span * 0.30, stage_pct=100, clip=index + 1, total=total_clips, note="ass_ready")
-        raw_clip, final_clip, smart_crop_path = render_clip(
+        raw_clip, final_clip, smart_crop_path, music_info = render_clip(
             source_clip,
             ass_path,
             clip,
@@ -3720,6 +3852,7 @@ def main():
                 "subtitlePath": str(ass_path.relative_to(ROOT)),
                 "transcriptReviewPath": str(review_path.relative_to(ROOT)) if review_path else "",
                 "smartCropPath": str(smart_crop_path.relative_to(ROOT)) if smart_crop_path else "",
+                "backgroundMusic": music_info or {},
                 "finalPath": str(final_clip.relative_to(ROOT)),
             }
         )
