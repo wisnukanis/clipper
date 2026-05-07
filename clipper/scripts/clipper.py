@@ -91,7 +91,7 @@ def parse_keys_from_env(*names):
 def cfg():
     transcribe_provider = os.environ.get("TRANSCRIBE_PROVIDER", "deepgram").strip().lower()
     if transcribe_provider not in {"offline", "auto", "deepgram"}:
-        transcribe_provider = "offline"
+        transcribe_provider = "deepgram"
 
     openai_models = parse_keys(os.environ.get("OPENAI_MODELS"))
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-4.1-nano")
@@ -900,38 +900,29 @@ def transcribe_audio(audio_path, job_id, config):
         config["last_transcript_source"] = "offline"
         return transcribe_offline(audio_path, job_id, config)
 
-    if provider in {"auto", "deepgram"} and int(config.get("deepgram_enabled", 0)) == 1:
-        if config.get("deepgram_keys"):
-            try:
-                result = transcribe_deepgram(audio_path, job_id, config)
-                config["last_transcript_source"] = "deepgram"
-                return result
-            except Exception as exc:
-                log_warn(f"Deepgram gagal total: {exc}")
-                try:
-                    result = transcribe_openai(audio_path, job_id, config)
-                    config["last_transcript_source"] = "openai"
-                    return result
-                except Exception as openai_exc:
-                    log_warn(f"OpenAI transcription fallback gagal: {openai_exc}")
-                    if provider == "deepgram":
-                        log_warn("Fallback tetap memakai faster-whisper agar proses lokal tidak putus.")
-                    log_step("Fallback transkripsi offline dengan faster-whisper.")
-        else:
-            log_warn("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi.")
-            try:
-                result = transcribe_openai(audio_path, job_id, config)
-                config["last_transcript_source"] = "openai"
-                return result
-            except Exception as openai_exc:
-                log_warn(f"OpenAI transcription fallback gagal: {openai_exc}")
-    elif provider == "deepgram":
-        log_warn("TRANSCRIBE_PROVIDER=deepgram tetapi DEEPGRAM_ENABLED=0. Pakai faster-whisper offline.")
+    deepgram_error = None
+    if provider in {"auto", "deepgram"} and int(config.get("deepgram_enabled", 0)) == 1 and config.get("deepgram_keys"):
+        try:
+            result = transcribe_deepgram(audio_path, job_id, config)
+            config["last_transcript_source"] = "deepgram"
+            return result
+        except Exception as exc:
+            deepgram_error = exc
+            log_warn(f"Deepgram gagal total: {exc}")
     else:
-        log_warn("TRANSCRIBE_PROVIDER=auto tanpa Deepgram aktif. Pakai faster-whisper offline.")
+        if int(config.get("deepgram_enabled", 0)) != 1:
+            deepgram_error = RuntimeError("DEEPGRAM_ENABLED=0")
+            log_warn("Deepgram tidak aktif. Coba fallback transkripsi OpenAI.")
+        elif not config.get("deepgram_keys"):
+            deepgram_error = RuntimeError("DEEPGRAM_API_KEYS / DEEPGRAM_API_KEY belum diisi.")
+            log_warn(str(deepgram_error))
 
-    config["last_transcript_source"] = "offline"
-    return transcribe_offline(audio_path, job_id, config)
+    try:
+        result = transcribe_openai(audio_path, job_id, config)
+        config["last_transcript_source"] = "openai"
+        return result
+    except Exception as openai_exc:
+        raise RuntimeError(f"Transkripsi gagal. Deepgram: {deepgram_error}; OpenAI: {openai_exc}") from openai_exc
 
 
 def transcribe_offline(audio_path, job_id, config):
