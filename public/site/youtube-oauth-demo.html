@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#07111f">
+    <title>YouTube OAuth Demo Video - Clipper Emsa Pro</title>
+    <link rel="stylesheet" href="/site.css">
+    <style>
+      .demoHero {
+        padding: 56px 0 22px;
+      }
+
+      .demoHero h1 {
+        max-width: 920px;
+        font-size: clamp(34px, 6vw, 64px);
+      }
+
+      .demoHero .lead {
+        max-width: 860px;
+      }
+
+      .demoGrid {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 18px;
+        margin: 18px 0 48px;
+      }
+
+      .demoPanel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        backdrop-filter: blur(16px);
+      }
+
+      .demoPanel h2,
+      .demoPanel h3 {
+        margin: 0 0 14px;
+      }
+
+      .demoPanel p,
+      .demoPanel li,
+      .demoPanel td {
+        color: #dce8f4;
+        line-height: 1.65;
+      }
+
+      .demoPanel ol,
+      .demoPanel ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .detailTable {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .detailTable th,
+      .detailTable td {
+        padding: 11px 0;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .detailTable th {
+        width: 36%;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      code {
+        display: inline-block;
+        max-width: 100%;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.32);
+        color: #d7fff7;
+        overflow-wrap: anywhere;
+      }
+
+      .scopeCard {
+        display: grid;
+        gap: 8px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.24);
+      }
+
+      .scopeCard strong {
+        color: var(--cyan);
+      }
+
+      .timeline {
+        display: grid;
+        gap: 12px;
+        counter-reset: step;
+      }
+
+      .timeline li {
+        list-style: none;
+        position: relative;
+        padding-left: 44px;
+      }
+
+      .timeline li::before {
+        counter-increment: step;
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: 2px;
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--cyan);
+        color: var(--ink);
+        font-weight: 900;
+      }
+
+      .wide {
+        grid-column: 1 / -1;
+      }
+
+      @media (max-width: 860px) {
+        .demoGrid {
+          grid-template-columns: 1fr;
+        }
+
+        .detailTable th,
+        .detailTable td {
+          display: block;
+          width: 100%;
+        }
+
+        .detailTable th {
+          padding-bottom: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="siteHeader">
+      <a class="brand" href="/">
+        <span class="brandMark">CE</span>
+        <span>Clipper Emsa Pro</span>
+      </a>
+      <nav>
+        <a href="/privacy.html">Privacy Policy</a>
+        <a href="/terms.html">Terms</a>
+        <a class="loginLink" href="/youtube-oauth-demo.html">OAuth Demo</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="demoHero">
+        <p class="eyebrow">Google OAuth Verification</p>
+        <h1>YouTube OAuth Demo Video Guide</h1>
+        <p class="lead">Halaman ini dipakai sebagai panduan rekaman demo untuk menunjukkan proses OAuth grant YouTube, detail aplikasi, OAuth client, dan penggunaan scope oleh Clipper Emsa Pro.</p>
+      </section>
+
+      <section class="demoGrid">
+        <article class="demoPanel">
+          <h2>App Details To Show</h2>
+          <table class="detailTable">
+            <tbody>
+              <tr>
+                <th>App name</th>
+                <td>Clipper Emsa Pro</td>
+              </tr>
+              <tr>
+                <th>Homepage</th>
+                <td><code>https://dashboard.emsa.pro</code></td>
+              </tr>
+              <tr>
+                <th>Privacy Policy</th>
+                <td><code>https://dashboard.emsa.pro/privacy.html</code></td>
+              </tr>
+              <tr>
+                <th>Terms of Service</th>
+                <td><code>https://dashboard.emsa.pro/terms.html</code></td>
+              </tr>
+              <tr>
+                <th>Authorized domain</th>
+                <td><code>emsa.pro</code></td>
+              </tr>
+              <tr>
+                <th>OAuth client type</th>
+                <td>Web application</td>
+              </tr>
+              <tr>
+                <th>OAuth client ID</th>
+                <td><code>Show the value from Google Cloud Console > APIs &amp; Services > Credentials</code></td>
+              </tr>
+              <tr>
+                <th>Redirect URI</th>
+                <td><code>https://dashboard.emsa.pro/api/youtube/callback</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+
+        <article class="demoPanel">
+          <h2>Recording Checklist</h2>
+          <ol class="timeline">
+            <li>Open Google Cloud Console and show the project, app name, OAuth consent screen status, authorized domain, and OAuth client ID.</li>
+            <li>Open Clipper Emsa Pro dashboard and show the YouTube platform status.</li>
+            <li>Click <strong>Reconnect YouTube</strong> to start the OAuth grant flow.</li>
+            <li>Show the Google consent screen and the requested YouTube upload permission.</li>
+            <li>Approve access, return to the callback page, then show the dashboard preflight result with YouTube token valid.</li>
+            <li>Run or show the publish workflow where the final generated clip is uploaded as a YouTube Short.</li>
+          </ol>
+        </article>
+
+        <article class="demoPanel wide">
+          <h2>Sensitive And Restricted Scope Usage</h2>
+          <div class="scopeCard">
+            <strong><code>https://www.googleapis.com/auth/youtube.upload</code></strong>
+            <p>This scope is used only to upload the final generated short video to the authenticated user's YouTube channel. The app does not use this scope to read private channel data, delete videos, manage comments, access analytics, or perform unrelated YouTube account actions.</p>
+          </div>
+          <div class="scopeCard">
+            <strong>Offline access / refresh token</strong>
+            <p>The app requests offline access so scheduled GitHub Actions workflows can create a short-lived access token when a queued video is ready to publish. Refresh tokens are stored as encrypted GitHub Actions secrets or local server environment variables. Access tokens are temporary and are not stored in the application UI.</p>
+          </div>
+          <div class="scopeCard">
+            <strong>Restricted scopes</strong>
+            <p>This YouTube publishing flow does not request Gmail, Drive, Calendar, or other restricted Google API scopes. Each OAuth client in this project should be shown in the video, and each should be explained with the same upload-only purpose if it uses the YouTube upload scope.</p>
+          </div>
+        </article>
+
+        <article class="demoPanel">
+          <h2>User Flow To Narrate</h2>
+          <ol>
+            <li>The user signs in to the private dashboard.</li>
+            <li>The user clicks Reconnect YouTube.</li>
+            <li>Google shows the app name, OAuth client, and requested YouTube upload permission.</li>
+            <li>The user grants permission.</li>
+            <li>The app receives an authorization code at the callback URL and exchanges it for a refresh token.</li>
+            <li>The refresh token is saved securely and later used to upload generated clips selected by the user or queue.</li>
+          </ol>
+        </article>
+
+        <article class="demoPanel">
+          <h2>Data Handling Statement</h2>
+          <ul>
+            <li>Uploaded video files are generated from source video links selected in the dashboard or queue.</li>
+            <li>Video title, description, tags, and captions are generated for publishing metadata.</li>
+            <li>OAuth tokens are used only for authentication and publishing to the user's connected YouTube channel.</li>
+            <li>Users can revoke app access from their Google Account permissions page at any time.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <span>Clipper Emsa Pro</span>
+      <a href="/privacy.html">Privacy Policy</a>
+      <a href="/terms.html">Terms of Service</a>
+    </footer>
+  </body>
+</html>
