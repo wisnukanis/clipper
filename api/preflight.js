@@ -47,7 +47,17 @@ async function checkYoutubeToken(enabled) {
   const missing = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]
     .filter((key) => !clean(process.env[key]));
   if (missing.length) {
-    return [check("YouTube Data API", false, `missing env: ${missing.join(", ")}`, true)];
+    const githubSecrets = await checkGithubYoutubeSecrets();
+    if (githubSecrets.ok) {
+      return [check(
+        "YouTube Data API",
+        true,
+        `GitHub Secrets lengkap untuk workflow; Vercel env belum diset: ${missing.join(", ")}`,
+        true
+      )];
+    }
+
+    return [check("YouTube Data API", false, `${githubSecrets.detail}; Vercel env missing: ${missing.join(", ")}`, true)];
   }
 
   try {
@@ -58,5 +68,37 @@ async function checkYoutubeToken(enabled) {
       ? "invalid_grant; klik Reconnect YouTube"
       : error.message;
     return [check("YouTube Data API", false, detail, true)];
+  }
+}
+
+async function checkGithubYoutubeSecrets() {
+  const token = clean(process.env.GH_REPO_SECRET_TOKEN || process.env.GITHUB_TOKEN);
+  if (!token) return { ok: false, detail: "GH_REPO_SECRET_TOKEN belum diset" };
+
+  const repo = clean(process.env.DASHBOARD_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "emsabiq/clipper");
+  const required = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"];
+  try {
+    const response = await fetch(`https://api.github.com/repos/${repo}/actions/secrets?per_page=100`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      },
+      cache: "no-store"
+    });
+    if (!response.ok) {
+      return { ok: false, detail: `GitHub Secrets check gagal: HTTP ${response.status}` };
+    }
+
+    const data = await response.json();
+    const names = new Set((data.secrets || []).map((secret) => secret.name));
+    const missing = required.filter((key) => !names.has(key));
+    if (missing.length) {
+      return { ok: false, detail: `GitHub Secrets missing: ${missing.join(", ")}` };
+    }
+
+    return { ok: true, detail: "GitHub Secrets lengkap" };
+  } catch (error) {
+    return { ok: false, detail: `GitHub Secrets check gagal: ${error.message}` };
   }
 }
