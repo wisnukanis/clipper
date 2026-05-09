@@ -127,6 +127,7 @@ jobs:
 
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
       UPLOAD_DRIVER: sftp
+      REMOTE_UPLOAD_REQUIRED: ${{ secrets.REMOTE_UPLOAD_REQUIRED || 'false' }}
       DRY_RUN: "false"
       AUTO_PUBLISH: "true"
       DEFAULT_THEME: auto
@@ -181,11 +182,12 @@ jobs:
       SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
       SFTP_PASSPHRASE: ${{ secrets.SFTP_PASSPHRASE }}
       SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
-      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '420' }}
+      SFTP_TIMEOUT_SECONDS: ${{ secrets.SFTP_TIMEOUT_SECONDS || secrets.FTP_TIMEOUT_SECONDS || '30' }}
       SFTP_UPLOAD_TIMEOUT_SECONDS: ${{ secrets.SFTP_UPLOAD_TIMEOUT_SECONDS || secrets.FTP_UPLOAD_TIMEOUT_SECONDS || '1800' }}
       SFTP_CLEANUP_TIMEOUT_SECONDS: ${{ secrets.SFTP_CLEANUP_TIMEOUT_SECONDS || secrets.FTP_CLEANUP_TIMEOUT_SECONDS || '600' }}
-      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '180' }}
-      SFTP_PRECHECK_RETRIES: ${{ secrets.SFTP_PRECHECK_RETRIES || secrets.FTP_PRECHECK_RETRIES || '5' }}
+      SFTP_STATE_TIMEOUT_SECONDS: ${{ secrets.SFTP_STATE_TIMEOUT_SECONDS || secrets.FTP_STATE_TIMEOUT_SECONDS || '30' }}
+      SFTP_PRECHECK_TIMEOUT_SECONDS: ${{ secrets.SFTP_PRECHECK_TIMEOUT_SECONDS || secrets.FTP_PRECHECK_TIMEOUT_SECONDS || '12' }}
+      SFTP_PRECHECK_RETRIES: ${{ secrets.SFTP_PRECHECK_RETRIES || secrets.FTP_PRECHECK_RETRIES || '1' }}
       SFTP_UPLOAD_RETRIES: ${{ secrets.SFTP_UPLOAD_RETRIES || secrets.FTP_UPLOAD_RETRIES || '4' }}
       SFTP_PUBLIC_URL_RETRIES: ${{ secrets.SFTP_PUBLIC_URL_RETRIES || secrets.FTP_PUBLIC_URL_RETRIES || '8' }}
       SFTP_PUBLIC_URL_RETRY_DELAY_MS: ${{ secrets.SFTP_PUBLIC_URL_RETRY_DELAY_MS || secrets.FTP_PUBLIC_URL_RETRY_DELAY_MS || '2500' }}
@@ -353,16 +355,26 @@ jobs:
         run: |
           missing=0
 
+          remote_required="$(printf '%s' "$REMOTE_UPLOAD_REQUIRED" | tr '[:upper:]' '[:lower:]')"
+          remote_missing_level="warning"
+          if [ "$remote_required" = "true" ] || [ "$remote_required" = "1" ]; then
+            remote_missing_level="error"
+          fi
+
           for key in PUBLIC_BASE_URL SFTP_HOST SFTP_USER SFTP_REMOTE_DIR
           do
             if [ -z "${!key}" ]; then
-              echo "::error::$key belum diisi di GitHub Secrets"
-              missing=1
+              echo "::$remote_missing_level::$key belum diisi di GitHub Secrets"
+              if [ "$remote_missing_level" = "error" ]; then
+                missing=1
+              fi
             fi
           done
           if [ -z "$SFTP_PASSWORD" ] && [ -z "$SFTP_PRIVATE_KEY" ]; then
-            echo "::error::SFTP_PASSWORD atau SFTP_PRIVATE_KEY belum diisi di GitHub Secrets"
-            missing=1
+            echo "::$remote_missing_level::SFTP_PASSWORD atau SFTP_PRIVATE_KEY belum diisi di GitHub Secrets"
+            if [ "$remote_missing_level" = "error" ]; then
+              missing=1
+            fi
           fi
 
           if [ "$INSTAGRAM_UPLOAD_ENABLED" = "true" ]; then

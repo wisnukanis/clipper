@@ -210,6 +210,7 @@ function missingRemoteConfig() {
 
 async function checkRemoteStorage(online) {
   const label = config.ftp.label || "Remote storage";
+  const required = config.remoteUploadRequired === true;
 
   if (!shouldUploadToRemote()) {
     return checkResult(label, true, "UPLOAD_DRIVER bukan ftp/sftp", false);
@@ -217,15 +218,17 @@ async function checkRemoteStorage(online) {
 
   const missing = missingRemoteConfig();
   if (missing.length) {
-    return checkResult(label, false, `missing env: ${missing.join(", ")}`, true);
+    return checkResult(label, false, `missing env: ${missing.join(", ")}`, required);
   }
 
   if (!online) {
-    return checkResult(label, true, "env lengkap");
+    return checkResult(label, true, "env lengkap", required);
   }
 
-  const attempts = config.ftp.precheckRetries || Math.max(1, numberEnv("FTP_PRECHECK_RETRIES", 3));
-  const timeoutMs = Math.max(config.ftp.stateTimeoutMs, config.apiCheckTimeoutMs);
+  const configuredAttempts = config.ftp.precheckRetries || Math.max(1, numberEnv("FTP_PRECHECK_RETRIES", 3));
+  const attempts = required ? configuredAttempts : Math.min(configuredAttempts, 1);
+  const configuredTimeoutMs = config.ftp.precheckTimeoutMs || Math.min(config.ftp.stateTimeoutMs, config.apiCheckTimeoutMs);
+  const timeoutMs = required ? configuredTimeoutMs : Math.min(configuredTimeoutMs, 12000);
   let lastError = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -237,7 +240,7 @@ async function checkRemoteStorage(online) {
       const detail = attempt > 1
         ? `remote siap: ${config.ftp.remoteDir} (attempt ${attempt}/${attempts})`
         : `remote siap: ${config.ftp.remoteDir}`;
-      return checkResult(label, true, detail);
+      return checkResult(label, true, detail, required);
     } catch (error) {
       lastError = error;
       if (attempt < attempts) {
@@ -247,7 +250,7 @@ async function checkRemoteStorage(online) {
     }
   }
 
-  return checkResult(label, false, lastError?.message || `${label} precheck gagal`, true);
+  return checkResult(label, false, lastError?.message || `${label} precheck gagal`, required);
 }
 
 async function checkInstagram(online, required = canPublish()) {

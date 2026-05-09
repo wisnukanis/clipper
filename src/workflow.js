@@ -39,6 +39,17 @@ export async function runWorkflow(options = {}) {
     throw error;
   }
 
+  const remoteCheck = preflight.checks.find((check) => check.name === config.ftp.label);
+  if (remoteCheck && !remoteCheck.ok && !remoteCheck.required) {
+    const driver = config.uploadDriver;
+    config.uploadDriver = "local";
+    await appendLog("remote_upload_disabled", {
+      driver,
+      reason: remoteCheck.detail || "remote storage preflight failed"
+    });
+    console.warn(`${config.ftp.label} preflight warning; remote upload dinonaktifkan untuk run ini.`);
+  }
+
   await downloadStateFromRemote().catch((error) => {
     console.warn(`State remote dilewati: ${error.message}`);
   });
@@ -518,14 +529,28 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     metadataUrl: ""
   };
   if (shouldUploadToRemote()) {
-    upload = await uploadJobFiles({
-      job: storageJob,
-      videoPath: output.finalAbsPath,
-      thumbnailPath: thumbnail.path,
-      metadataPath
-    });
-    const videoPublicOk = await validatePublicUrl(upload.videoUrl);
-    if (!videoPublicOk) throw new Error(`Public video URL belum valid: ${upload.videoUrl}`);
+    try {
+      upload = await uploadJobFiles({
+        job: storageJob,
+        videoPath: output.finalAbsPath,
+        thumbnailPath: thumbnail.path,
+        metadataPath
+      });
+      const videoPublicOk = await validatePublicUrl(upload.videoUrl);
+      if (!videoPublicOk) throw new Error(`Public video URL belum valid: ${upload.videoUrl}`);
+    } catch (error) {
+      if (config.remoteUploadRequired || !config.youtube.enabled) throw error;
+      await appendLog("remote_upload_failed_skip", {
+        job_id: storageJob.job_id,
+        error: error.message
+      });
+      console.warn(`${config.ftp.label} upload gagal; lanjut YouTube tanpa public URL: ${error.message}`);
+      upload = {
+        videoUrl: "",
+        thumbnailUrl: "",
+        metadataUrl: ""
+      };
+    }
   }
   console.log(`Public video URL valid clip ${clipIndex}/${total}:`, upload.videoUrl);
 

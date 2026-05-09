@@ -118,6 +118,7 @@ function buildConfig() {
     dashboardAllowRemote: boolEnv("AUTO_DASHBOARD_ALLOW_REMOTE", false),
     graphApiVersion: cleanText(process.env.GRAPH_API_VERSION || "v25.0"),
     apiCheckTimeoutMs: numberEnv("API_CHECK_TIMEOUT_SECONDS", 30) * 1000,
+    remoteUploadRequired: boolEnv("REMOTE_UPLOAD_REQUIRED", false),
     instagram: {
       enabled: boolEnv("INSTAGRAM_UPLOAD_ENABLED", true),
       igUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
@@ -213,6 +214,7 @@ function buildConfig() {
       uploadTimeoutMs: numberEnvFrom(remoteEnvNames("UPLOAD_TIMEOUT_SECONDS"), 1800) * 1000,
       cleanupTimeoutMs: numberEnvFrom(remoteEnvNames("CLEANUP_TIMEOUT_SECONDS"), 600) * 1000,
       stateTimeoutMs: numberEnvFrom(remoteEnvNames("STATE_TIMEOUT_SECONDS"), 180) * 1000,
+      precheckTimeoutMs: numberEnvFrom(remoteEnvNames("PRECHECK_TIMEOUT_SECONDS"), 12) * 1000,
       precheckRetries: Math.max(1, numberEnvFrom(remoteEnvNames("PRECHECK_RETRIES"), 5)),
       retries: Math.max(1, numberEnvFrom(remoteEnvNames("UPLOAD_RETRIES"), 4)),
       publicUrlRetries: Math.max(1, numberEnvFrom(remoteEnvNames("PUBLIC_URL_RETRIES"), 8)),

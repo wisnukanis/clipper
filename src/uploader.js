@@ -144,11 +144,7 @@ class SftpRemoteClient {
 async function connectRemoteClient(timeoutMs) {
   if (config.uploadDriver === "sftp") {
     const client = new SftpClient();
-    const readyTimeout = Math.max(
-      Number(timeoutMs || 0),
-      Number(config.ftp.timeoutMs || 0),
-      30000
-    );
+    const readyTimeout = Math.max(Number(timeoutMs || config.ftp.timeoutMs || 0), 5000);
     await client.connect({
       host: config.ftp.host,
       port: config.ftp.port,
