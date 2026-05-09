@@ -11,25 +11,27 @@ import { extractYoutubeVideoId } from "./youtube.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
 
 const DEFAULT_QUERIES = [
+  "podcast indonesia hari ini",
+  "podcast artis indonesia hari ini",
   "podcast artis indonesia terbaru",
   "podcast artis indonesia viral",
-  "deddy corbuzier artis terbaru",
-  "vindes artis terbaru",
-  "politik indonesia terbaru podcast",
-  "komedi indonesia podcast komika"
+  "podcast deddy corbuzier terbaru",
+  "podcast vindes terbaru",
+  "podcast politik indonesia hari ini"
 ];
 
 const FALLBACK_QUERIES = [
+  "podcast indonesia hari ini",
   "podcast indonesia terbaru",
   "podcast indonesia viral",
   "podcast artis indonesia full",
   "podcast selebriti indonesia terbaru",
-  "deddy corbuzier terbaru",
+  "podcast deddy corbuzier terbaru",
   "raditya dika podcast terbaru",
-  "vindes terbaru",
+  "podcast vindes terbaru",
   "komika indonesia podcast terbaru",
-  "politik indonesia terbaru",
-  "podcast politik indonesia"
+  "podcast politik indonesia",
+  "podcast komedi indonesia"
 ];
 
 const DEFAULT_CHANNEL_HANDLES = [
@@ -44,7 +46,8 @@ const DEFAULT_CHANNEL_HANDLES = [
   "@TotalPolitik"
 ];
 
-const TOPIC_RE = /podcast|podhub|podkesmas|vindes|deddy|corbuzier|raditya|artis|aktor|aktris|penyanyi|komika|komedi|stand\s*up|lucu|politik|pilpres|dpr|presiden|menteri|prabowo|jokowi|anies|ganjar/i;
+const PODCAST_TOPIC_RE = /podcast|siniar|podhub|podkesmas|close\s*the\s*door|vindes|deddy|corbuzier|raditya|daniel\s*mananta|has\s*creative|kasisolusi|total\s*politik|podcast\s*politik|podcast\s*komedi/i;
+const NON_PODCAST_NOISE_RE = /official\s*music\s*video|lirik|lyrics|trailer|teaser|sinetron|drama|full\s*movie|film\s*pendek|gameplay|live\s*stream\s*game|highlight\s*bola/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 const DISCOVERY_CACHE_FILE = "discovery-cache.json";
 const AUTO_DISCOVERY_SELECTABLE_STATUSES = new Set(["queued", "failed", "retry"]);
@@ -196,6 +199,16 @@ function knownVideoIds(videos, history) {
   return ids;
 }
 
+function candidatePublishedAt(item = {}) {
+  if (item.publishedAt) return item.publishedAt;
+  if (item.timestamp) return new Date(Number(item.timestamp) * 1000).toISOString();
+  const uploadDate = String(item.upload_date || "").trim();
+  if (/^\d{8}$/.test(uploadDate)) {
+    return `${uploadDate.slice(0, 4)}-${uploadDate.slice(4, 6)}-${uploadDate.slice(6, 8)}T00:00:00Z`;
+  }
+  return uploadDate;
+}
+
 function ageHours(publishedAt) {
   const timestamp = Date.parse(publishedAt || "");
   if (!Number.isFinite(timestamp)) return 24 * 365;
@@ -221,7 +234,7 @@ function viralStats(item) {
   const views = numberValue(item.view_count);
   const likes = numberValue(item.like_count);
   const comments = numberValue(item.comment_count);
-  const hours = ageHours(item.publishedAt || item.upload_date);
+  const hours = ageHours(candidatePublishedAt(item));
   return {
     views,
     likes,
@@ -234,11 +247,29 @@ function viralStats(item) {
   };
 }
 
+function isTrustedPodcastChannelSource(item) {
+  return ["youtube_api_channel", "yt_dlp_channel"].includes(item.discovery_source);
+}
+
+function isPodcastCandidate(item) {
+  const text = candidateText(item);
+  if (NON_PODCAST_NOISE_RE.test(text) && !PODCAST_TOPIC_RE.test(text)) return false;
+  return PODCAST_TOPIC_RE.test(text) || isTrustedPodcastChannelSource(item);
+}
+
+function passesDuration(item, options) {
+  const duration = numberValue(item.duration);
+  if (duration && duration < options.minDuration) return false;
+  if (duration && duration > options.maxDuration) return false;
+  return true;
+}
+
 function topicMultiplier(text) {
   const value = String(text || "").toLowerCase();
-  if (/podcast.*artis|artis.*podcast|deddy|corbuzier|vindes|raditya/.test(value)) return 1.35;
-  if (/politik|pilpres|dpr|presiden|menteri|prabowo|jokowi|anies|ganjar/.test(value)) return 1.12;
-  if (/komedi|komika|stand\s*up|lucu/.test(value)) return 1.08;
+  if (/podcast.*artis|artis.*podcast|deddy|corbuzier|vindes|raditya|close\s*the\s*door/.test(value)) return 1.4;
+  if (/podhub|podkesmas|daniel\s*mananta|has\s*creative|kasisolusi/.test(value)) return 1.28;
+  if (/podcast.*politik|politik.*podcast|total\s*politik/.test(value)) return 1.16;
+  if (/podcast.*komedi|komedi.*podcast|komika/.test(value)) return 1.1;
   return 1;
 }
 
@@ -253,52 +284,55 @@ function scoreCandidate(item) {
     stats.likesPerHour * 2 +
     stats.commentsPerHour * 25 +
     stats.engagementRate * 50000;
-  const trustedChannelBoost = ["youtube_api_channel", "yt_dlp_channel"].includes(item.discovery_source) ? 30000 : 0;
-  const freshBoost = stats.ageHours <= 24 ? 40000 : stats.ageHours <= 72 ? 18000 : 0;
+  const trustedChannelBoost = isTrustedPodcastChannelSource(item) ? 35000 : 0;
+  const trendingBoost = item.discovery_source === "youtube_api_trending" ? 45000 : 0;
+  const freshBoost = stats.ageHours <= 12 ? 55000 : stats.ageHours <= 24 ? 40000 : stats.ageHours <= 72 ? 18000 : 0;
 
-  return Math.round((raw + trustedChannelBoost + freshBoost) * topicMultiplier(text) * durationMultiplier * recencyMultiplier);
+  return Math.round((raw + trustedChannelBoost + trendingBoost + freshBoost) * topicMultiplier(text) * durationMultiplier * recencyMultiplier);
 }
 
 function isViralCandidate(item, options) {
   const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
   if (!id) return false;
 
-  const duration = numberValue(item.duration);
-  if (duration && duration < options.minDuration) return false;
-  if (duration && duration > options.maxDuration) return false;
+  if (!passesDuration(item, options)) return false;
 
   const stats = viralStats(item);
   const isFastGrowing = stats.viewsPerHour >= options.minViewsPerHour;
   const hasEnoughViews = stats.views >= options.minViews;
   if (!isFastGrowing && !hasEnoughViews) return false;
 
-  return TOPIC_RE.test(candidateText(item));
+  return isPodcastCandidate(item);
 }
 
 function isTopicCandidate(item, options) {
   const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
   if (!id) return false;
 
-  const duration = numberValue(item.duration);
-  if (duration && duration < options.minDuration) return false;
-  if (duration && duration > options.maxDuration) return false;
+  if (!passesDuration(item, options)) return false;
 
-  return TOPIC_RE.test(candidateText(item));
+  return isPodcastCandidate(item);
 }
 
 function isFreshChannelCandidate(item, options) {
   const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
   if (!id) return false;
 
-  const duration = numberValue(item.duration);
-  if (duration && duration < options.minDuration) return false;
-  if (duration && duration > options.maxDuration) return false;
+  if (!passesDuration(item, options)) return false;
 
   const isFresh = item.discovery_source === "yt_dlp_channel"
-    || ageHours(item.publishedAt || item.upload_date) <= options.publishedAfterDays * 24 + 6;
+    || ageHours(candidatePublishedAt(item)) <= options.publishedAfterDays * 24 + 6;
   if (!isFresh) return false;
 
-  return ["youtube_api_channel", "yt_dlp_channel"].includes(item.discovery_source) || TOPIC_RE.test(candidateText(item));
+  return isPodcastCandidate(item);
+}
+
+function isTrendingPodcastCandidate(item, options) {
+  const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
+  if (!id) return false;
+  if (!passesDuration(item, options)) return false;
+  if (ageHours(candidatePublishedAt(item)) > options.trendingMaxAgeHours) return false;
+  return isPodcastCandidate(item);
 }
 
 function parseJsonLines(stdout) {
@@ -487,6 +521,34 @@ function chunk(items, size) {
   return chunks;
 }
 
+function youtubeVideoResourceToCandidate(item, discoveryQuery) {
+  if (!item?.id) return null;
+  if (item.status?.embeddable === false) return null;
+  const snippet = item.snippet || {};
+  const statistics = item.statistics || {};
+  const duration = parseIsoDuration(item.contentDetails?.duration);
+  return {
+    id: item.id,
+    url: videoUrl(item.id),
+    webpage_url: videoUrl(item.id),
+    title: snippet.title || "",
+    description: snippet.description || "",
+    channel: snippet.channelTitle || "",
+    channelId: snippet.channelId || "",
+    publishedAt: snippet.publishedAt || "",
+    duration,
+    view_count: numberValue(statistics.viewCount),
+    like_count: numberValue(statistics.likeCount),
+    comment_count: numberValue(statistics.commentCount),
+    discovery_source: discoveryQuery.startsWith("channel:")
+      ? "youtube_api_channel"
+      : discoveryQuery.startsWith("trending:")
+        ? "youtube_api_trending"
+        : "youtube_api",
+    discovery_query: discoveryQuery
+  };
+}
+
 async function searchYoutubeIds({ credential, query, channelId, options }) {
   const data = await fetchYoutube("search", {
     part: "snippet",
@@ -560,28 +622,8 @@ async function loadYoutubeDetails(credential, ids, queryById) {
     }, credential);
 
     for (const item of data.items || []) {
-      if (!item?.id) continue;
-      if (item.status?.embeddable === false) continue;
-      const snippet = item.snippet || {};
-      const statistics = item.statistics || {};
-      const duration = parseIsoDuration(item.contentDetails?.duration);
-      const discoveryQuery = queryById.get(item.id) || "";
-      candidates.push({
-        id: item.id,
-        url: videoUrl(item.id),
-        webpage_url: videoUrl(item.id),
-        title: snippet.title || "",
-        description: snippet.description || "",
-        channel: snippet.channelTitle || "",
-        channelId: snippet.channelId || "",
-        publishedAt: snippet.publishedAt || "",
-        duration,
-        view_count: numberValue(statistics.viewCount),
-        like_count: numberValue(statistics.likeCount),
-        comment_count: numberValue(statistics.commentCount),
-        discovery_source: discoveryQuery.startsWith("channel:") ? "youtube_api_channel" : "youtube_api",
-        discovery_query: discoveryQuery
-      });
+      const candidate = youtubeVideoResourceToCandidate(item, queryById.get(item.id) || "");
+      if (candidate) candidates.push(candidate);
     }
   }
   return candidates;
@@ -671,8 +713,11 @@ async function discoverWithDailyYoutubeApiSearch({ queries, knownIds, options, t
   const cache = await readDiscoveryCache();
   const todayCache = cache[targetDate] || {};
   const cached = Array.isArray(todayCache.youtube_api_candidates) ? todayCache.youtube_api_candidates : [];
+  const query = String(process.env.AUTO_DISCOVER_DAILY_QUERY || queries[0] || DEFAULT_QUERIES[0]).trim();
+  const cacheMatchesQuery = todayCache.youtube_api_search_query === query
+    && Number(todayCache.youtube_api_search_max_results || 0) === Number(options.maxResults || 0);
 
-  if (todayCache.youtube_api_search_done) {
+  if (todayCache.youtube_api_search_done && cacheMatchesQuery) {
     console.log(`AUTO DISCOVERY: search.list sudah dipakai untuk ${targetDate}, pakai cache ${cached.length} kandidat.`);
     return cached.filter((item) => {
       const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
@@ -686,7 +731,6 @@ async function discoverWithDailyYoutubeApiSearch({ queries, knownIds, options, t
     return null;
   }
 
-  const query = String(process.env.AUTO_DISCOVER_DAILY_QUERY || queries[0] || DEFAULT_QUERIES[0]).trim();
   const credential = credentials[0];
   await patchDiscoveryCache(targetDate, {
     youtube_api_search_done: true,
@@ -718,6 +762,58 @@ async function discoverWithDailyYoutubeApiSearch({ queries, knownIds, options, t
     }
     throw error;
   }
+}
+
+async function discoverTrendingWithYoutubeApi({ knownIds, options }) {
+  if (youtubeApiQuotaExhausted) {
+    console.log("AUTO DISCOVERY: YouTube API quota sudah habis, trending dilewati.");
+    return null;
+  }
+
+  const credentials = await youtubeDiscoveryCredentials();
+  if (!credentials.length) {
+    console.log("AUTO DISCOVERY: YOUTUBE_API_KEY belum ada, trending dilewati.");
+    return null;
+  }
+
+  const categoryIds = listEnv("AUTO_DISCOVER_TRENDING_CATEGORY_IDS", ["24", "22"])
+    .map((item) => String(item || "").trim())
+    .map((item) => item.toLowerCase() === "all" ? "" : item)
+    .filter((item, index, list) => list.indexOf(item) === index);
+  const categories = categoryIds.length ? categoryIds : [""];
+  let lastError = null;
+
+  for (const credential of credentials) {
+    const candidates = new Map();
+    try {
+      for (const categoryId of categories) {
+        const query = `trending:${options.regionCode}${categoryId ? `:${categoryId}` : ""}`;
+        const data = await fetchYoutube("videos", {
+          part: "snippet,statistics,contentDetails,status",
+          chart: "mostPopular",
+          regionCode: options.regionCode,
+          videoCategoryId: categoryId || undefined,
+          maxResults: options.trendingMaxResults || options.maxResults
+        }, credential);
+
+        for (const item of data.items || []) {
+          if (knownIds.has(item.id) || candidates.has(item.id)) continue;
+          const candidate = youtubeVideoResourceToCandidate(item, query);
+          if (candidate) candidates.set(item.id, candidate);
+        }
+      }
+      return [...candidates.values()];
+    } catch (error) {
+      lastError = error;
+      if (error.quotaExceeded || isYoutubeQuotaError(error)) {
+        youtubeApiQuotaExhausted = true;
+        throw error;
+      }
+      console.warn(`YouTube trending discovery gagal, coba credential berikutnya: ${error.message}`);
+    }
+  }
+
+  throw lastError || new Error("YouTube trending discovery gagal.");
 }
 
 async function discoverWithYtDlp({ queries, knownIds, options }) {
@@ -768,8 +864,17 @@ async function discoverChannelsWithYtDlp({ knownIds, options }) {
   return [...candidates.values()];
 }
 
-async function loadRawCandidates({ queries, knownIds, options, targetDate, channelOnly = false, useApi = true, dailyApiSearch = false }) {
+async function loadRawCandidates({ queries, knownIds, options, targetDate, channelOnly = false, useApi = true, dailyApiSearch = false, trending = false }) {
   let rawCandidates = null;
+  if (trending) {
+    try {
+      rawCandidates = await discoverTrendingWithYoutubeApi({ knownIds, options });
+    } catch (error) {
+      console.warn(`YouTube trending discovery dilewati: ${error.message}`);
+    }
+    return rawCandidates || [];
+  }
+
   if (dailyApiSearch) {
     try {
       rawCandidates = await discoverWithDailyYoutubeApiSearch({ queries, knownIds, options, targetDate });
@@ -810,6 +915,7 @@ async function validateCandidateAvailability(item) {
 async function selectDiscoveredCandidates(rawCandidates, options, addCount, mode) {
   const filter = mode === "fresh_channels"
     ? isFreshChannelCandidate
+    : mode === "today_trending" ? isTrendingPodcastCandidate
     : ["best_available", "daily_api_search"].includes(mode) ? isTopicCandidate : isViralCandidate;
   const ranked = rawCandidates
     .filter((item) => filter(item, options))
@@ -835,11 +941,39 @@ function fallbackPasses(baseQueries, baseOptions) {
   const fallbackQueries = uniqueList([...baseQueries, ...FALLBACK_QUERIES]);
   const useDailyApi = boolEnv("AUTO_DISCOVER_USE_API", false);
   const dailyApiMaxResults = numberEnv("AUTO_DISCOVER_DAILY_SEARCH_RESULTS", 7, 1, 50);
-  const fallbackMaxResults = numberEnv("AUTO_DISCOVER_FALLBACK_MAX_RESULTS", 6, baseOptions.maxResults, 50);
-  const freshUploadDays = numberEnv("AUTO_DISCOVER_FRESH_UPLOAD_DAYS", 3, 1, 30);
-  const freshChannelMaxResults = numberEnv("AUTO_DISCOVER_CHANNEL_MAX_RESULTS", 1, 1, 25);
+  const trendingMaxResults = numberEnv("AUTO_DISCOVER_TRENDING_MAX_RESULTS", 25, 1, 50);
+  const fallbackMaxResults = numberEnv("AUTO_DISCOVER_FALLBACK_MAX_RESULTS", 12, baseOptions.maxResults, 50);
+  const freshUploadDays = numberEnv("AUTO_DISCOVER_FRESH_UPLOAD_DAYS", 1, 1, 30);
+  const freshChannelMaxResults = numberEnv("AUTO_DISCOVER_CHANNEL_MAX_RESULTS", 3, 1, 25);
+  const trendingEnabled = boolEnv("AUTO_DISCOVER_TRENDING_ENABLED", true);
 
   return [
+    {
+      mode: "fresh_channels",
+      channelOnly: true,
+      useApi: true,
+      queries: [],
+      options: {
+        ...baseOptions,
+        maxResults: freshChannelMaxResults,
+        publishedAfterDays: freshUploadDays,
+        minViews: 0,
+        minViewsPerHour: 0
+      }
+    },
+    ...(useDailyApi && trendingEnabled ? [{
+      mode: "today_trending",
+      trending: true,
+      useApi: true,
+      queries: [],
+      options: {
+        ...baseOptions,
+        maxResults: trendingMaxResults,
+        trendingMaxResults,
+        minViews: 0,
+        minViewsPerHour: 0
+      }
+    }] : []),
     ...(useDailyApi ? [{
       mode: "daily_api_search",
       dailyApiSearch: true,
@@ -850,19 +984,6 @@ function fallbackPasses(baseQueries, baseOptions) {
         maxResults: dailyApiMaxResults
       }
     }] : []),
-    {
-      mode: "fresh_channels",
-      channelOnly: true,
-      useApi: false,
-      queries: [],
-      options: {
-        ...baseOptions,
-        maxResults: freshChannelMaxResults,
-        publishedAfterDays: freshUploadDays,
-        minViews: 0,
-        minViewsPerHour: 0
-      }
-    },
     {
       mode: "strict",
       useApi: false,
@@ -876,7 +997,7 @@ function fallbackPasses(baseQueries, baseOptions) {
       options: {
         ...baseOptions,
         maxResults: fallbackMaxResults,
-        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 30),
+        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 7),
         minViews: Math.max(10000, Math.floor(baseOptions.minViews * 0.5)),
         minViewsPerHour: Math.max(250, Math.floor(baseOptions.minViewsPerHour * 0.5))
       }
@@ -888,7 +1009,7 @@ function fallbackPasses(baseQueries, baseOptions) {
       options: {
         ...baseOptions,
         maxResults: fallbackMaxResults,
-        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 60),
+        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 14),
         minDuration: Math.min(baseOptions.minDuration, 300),
         minViews: Math.max(5000, Math.floor(baseOptions.minViews * 0.25)),
         minViewsPerHour: Math.max(100, Math.floor(baseOptions.minViewsPerHour * 0.2))
@@ -901,7 +1022,7 @@ function fallbackPasses(baseQueries, baseOptions) {
       options: {
         ...baseOptions,
         maxResults: fallbackMaxResults,
-        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 90),
+        publishedAfterDays: Math.max(baseOptions.publishedAfterDays, 30),
         minDuration: Math.min(baseOptions.minDuration, 300),
         minViews: 0,
         minViewsPerHour: 0
@@ -948,7 +1069,8 @@ export async function discoverAndQueueVideos(options = {}) {
   const maxDuration = numberEnv("AUTO_DISCOVER_MAX_DURATION_SECONDS", 10800, 60, 86400);
   const minViews = numberEnv("AUTO_DISCOVER_MIN_VIEWS", 25000, 0, 1000000000);
   const minViewsPerHour = numberEnv("AUTO_DISCOVER_MIN_VIEWS_PER_HOUR", 500, 0, 1000000000);
-  const publishedAfterDays = numberEnv("AUTO_DISCOVER_PUBLISHED_AFTER_DAYS", 14, 1, 365);
+  const publishedAfterDays = numberEnv("AUTO_DISCOVER_PUBLISHED_AFTER_DAYS", 2, 1, 365);
+  const trendingMaxAgeHours = numberEnv("AUTO_DISCOVER_TRENDING_MAX_AGE_HOURS", 36, 1, 168);
   const regionCode = String(process.env.AUTO_DISCOVER_REGION_CODE || "ID").trim().toUpperCase();
   const relevanceLanguage = String(process.env.AUTO_DISCOVER_RELEVANCE_LANGUAGE || "id").trim().toLowerCase();
   const discoveryOptions = {
@@ -958,6 +1080,7 @@ export async function discoverAndQueueVideos(options = {}) {
     minViews,
     minViewsPerHour,
     publishedAfterDays,
+    trendingMaxAgeHours,
     regionCode,
     relevanceLanguage
   };
@@ -978,7 +1101,8 @@ export async function discoverAndQueueVideos(options = {}) {
       targetDate,
       channelOnly: Boolean(pass.channelOnly),
       useApi: pass.useApi !== false,
-      dailyApiSearch: Boolean(pass.dailyApiSearch)
+      dailyApiSearch: Boolean(pass.dailyApiSearch),
+      trending: Boolean(pass.trending)
     });
     selected = await selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
     if (selected.length) {
