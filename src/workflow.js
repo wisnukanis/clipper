@@ -64,72 +64,196 @@ export async function runWorkflow(options = {}) {
     }
   }
 
-  let selection = null;
   let discoveryResult = null;
 
   if (options.url) {
-    selection = await createManualSelection(options);
-  } else {
-    try {
-      discoveryResult = await discoverAndQueueVideos({
-        theme: options.theme || config.defaultTheme,
-        targetDate: todayDate(),
-        ignoreDailyQueueLimit: !options.scheduled
-      });
-      await appendLog("discovery_result", {
-        skipped: Boolean(discoveryResult?.skipped),
-        reason: discoveryResult?.reason || "",
-        added_count: discoveryResult?.added?.length || 0,
-        expired_count: discoveryResult?.expired_count || 0,
-        daily_queue_count: discoveryResult?.daily_queue_count || 0,
-        daily_queue_limit: discoveryResult?.daily_queue_limit || 0,
-        added_video_ids: (discoveryResult?.added || []).map((video) => video.id)
-      });
-    } catch (error) {
-      console.warn(`Auto discovery gagal, fallback ke antrean lama: ${error.message}`);
-      await appendLog("discovery_failed", { error: error.message });
+    const selection = await createManualSelection(options);
+    if (!selection) {
+      return noVideoSelectedResult({ discoveryResult, failedSelections: [] });
     }
+    return processSelectedWorkflow({
+      selection,
+      options,
+      scheduledDailyLimit,
+      scheduledPostedToday
+    });
+  }
 
-    const discoveredVideoIds = (discoveryResult?.added || [])
-      .map((video) => video.id)
-      .filter(Boolean);
+  let discoveryAttempted = false;
+  let discoveredVideoIds = [];
+  const failedSelections = [];
+  const excludedVideoIds = new Set();
+  const maxAttempts = queueFailoverLimit();
 
-    if (discoveredVideoIds.length) {
-      selection = await selectNextVideo({
-        theme: options.theme || config.defaultTheme,
-        preferredVideoIds: discoveredVideoIds,
-        forceReprocess: options.forceReprocess === true
-      });
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let selection = await selectQueuedWorkflowVideo({ options, excludedVideoIds });
+
+    if (!selection && !discoveryAttempted) {
+      discoveryAttempted = true;
+      discoveryResult = await discoverQueuedVideos(options);
+      discoveredVideoIds = (discoveryResult?.added || [])
+        .map((video) => video.id)
+        .filter(Boolean);
+
+      if (discoveredVideoIds.length) {
+        selection = await selectQueuedWorkflowVideo({
+          options,
+          excludedVideoIds,
+          preferredVideoIds: discoveredVideoIds
+        });
+      }
+
+      if (!selection) {
+        selection = await selectQueuedWorkflowVideo({ options, excludedVideoIds });
+      }
     }
 
     if (!selection) {
-      selection = await selectNextVideo({
-        theme: options.theme || config.defaultTheme,
-        forceReprocess: options.forceReprocess === true
+      return noVideoSelectedResult({ discoveryResult, failedSelections });
+    }
+
+    try {
+      const result = await processSelectedWorkflow({
+        selection,
+        options,
+        scheduledDailyLimit,
+        scheduledPostedToday
       });
+      if (failedSelections.length) {
+        return {
+          ...result,
+          skipped_failed_video_count: failedSelections.length,
+          skipped_failed_videos: failedSelections
+        };
+      }
+      return result;
+    } catch (error) {
+      const failed = summarizeFailedSelection(selection, error);
+      failedSelections.push(failed);
+      excludedVideoIds.add(selection.video.id);
+      await appendLog("queue_video_failed_skip", {
+        attempt,
+        max_attempts: maxAttempts,
+        ...failed
+      });
+      console.warn(`Video antrean gagal, dilewati: ${error.message}`);
     }
   }
 
-  if (!selection) {
-    await appendLog("no_video_selected", {
-      discovery_added_count: discoveryResult?.added?.length || 0,
-      discovery_skipped: Boolean(discoveryResult?.skipped),
-      discovery_reason: discoveryResult?.reason || "",
-      discovery_expired_count: discoveryResult?.expired_count || 0,
-      daily_queue_count: discoveryResult?.daily_queue_count || 0,
-      daily_queue_limit: discoveryResult?.daily_queue_limit || 0
-    });
-    return {
-      status: "no_video_selected",
-      discovery_added_count: discoveryResult?.added?.length || 0,
-      discovery_skipped: Boolean(discoveryResult?.skipped),
-      discovery_reason: discoveryResult?.reason || "",
-      discovery_expired_count: discoveryResult?.expired_count || 0,
-      daily_queue_count: discoveryResult?.daily_queue_count || 0,
-      daily_queue_limit: discoveryResult?.daily_queue_limit || 0
-    };
-  }
+  await uploadStateToRemote().catch(() => {});
+  await appendLog("queue_failover_exhausted", {
+    failed_video_count: failedSelections.length,
+    failed_videos: failedSelections
+  });
+  return {
+    status: "queue_failed",
+    failed_video_count: failedSelections.length,
+    failed_videos: failedSelections
+  };
+}
 
+async function createManualSelection(options) {
+  const video = await addVideo({
+    url: options.url,
+    theme: options.theme && options.theme !== "auto" ? options.theme : "podcast artis",
+    target_date: todayDate(),
+    priority: 0,
+    manual_range: options.range || "",
+    quality_profile: options.qualityProfile || "standard",
+    clip_count: Number(options.clipCount || process.env.CLIP_COUNT || 1),
+    scene_mode: options.sceneMode || "podcast",
+    subtitle_font: options.subtitleFont || "Segoe UI Semibold",
+    subtitle_font_size: options.subtitleFontSize || 46,
+    subtitle_margin_v: options.subtitleMarginV || 550,
+    subtitle_margin_h: options.subtitleMarginH || 180,
+    use_frame: options.useFrame,
+    use_filter: options.useFilter,
+    use_watermark: options.useWatermark,
+    use_music: options.useMusic,
+    force_reprocess: options.forceReprocess === true,
+    notes: "Ditambahkan dari CLI/manual run"
+  });
+  return selectNextVideo({
+    theme: video.theme,
+    targetDate: todayDate(),
+    preferredVideoIds: [video.id],
+    forceReprocess: options.forceReprocess === true
+  });
+}
+
+function queueFailoverLimit() {
+  const configured = Number(process.env.QUEUE_FAILOVER_ATTEMPTS || process.env.MAX_SCHEDULED_POSTS_PER_DAY || 15);
+  if (!Number.isFinite(configured) || configured <= 0) return 15;
+  return Math.min(Math.floor(configured), 50);
+}
+
+function summarizeFailedSelection(selection, error) {
+  return {
+    video_id: selection?.video?.id || "",
+    youtube_video_id: selection?.video?.youtube_video_id || "",
+    url: selection?.video?.url || selection?.video?.source_url || "",
+    error: error.message
+  };
+}
+
+async function selectQueuedWorkflowVideo({ options, excludedVideoIds, preferredVideoIds = [] }) {
+  return selectNextVideo({
+    theme: options.theme || config.defaultTheme,
+    preferredVideoIds,
+    excludeVideoIds: [...excludedVideoIds],
+    forceReprocess: options.forceReprocess === true,
+    randomize: true
+  });
+}
+
+async function discoverQueuedVideos(options) {
+  try {
+    const discoveryResult = await discoverAndQueueVideos({
+      theme: options.theme || config.defaultTheme,
+      targetDate: todayDate(),
+      ignoreDailyQueueLimit: !options.scheduled
+    });
+    await appendLog("discovery_result", {
+      skipped: Boolean(discoveryResult?.skipped),
+      reason: discoveryResult?.reason || "",
+      added_count: discoveryResult?.added?.length || 0,
+      expired_count: discoveryResult?.expired_count || 0,
+      daily_queue_count: discoveryResult?.daily_queue_count || 0,
+      daily_queue_limit: discoveryResult?.daily_queue_limit || 0,
+      added_video_ids: (discoveryResult?.added || []).map((video) => video.id)
+    });
+    return discoveryResult;
+  } catch (error) {
+    console.warn(`Auto discovery gagal, fallback ke antrean lama: ${error.message}`);
+    await appendLog("discovery_failed", { error: error.message });
+    return null;
+  }
+}
+
+async function noVideoSelectedResult({ discoveryResult, failedSelections }) {
+  await appendLog("no_video_selected", {
+    discovery_added_count: discoveryResult?.added?.length || 0,
+    discovery_skipped: Boolean(discoveryResult?.skipped),
+    discovery_reason: discoveryResult?.reason || "",
+    discovery_expired_count: discoveryResult?.expired_count || 0,
+    daily_queue_count: discoveryResult?.daily_queue_count || 0,
+    daily_queue_limit: discoveryResult?.daily_queue_limit || 0,
+    skipped_failed_video_count: failedSelections.length
+  });
+  return {
+    status: "no_video_selected",
+    discovery_added_count: discoveryResult?.added?.length || 0,
+    discovery_skipped: Boolean(discoveryResult?.skipped),
+    discovery_reason: discoveryResult?.reason || "",
+    discovery_expired_count: discoveryResult?.expired_count || 0,
+    daily_queue_count: discoveryResult?.daily_queue_count || 0,
+    daily_queue_limit: discoveryResult?.daily_queue_limit || 0,
+    skipped_failed_video_count: failedSelections.length,
+    skipped_failed_videos: failedSelections
+  };
+}
+
+async function processSelectedWorkflow({ selection, options, scheduledDailyLimit, scheduledPostedToday }) {
   const { video, theme, prompt } = selection;
   const job = await createJobRecord(selection);
   await appendLog("job_created", { job_id: job.job_id, video_id: video.id, url: video.url });
@@ -300,34 +424,6 @@ export async function runWorkflow(options = {}) {
     await appendLog("workflow_failed", { job_id: job.job_id, error: error.message });
     throw error;
   }
-}
-
-async function createManualSelection(options) {
-  const video = await addVideo({
-    url: options.url,
-    theme: options.theme && options.theme !== "auto" ? options.theme : "podcast artis",
-    target_date: todayDate(),
-    priority: 0,
-    manual_range: options.range || "",
-    quality_profile: options.qualityProfile || "standard",
-    clip_count: Number(options.clipCount || process.env.CLIP_COUNT || 1),
-    scene_mode: options.sceneMode || "podcast",
-    subtitle_font: options.subtitleFont || "Segoe UI Semibold",
-    subtitle_font_size: options.subtitleFontSize || 46,
-    subtitle_margin_v: options.subtitleMarginV || 550,
-    subtitle_margin_h: options.subtitleMarginH || 180,
-    use_frame: options.useFrame,
-    use_filter: options.useFilter,
-    use_watermark: options.useWatermark,
-    use_music: options.useMusic,
-    force_reprocess: options.forceReprocess === true,
-    notes: "Ditambahkan dari CLI/manual run"
-  });
-  return selectNextVideo({
-    theme: video.theme,
-    targetDate: todayDate(),
-    forceReprocess: options.forceReprocess === true
-  });
 }
 
 async function processClipOutput({ job, video, theme, prompt, output, clipperResult, index, total, options }) {

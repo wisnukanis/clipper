@@ -5,6 +5,46 @@ import { hasProcessedVideo } from "./history.js";
 
 const selectableStatuses = new Set(["queued", "failed", "retry"]);
 
+function statusRank(status) {
+  const value = String(status || "queued").toLowerCase();
+  if (value === "queued") return 0;
+  if (value === "retry") return 1;
+  if (value === "failed") return 2;
+  return 3;
+}
+
+function compareCandidates(a, b) {
+  const status = statusRank(a.status) - statusRank(b.status);
+  if (status !== 0) return status;
+  const priority = Number(a.priority || 100) - Number(b.priority || 100);
+  if (priority !== 0) return priority;
+  return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+}
+
+function shuffle(items) {
+  const list = [...items];
+  for (let index = list.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [list[index], list[swapIndex]] = [list[swapIndex], list[index]];
+  }
+  return list;
+}
+
+function orderCandidates(candidates, randomize = false) {
+  if (!randomize) return [...candidates].sort(compareCandidates);
+
+  const byStatus = new Map();
+  for (const video of candidates) {
+    const rank = statusRank(video.status);
+    if (!byStatus.has(rank)) byStatus.set(rank, []);
+    byStatus.get(rank).push(video);
+  }
+
+  return [...byStatus.keys()]
+    .sort((a, b) => a - b)
+    .flatMap((rank) => shuffle(byStatus.get(rank)));
+}
+
 function boolInput(value, fallback = false) {
   if (value === undefined || value === null || value === "") return fallback;
   if (typeof value === "boolean") return value;
@@ -20,10 +60,12 @@ export async function selectNextVideo(options = {}) {
   const activeThemes = themes.filter((theme) => theme.status === "active");
   const requestedTheme = options.theme && options.theme !== "auto" ? options.theme : "";
   const preferredVideoIds = new Set((options.preferredVideoIds || []).filter(Boolean));
+  const excludedVideoIds = new Set((options.excludeVideoIds || []).filter(Boolean));
 
   let candidates = videos
     .map(normalizeVideo)
     .filter((video) => video.active !== false)
+    .filter((video) => !excludedVideoIds.has(video.id))
     .filter((video) => selectableStatuses.has(video.status || "queued"))
     .filter((video) => !requestedTheme || video.theme === requestedTheme);
 
@@ -35,11 +77,7 @@ export async function selectNextVideo(options = {}) {
     : [];
   if (preferredCandidates.length) candidates = preferredCandidates;
 
-  candidates.sort((a, b) => {
-    const priority = Number(a.priority || 100) - Number(b.priority || 100);
-    if (priority !== 0) return priority;
-    return String(a.created_at || "").localeCompare(String(b.created_at || ""));
-  });
+  candidates = orderCandidates(candidates, options.randomize === true);
 
   for (const video of candidates) {
     if (!options.forceReprocess && !video.force_reprocess && await hasProcessedVideo(video)) {
