@@ -148,9 +148,10 @@ export async function updateVideoStatus(videoId, status, patch = {}) {
   });
 }
 
-export async function createJobRecord({ video, theme, prompt }) {
+export async function createJobRecord({ video, theme, prompt }, options = {}) {
   const jobId = createJobId(theme?.name || video?.theme || "podcast");
   const now = new Date().toISOString();
+  const keepVideoStatus = options.keepVideoStatus === true;
   const job = {
     job_id: jobId,
     video_id: video.id,
@@ -203,7 +204,11 @@ export async function createJobRecord({ video, theme, prompt }) {
     error_message: ""
   };
   await upsertItem("jobs", job, "job_id");
-  await updateVideoStatus(video.id, "selected", { current_job_id: jobId });
+  if (keepVideoStatus) {
+    await patchItem("videos", video.id, { current_job_id: jobId });
+  } else {
+    await updateVideoStatus(video.id, "selected", { current_job_id: jobId });
+  }
   return job;
 }
 

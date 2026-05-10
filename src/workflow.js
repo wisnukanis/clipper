@@ -7,6 +7,7 @@ import { appendHistory, publishedCountToday } from "./history.js";
 import { addVideo, createJobRecord, selectNextVideo, updateVideoStatus } from "./selector.js";
 import { runClipper } from "./clipper-runner.js";
 import { generateCaption, generateFrameQuoteText, generateThumbnailText } from "./caption.js";
+import { ensureCaptionSourceCredit } from "./caption-policy.js";
 import { generateThumbnail, prependThumbnailIntro } from "./thumbnail.js";
 import { fileExists, uploadHistoryFile, uploadJobFiles, validatePublicUrl } from "./uploader.js";
 import { publishReel } from "./instagram.js";
@@ -76,6 +77,7 @@ export async function runWorkflow(options = {}) {
   }
 
   let discoveryResult = null;
+  const keepVideoQueued = !options.url && !options.scheduled;
 
   if (options.url) {
     const selection = await createManualSelection(options);
@@ -86,7 +88,8 @@ export async function runWorkflow(options = {}) {
       selection,
       options,
       scheduledDailyLimit,
-      scheduledPostedToday
+      scheduledPostedToday,
+      keepVideoQueued: false
     });
   }
 
@@ -128,7 +131,8 @@ export async function runWorkflow(options = {}) {
         selection,
         options,
         scheduledDailyLimit,
-        scheduledPostedToday
+        scheduledPostedToday,
+        keepVideoQueued
       });
       if (failedSelections.length) {
         return {
@@ -264,17 +268,26 @@ async function noVideoSelectedResult({ discoveryResult, failedSelections }) {
   };
 }
 
-async function processSelectedWorkflow({ selection, options, scheduledDailyLimit, scheduledPostedToday }) {
+async function processSelectedWorkflow({ selection, options, scheduledDailyLimit, scheduledPostedToday, keepVideoQueued = false }) {
   const { video, theme, prompt } = selection;
-  const job = await createJobRecord(selection);
-  await appendLog("job_created", { job_id: job.job_id, video_id: video.id, url: video.url });
+  const job = await createJobRecord(selection, { keepVideoStatus: keepVideoQueued });
+  const maybeUpdateVideoStatus = async (status, patch) => {
+    if (keepVideoQueued) return;
+    await updateVideoStatus(video.id, status, patch);
+  };
+  await appendLog("job_created", {
+    job_id: job.job_id,
+    video_id: video.id,
+    url: video.url,
+    keep_video_queued: keepVideoQueued
+  });
 
   try {
     await updateJob(job.job_id, {
       status: "clipper_processing",
       clipper_status: "processing"
     });
-    await updateVideoStatus(video.id, "clipper_processing");
+    await maybeUpdateVideoStatus("clipper_processing");
 
     const clipperResult = await runClipper({
       video,
@@ -394,7 +407,7 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
       published_at: final.publishedClips > 0 ? new Date().toISOString() : ""
     });
 
-    await updateVideoStatus(video.id, final.videoStatus, {
+    await maybeUpdateVideoStatus(final.videoStatus, {
       youtube_video_id: lastPlatformResults.youtube?.videoId || video.youtube_video_id,
       youtube_url: lastPlatformResults.youtube?.url || "",
       instagram_media_id: lastPlatformResults.instagram?.mediaId || "",
@@ -430,7 +443,7 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
       status: "failed",
       error_message: error.message
     });
-    await updateVideoStatus(video.id, "failed", { error_message: error.message });
+    await maybeUpdateVideoStatus("failed", { error_message: error.message });
     await uploadStateToRemote().catch(() => {});
     await appendLog("workflow_failed", { job_id: job.job_id, error: error.message });
     throw error;
@@ -463,12 +476,16 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     frame_quote_text: frameQuoteText
   });
 
-  const caption = await generateCaption({
+  const generatedCaption = await generateCaption({
     job: storageJob,
     output,
     promptTemplate: prompt,
     clipperRoot: clipperResult.clipperRoot,
     aiProvider
+  });
+  const caption = ensureCaptionSourceCredit(generatedCaption, {
+    sourceUrl: video.url || video.source_url,
+    sourceTitle: video.source_title || output.title || job.source_title
   });
   await updateJob(job.job_id, {
     caption_status: "done",
@@ -760,6 +777,10 @@ async function updateJob(jobId, patch) {
 }
 
 async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
+  const publishCaption = ensureCaptionSourceCredit(caption, {
+    sourceUrl: job.source_url,
+    sourceTitle: job.source_title || output.title
+  });
   const platformResults = {
     instagram: null,
     facebook: null,
@@ -775,7 +796,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
   if (config.youtube.enabled) {
     platformResults.youtube = await publishPlatform("youtube", platformResults, job.job_id, async () => {
       await updateJob(job.job_id, { youtube_status: "processing", youtube_error: "" });
-      const youtubeMetadata = buildYoutubeMetadata({ job, output, caption });
+      const youtubeMetadata = buildYoutubeMetadata({ job, output, caption: publishCaption });
       return publishToYoutube({
         videoPath: output.finalAbsPath,
         thumbnailPath: thumbnail?.path || "",
@@ -795,7 +816,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
         videoUrl: upload.videoUrl,
         videoPath: output.finalAbsPath,
         title: output.title || job.source_title || "Podcast Clip",
-        description: caption,
+        description: publishCaption,
         thumbnailPath: thumbnail?.path || ""
       });
     });
@@ -812,7 +833,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
       });
       return publishReel({
         videoUrl: instagramVideo.videoUrl,
-        caption,
+        caption: publishCaption,
         coverUrl: upload.thumbnailUrl || ""
       });
     });
@@ -825,7 +846,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
       return publishToTikTok({
         videoUrl: upload.videoUrl,
         videoPath: output.finalAbsPath,
-        caption
+        caption: publishCaption
       });
     });
   }
@@ -836,7 +857,11 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
       await updateJob(job.job_id, { threads_status: "processing", threads_error: "" });
       return publishToThreads({
         videoUrl: upload.videoUrl,
-        caption
+        caption: ensureCaptionSourceCredit(publishCaption, {
+          sourceUrl: job.source_url,
+          sourceTitle: job.source_title || output.title,
+          maxLength: 500
+        })
       });
     });
   }
