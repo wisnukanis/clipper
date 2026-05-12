@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b1220">
+    <title>Kebijakan Privasi - RazqaBermain Clipper</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fb;
+        --text: #142033;
+        --muted: #5b6678;
+        --line: #d9e0ea;
+        --accent: #0f766e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Arial, "Segoe UI", sans-serif;
+        line-height: 1.65;
+      }
+      header, main, footer {
+        width: min(920px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 22px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      a { color: var(--accent); }
+      .brand {
+        color: var(--text);
+        font-weight: 800;
+        text-decoration: none;
+      }
+      nav {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      main { padding: 34px 0; }
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(32px, 6vw, 52px);
+        line-height: 1.05;
+      }
+      h2 { margin-top: 30px; }
+      .updated { color: var(--muted); margin-top: 0; }
+      ul { padding-left: 22px; }
+      footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        padding: 18px 0 30px;
+      }
+      @media (max-width: 640px) {
+        header { flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">RazqaBermain Clipper</a>
+      <nav>
+        <a href="/privacy.html">Kebijakan Privasi</a>
+        <a href="/terms.html">Ketentuan Layanan</a>
+        <a href="/data-deletion.html">Penghapusan Data</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Kebijakan Privasi</h1>
+      <p class="updated">Terakhir diperbarui: 12 Mei 2026</p>
+
+      <p>RazqaBermain Clipper adalah aplikasi otomasi internal untuk menyiapkan, mengelola, dan menerbitkan konten video pendek ke platform yang dihubungkan oleh pengguna, termasuk layanan Meta seperti Facebook Page dan Instagram.</p>
+
+      <h2>Data yang Kami Proses</h2>
+      <p>Aplikasi dapat memproses data akun dan izin yang diberikan melalui proses login atau authorization platform, seperti user ID, page ID, token akses, status koneksi, metadata video, URL media, jadwal publikasi, dan status workflow.</p>
+
+      <h2>Cara Kami Menggunakan Data</h2>
+      <ul>
+        <li>Menghubungkan akun atau halaman yang dipilih pengguna.</li>
+        <li>Mengunggah dan menerbitkan konten yang dipilih atau disetujui pengguna.</li>
+        <li>Menampilkan status proses, histori workflow, dan hasil publikasi di dashboard.</li>
+        <li>Memperbarui token akses jika platform menyediakan mekanisme refresh yang sah.</li>
+      </ul>
+
+      <h2>Penyimpanan dan Keamanan</h2>
+      <p>Token dan konfigurasi sensitif disimpan sebagai environment variables atau repository secrets yang aksesnya dibatasi. Kami tidak menjual, menyewakan, atau membagikan token pengguna kepada pihak ketiga untuk tujuan pemasaran.</p>
+
+      <h2>Berbagi Data</h2>
+      <p>Data hanya dikirim ke platform terkait saat dibutuhkan untuk menjalankan fungsi aplikasi, misalnya upload video, validasi token, atau membaca status workflow. Layanan infrastruktur seperti hosting, penyimpanan, dan GitHub Actions dapat memproses data teknis untuk menjalankan aplikasi.</p>
+
+      <h2>Penghapusan Data</h2>
+      <p>Pengguna dapat meminta penghapusan data aplikasi melalui halaman <a href="/data-deletion.html">Instruksi Penghapusan Data</a>. Pengguna juga dapat mencabut akses aplikasi dari pengaturan akun Meta/Facebook atau platform terkait.</p>
+
+      <h2>Kontak</h2>
+      <p>Untuk pertanyaan privasi, hubungi: <a href="mailto:admin@razqabermain.com">admin@razqabermain.com</a>.</p>
+    </main>
+
+    <footer>
+      <span>RazqaBermain Clipper</span>
+    </footer>
+  </body>
+</html>
