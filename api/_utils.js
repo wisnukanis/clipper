@@ -440,7 +440,7 @@ async function withRemoteRetry(task) {
 }
 
 function githubRepo() {
-  return clean(process.env.DASHBOARD_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "emsabiq/clipper");
+  return clean(process.env.DASHBOARD_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "wisnukanis/clipper");
 }
 
 function githubToken() {

@@ -786,7 +786,7 @@ Contoh `.env.example`:
 
 ```env
 LOCAL_PORT=8787
-PUBLIC_BASE_URL=https://www.example.com/ig-generated
+PUBLIC_BASE_URL=https://razqabermain.com/ig-generated
 UPLOAD_DRIVER=sftp
 AI_PROVIDER=openai
 
@@ -797,13 +797,13 @@ OPENAI_TEMPERATURE=0.45
 OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 AI_REQUEST_TIMEOUT_SECONDS=25
 
-SFTP_HOST=
+SFTP_HOST=37.44.245.121
 SFTP_PORT=65002
-SFTP_USER=
+SFTP_USER=u801238271
 SFTP_PASSWORD=
 SFTP_PRIVATE_KEY=
 SFTP_PASSPHRASE=
-SFTP_REMOTE_DIR=/home/u123456789/domains/domain.tld/public_html/ig-generated
+SFTP_REMOTE_DIR=/home/u801238271/domains/razqabermain.com/public_html/ig-generated
 SFTP_TIMEOUT_SECONDS=420
 SFTP_UPLOAD_TIMEOUT_SECONDS=1800
 SFTP_CLEANUP_TIMEOUT_SECONDS=600
@@ -821,12 +821,12 @@ VIDEO_FRAME_ENABLED=true
 VIDEO_FILTER_ENABLED=true
 VIDEO_WATERMARK_ENABLED=true
 VIDEO_LOWER_THIRD_ENABLED=true
-VIDEO_LOWER_THIRD_BRAND=@clipperemsapro | Podcast Highlight
+VIDEO_LOWER_THIRD_BRAND=@razqabermain | Ceramah Highlight
 VIDEO_FRAME_ASSET=assets/branding/frame-1080x1920.png
 VIDEO_WATERMARK_ASSET=assets/branding/logo.png
 VIDEO_EFFECT_CRF=27
 VIDEO_EFFECT_PRESET=veryfast
-THUMBNAIL_PILL_TEXT=Podcast | Highlight | Viral
+THUMBNAIL_PILL_TEXT=Ceramah | Kajian | Shorts
 THUMBNAIL_INTRO_ENABLED=true
 THUMBNAIL_INTRO_SECONDS=0.9
 MAX_SCHEDULED_POSTS_PER_DAY=15
@@ -847,9 +847,12 @@ AUTO_DASHBOARD_ALLOW_REMOTE=false
 
 POST_CRON=0 8,13,19 * * *
 DEFAULT_THEME=auto
-AUTO_DISCOVER_CHANNEL_HANDLES=@corbuzier|@VINDES|@radityadika|@DanielManantaNetwork|@HASCreative|@podkesmas|@podhub|@Kasisolusi|@TotalPolitik
-AUTO_DISCOVER_FRESH_UPLOAD_DAYS=3
-AUTO_DISCOVER_CHANNEL_MAX_RESULTS=5
+AUTO_DISCOVER_QUERY=ceramah islam terbaru indonesia|ceramah ustadz terbaru|kajian islam indonesia terbaru|ceramah agama islam terbaru|ceramah pendek islam|kajian sunnah terbaru
+AUTO_DISCOVER_DAILY_QUERY=ceramah islam terbaru indonesia
+AUTO_DISCOVER_TRENDING_CATEGORY_IDS=27,22
+AUTO_DISCOVER_CHANNEL_HANDLES=
+AUTO_DISCOVER_FRESH_UPLOAD_DAYS=1
+AUTO_DISCOVER_CHANNEL_MAX_RESULTS=3
 
 GRAPH_API_VERSION=v25.0
 YOUTUBE_UPLOAD_ENABLED=true

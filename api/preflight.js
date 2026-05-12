@@ -75,7 +75,7 @@ async function checkGithubYoutubeSecrets() {
   const token = clean(process.env.GH_REPO_SECRET_TOKEN || process.env.GITHUB_TOKEN);
   if (!token) return { ok: false, detail: "GH_REPO_SECRET_TOKEN belum diset" };
 
-  const repo = clean(process.env.DASHBOARD_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "emsabiq/clipper");
+  const repo = clean(process.env.DASHBOARD_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "wisnukanis/clipper");
   const required = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"];
   try {
     const response = await fetch(`https://api.github.com/repos/${repo}/actions/secrets?per_page=100`, {

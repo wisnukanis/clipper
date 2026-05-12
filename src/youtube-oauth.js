@@ -147,7 +147,7 @@ export function persistLocalYoutubeTokens({ refreshToken }) {
 
 export async function upsertGithubSecret(name, value) {
   const token = clean(process.env.GH_REPO_SECRET_TOKEN || process.env.GITHUB_TOKEN);
-  const repo = clean(process.env.DASHBOARD_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "emsabiq/clipper");
+  const repo = clean(process.env.DASHBOARD_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "wisnukanis/clipper");
   if (!token) return { skipped: true, reason: "GH_REPO_SECRET_TOKEN belum diset" };
   if (!value) return { skipped: true, reason: `${name} kosong` };
 

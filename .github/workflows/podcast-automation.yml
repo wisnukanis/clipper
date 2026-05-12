@@ -157,7 +157,7 @@ jobs:
       TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
       TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
       TIKTOK_SCOPE: ${{ secrets.TIKTOK_SCOPE }}
-      TIKTOK_REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI || 'https://clipper.emsa.pro/auth/tiktok/callback.php' }}
+      TIKTOK_REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI || 'https://razqabermain.com/ig-generated/auth/tiktok/callback.php' }}
       TIKTOK_PUBLISH_MODE: ${{ secrets.TIKTOK_PUBLISH_MODE || 'direct' }}
       TIKTOK_PRIVACY_LEVEL: ${{ secrets.TIKTOK_PRIVACY_LEVEL || 'SELF_ONLY' }}
       TIKTOK_DISABLE_DUET: ${{ secrets.TIKTOK_DISABLE_DUET || 'false' }}
@@ -218,14 +218,14 @@ jobs:
       INSTAGRAM_CONTAINER_MAX_ATTEMPTS: ${{ secrets.INSTAGRAM_CONTAINER_MAX_ATTEMPTS || '90' }}
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
       AUTO_DISCOVER_VIDEOS: ${{ secrets.AUTO_DISCOVER_VIDEOS || 'true' }}
-      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'podcast indonesia hari ini|podcast artis indonesia hari ini|podcast artis indonesia terbaru|podcast deddy corbuzier terbaru|podcast vindes terbaru|podcast politik indonesia hari ini' }}
-      AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || 'podcast indonesia hari ini' }}
+      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'ceramah islam terbaru indonesia|ceramah ustadz terbaru|kajian islam indonesia terbaru|ceramah agama islam terbaru|ceramah pendek islam|kajian sunnah terbaru' }}
+      AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || 'ceramah islam terbaru indonesia' }}
       AUTO_DISCOVER_USE_API: ${{ secrets.AUTO_DISCOVER_USE_API || 'true' }}
       AUTO_DISCOVER_ALLOW_OAUTH: ${{ secrets.AUTO_DISCOVER_ALLOW_OAUTH || 'false' }}
       AUTO_DISCOVER_DAILY_SEARCH_ONLY: ${{ secrets.AUTO_DISCOVER_DAILY_SEARCH_ONLY || 'true' }}
       AUTO_DISCOVER_DAILY_SEARCH_RESULTS: ${{ secrets.AUTO_DISCOVER_DAILY_SEARCH_RESULTS || '7' }}
       AUTO_DISCOVER_TRENDING_ENABLED: ${{ secrets.AUTO_DISCOVER_TRENDING_ENABLED || 'true' }}
-      AUTO_DISCOVER_TRENDING_CATEGORY_IDS: ${{ secrets.AUTO_DISCOVER_TRENDING_CATEGORY_IDS || '24,22' }}
+      AUTO_DISCOVER_TRENDING_CATEGORY_IDS: ${{ secrets.AUTO_DISCOVER_TRENDING_CATEGORY_IDS || '27,22' }}
       AUTO_DISCOVER_TRENDING_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_TRENDING_MAX_RESULTS || '25' }}
       AUTO_DISCOVER_TRENDING_MAX_AGE_HOURS: ${{ secrets.AUTO_DISCOVER_TRENDING_MAX_AGE_HOURS || '36' }}
       AUTO_DISCOVER_CACHE_SYNC_IMMEDIATE: ${{ secrets.AUTO_DISCOVER_CACHE_SYNC_IMMEDIATE || 'true' }}
@@ -244,7 +244,7 @@ jobs:
       AUTO_DISCOVER_REGION_CODE: ${{ secrets.AUTO_DISCOVER_REGION_CODE || 'ID' }}
       AUTO_DISCOVER_RELEVANCE_LANGUAGE: ${{ secrets.AUTO_DISCOVER_RELEVANCE_LANGUAGE || 'id' }}
       AUTO_DISCOVER_CHANNEL_IDS: ${{ secrets.AUTO_DISCOVER_CHANNEL_IDS }}
-      AUTO_DISCOVER_CHANNEL_HANDLES: ${{ secrets.AUTO_DISCOVER_CHANNEL_HANDLES || '@corbuzier|@VINDES|@radityadika|@DanielManantaNetwork|@HASCreative|@podkesmas|@podhub|@Kasisolusi|@TotalPolitik' }}
+      AUTO_DISCOVER_CHANNEL_HANDLES: ${{ secrets.AUTO_DISCOVER_CHANNEL_HANDLES }}
       AUTO_DISCOVER_FRESH_UPLOAD_DAYS: ${{ secrets.AUTO_DISCOVER_FRESH_UPLOAD_DAYS || '1' }}
       AUTO_DISCOVER_CHANNEL_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_CHANNEL_MAX_RESULTS || '3' }}
 
