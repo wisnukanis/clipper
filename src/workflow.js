@@ -146,12 +146,27 @@ export async function runWorkflow(options = {}) {
       const failed = summarizeFailedSelection(selection, error);
       failedSelections.push(failed);
       excludedVideoIds.add(selection.video.id);
+      const sourceBlocked = isYoutubeSourceBlocked(error);
       await appendLog("queue_video_failed_skip", {
         attempt,
         max_attempts: maxAttempts,
+        terminal_source_block: sourceBlocked,
         ...failed
       });
       console.warn(`Video antrean gagal, dilewati: ${error.message}`);
+
+      if (sourceBlocked) {
+        await uploadStateToRemote().catch(() => {});
+        await appendLog("queue_failover_stopped_source_blocked", {
+          reason: "youtube_auth_required",
+          failed_video_count: failedSelections.length,
+          failed_videos: failedSelections
+        });
+        throw new Error(
+          "YouTube memblokir download dari runner GitHub (bot-check/login). " +
+          "Isi GitHub Secret YTDLP_COOKIES_TXT dengan cookies YouTube format Netscape, lalu jalankan ulang."
+        );
+      }
     }
   }
 
@@ -209,6 +224,18 @@ function summarizeFailedSelection(selection, error) {
     url: selection?.video?.url || selection?.video?.source_url || "",
     error: error.message
   };
+}
+
+function isYoutubeSourceBlocked(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return [
+    "youtube_auth_required",
+    "sign in to confirm",
+    "not a bot",
+    "use --cookies",
+    "cookies-from-browser",
+    "bot-check"
+  ].some((pattern) => message.includes(pattern));
 }
 
 async function selectQueuedWorkflowVideo({ options, excludedVideoIds, preferredVideoIds = [] }) {

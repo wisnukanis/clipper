@@ -247,6 +247,7 @@ jobs:
       AUTO_DISCOVER_CHANNEL_HANDLES: ${{ secrets.AUTO_DISCOVER_CHANNEL_HANDLES }}
       AUTO_DISCOVER_FRESH_UPLOAD_DAYS: ${{ secrets.AUTO_DISCOVER_FRESH_UPLOAD_DAYS || '1' }}
       AUTO_DISCOVER_CHANNEL_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_CHANNEL_MAX_RESULTS || '3' }}
+      QUEUE_FAILOVER_ATTEMPTS: ${{ secrets.QUEUE_FAILOVER_ATTEMPTS || '3' }}
 
       YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY || secrets.YOUTUBE_DATA_API_KEY || secrets.GOOGLE_API_KEY }}
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
@@ -319,12 +320,13 @@ jobs:
       YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
       YTDLP_REFERER: https://www.youtube.com/
 
-      YTDLP_SLEEP_REQUESTS: "5"
-      YTDLP_SLEEP_INTERVAL: "8"
-      YTDLP_MAX_SLEEP_INTERVAL: "18"
-      YTDLP_RETRIES: "3"
-      YTDLP_FRAGMENT_RETRIES: "3"
-      YTDLP_RETRY_SLEEP: "exp=10:60"
+      YTDLP_SLEEP_REQUESTS: ${{ secrets.YTDLP_SLEEP_REQUESTS || '0' }}
+      YTDLP_SLEEP_INTERVAL: ${{ secrets.YTDLP_SLEEP_INTERVAL || '0' }}
+      YTDLP_MAX_SLEEP_INTERVAL: ${{ secrets.YTDLP_MAX_SLEEP_INTERVAL || '0' }}
+      YTDLP_RETRIES: ${{ secrets.YTDLP_RETRIES || '1' }}
+      YTDLP_FRAGMENT_RETRIES: ${{ secrets.YTDLP_FRAGMENT_RETRIES || '1' }}
+      YTDLP_RETRY_SLEEP: ${{ secrets.YTDLP_RETRY_SLEEP || 'exp=1:6' }}
+      YTDLP_SOCKET_TIMEOUT: ${{ secrets.YTDLP_SOCKET_TIMEOUT || '20' }}
 
     steps:
       - name: Checkout
@@ -445,6 +447,10 @@ jobs:
           if [ "$DEEPGRAM_ENABLED" != "1" ] || [ -z "$DEEPGRAM_API_KEYS" ]; then
             echo "::error::DEEPGRAM_ENABLED harus 1 dan DEEPGRAM_API_KEYS wajib diisi"
             missing=1
+          fi
+
+          if [ -z "$YTDLP_COOKIES_TXT" ]; then
+            echo "::notice::YTDLP_COOKIES_TXT belum diisi. Jika YouTube bot-check, workflow akan berhenti cepat dan minta cookies."
           fi
 
           exit "$missing"
@@ -923,6 +929,7 @@ jobs:
           echo "AUTO_DISCOVER_FALLBACK_MAX_RESULTS=$AUTO_DISCOVER_FALLBACK_MAX_RESULTS"
           echo "AUTO_DISCOVER_FRESH_UPLOAD_DAYS=$AUTO_DISCOVER_FRESH_UPLOAD_DAYS"
           echo "AUTO_DISCOVER_CHANNEL_MAX_RESULTS=$AUTO_DISCOVER_CHANNEL_MAX_RESULTS"
+          echo "QUEUE_FAILOVER_ATTEMPTS=$QUEUE_FAILOVER_ATTEMPTS"
           echo "VIDEO_QUALITY_PROFILE=$VIDEO_QUALITY_PROFILE"
           echo "VIDEO_FRAME_ENABLED=$VIDEO_FRAME_ENABLED"
           echo "VIDEO_FILTER_ENABLED=$VIDEO_FILTER_ENABLED"
@@ -942,6 +949,7 @@ jobs:
           echo "YTDLP_MAX_SLEEP_INTERVAL=$YTDLP_MAX_SLEEP_INTERVAL"
           echo "YTDLP_RETRIES=$YTDLP_RETRIES"
           echo "YTDLP_FRAGMENT_RETRIES=$YTDLP_FRAGMENT_RETRIES"
+          echo "YTDLP_SOCKET_TIMEOUT=$YTDLP_SOCKET_TIMEOUT"
 
           if [ -n "$YTDLP_USER_AGENT" ]; then
             echo "YTDLP_USER_AGENT=configured"
@@ -976,6 +984,7 @@ jobs:
             --retries "$YTDLP_RETRIES" \
             --fragment-retries "$YTDLP_FRAGMENT_RETRIES" \
             --retry-sleep "$YTDLP_RETRY_SLEEP" \
+            --socket-timeout "$YTDLP_SOCKET_TIMEOUT" \
             --skip-download \
             --print title \
             "$TEST_URL"

@@ -14,6 +14,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_OPENAI_MODELS = set()
+YTDLP_AUTH_ERROR_PATTERNS = (
+    "sign in to confirm",
+    "not a bot",
+    "use --cookies",
+    "cookies-from-browser",
+    "cookies.txt",
+    "login required",
+    "private video",
+)
+
+
+class YoutubeAuthRequiredError(RuntimeError):
+    pass
 
 
 def log_step(message):
@@ -248,13 +261,73 @@ def run(args, capture=False):
     return subprocess.run(args, **kwargs)
 
 
+def run_streaming(args):
+    process = subprocess.Popen(
+        args,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+    )
+    output_lines = []
+    if process.stdout:
+        for line in process.stdout:
+            output_lines.append(line)
+            print(line, end="", flush=True)
+    returncode = process.wait()
+    output = "".join(output_lines)
+    if returncode != 0:
+        raise subprocess.CalledProcessError(returncode, args, output=output, stderr=output)
+    return subprocess.CompletedProcess(args, returncode, stdout=output, stderr="")
+
+
+def command_output(error):
+    stdout = getattr(error, "stdout", "") or getattr(error, "output", "") or ""
+    stderr = getattr(error, "stderr", "") or ""
+    return f"{stdout}\n{stderr}"
+
+
+def is_ytdlp_auth_error(error):
+    output = command_output(error).lower()
+    return any(pattern in output for pattern in YTDLP_AUTH_ERROR_PATTERNS)
+
+
+def raise_ytdlp_auth_error(error):
+    raise YoutubeAuthRequiredError(
+        "YOUTUBE_AUTH_REQUIRED: YouTube meminta login/cookies saat yt-dlp mengambil video. "
+        "Isi GitHub Secret YTDLP_COOKIES_TXT dengan cookies Netscape dari browser yang login YouTube, "
+        "atau pilih URL lain yang tidak terkena bot-check."
+    ) from error
+
+
 def run_ytdlp(args, capture=False):
     common_args = ytdlp_common_args()
+    commands = [
+        ["yt-dlp", *common_args, *args],
+        [sys.executable, "-m", "yt_dlp", *common_args, *args],
+    ]
 
-    try:
-        return run(["yt-dlp", *common_args, *args], capture=capture)
-    except FileNotFoundError:
-        return run([sys.executable, "-m", "yt_dlp", *common_args, *args], capture=capture)
+    last_missing = None
+    for command in commands:
+        try:
+            return run(command, capture=True) if capture else run_streaming(command)
+        except FileNotFoundError as exc:
+            last_missing = exc
+            continue
+        except subprocess.CalledProcessError as exc:
+            if is_ytdlp_auth_error(exc):
+                raise_ytdlp_auth_error(exc)
+            raise
+
+    if last_missing:
+        raise last_missing
+    raise RuntimeError("yt-dlp tidak tersedia.")
+
+
+def ytdlp_option_enabled(value):
+    value = str(value or "").strip().lower()
+    return bool(value) and value not in {"0", "false", "off", "none", "null"}
 
 
 def ytdlp_common_args():
@@ -272,6 +345,7 @@ def ytdlp_common_args():
     retries = os.environ.get("YTDLP_RETRIES", "").strip()
     fragment_retries = os.environ.get("YTDLP_FRAGMENT_RETRIES", "").strip()
     retry_sleep = os.environ.get("YTDLP_RETRY_SLEEP", "").strip()
+    socket_timeout = os.environ.get("YTDLP_SOCKET_TIMEOUT", "").strip()
 
     # Prioritas 1: pakai file cookies.txt
     # Letakkan cookies.txt di root project:
@@ -296,23 +370,26 @@ def ytdlp_common_args():
     if js_runtimes:
         args.extend(["--js-runtimes", js_runtimes])
 
-    if sleep_requests:
+    if ytdlp_option_enabled(sleep_requests):
         args.extend(["--sleep-requests", sleep_requests])
 
-    if sleep_interval:
+    if ytdlp_option_enabled(sleep_interval):
         args.extend(["--sleep-interval", sleep_interval])
 
-    if max_sleep_interval:
+    if ytdlp_option_enabled(max_sleep_interval):
         args.extend(["--max-sleep-interval", max_sleep_interval])
 
-    if retries:
+    if ytdlp_option_enabled(retries):
         args.extend(["--retries", retries])
 
-    if fragment_retries:
+    if ytdlp_option_enabled(fragment_retries):
         args.extend(["--fragment-retries", fragment_retries])
 
-    if retry_sleep:
+    if ytdlp_option_enabled(retry_sleep):
         args.extend(["--retry-sleep", retry_sleep])
+
+    if ytdlp_option_enabled(socket_timeout):
+        args.extend(["--socket-timeout", socket_timeout])
 
     return args
 
@@ -345,6 +422,8 @@ def download_subtitle(url, job_id, language):
         selected_lang = candidates[0] if candidates else None
         if selected_lang:
             log_info(f"Transcript tersedia. Bahasa dipakai: {selected_lang}")
+    except YoutubeAuthRequiredError:
+        raise
     except Exception as exc:
         log_warn(f"Gagal membaca daftar transcript: {exc}")
 
@@ -366,6 +445,8 @@ def download_subtitle(url, job_id, language):
                 url,
             ]
         )
+    except YoutubeAuthRequiredError:
+        raise
     except subprocess.CalledProcessError as exc:
         log_warn(f"Gagal mengambil subtitle: {exc}")
 
