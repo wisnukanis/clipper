@@ -230,8 +230,8 @@ jobs:
       AUTO_DISCOVER_TRENDING_MAX_AGE_HOURS: ${{ secrets.AUTO_DISCOVER_TRENDING_MAX_AGE_HOURS || '36' }}
       AUTO_DISCOVER_CACHE_SYNC_IMMEDIATE: ${{ secrets.AUTO_DISCOVER_CACHE_SYNC_IMMEDIATE || 'true' }}
       AUTO_DISCOVER_VALIDATE_URL: ${{ secrets.AUTO_DISCOVER_VALIDATE_URL || 'true' }}
-      AUTO_DISCOVER_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_MAX_RESULTS || '7' }}
-      AUTO_DISCOVER_ADD_COUNT: ${{ secrets.AUTO_DISCOVER_ADD_COUNT || '7' }}
+      AUTO_DISCOVER_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_MAX_RESULTS || '5' }}
+      AUTO_DISCOVER_ADD_COUNT: ${{ secrets.AUTO_DISCOVER_ADD_COUNT || '3' }}
       AUTO_DISCOVER_DAILY_QUEUE_LIMIT: ${{ secrets.AUTO_DISCOVER_DAILY_QUEUE_LIMIT || secrets.MAX_SCHEDULED_POSTS_PER_DAY || '15' }}
       AUTO_DISCOVER_EXPIRE_OLD_QUEUE: ${{ secrets.AUTO_DISCOVER_EXPIRE_OLD_QUEUE || 'true' }}
       AUTO_DISCOVER_QUEUE_TTL_DAYS: ${{ secrets.AUTO_DISCOVER_QUEUE_TTL_DAYS || '1' }}
@@ -266,15 +266,15 @@ jobs:
       OUTPUT_WIDTH: "1080"
       OUTPUT_HEIGHT: "1920"
       VIDEO_LANGUAGE: id
-      DOWNLOAD_MAX_HEIGHT: "1080"
-      DOWNLOAD_COMPRESS_CRF: "22"
-      FINAL_RENDER_CRF: "20"
+      DOWNLOAD_MAX_HEIGHT: ${{ secrets.DOWNLOAD_MAX_HEIGHT || '720' }}
+      DOWNLOAD_COMPRESS_CRF: ${{ secrets.DOWNLOAD_COMPRESS_CRF || '30' }}
+      FINAL_RENDER_CRF: ${{ secrets.FINAL_RENDER_CRF || '27' }}
       VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
       VIDEO_FRAME_ENABLED: ${{ github.event.inputs.use_frame || secrets.VIDEO_FRAME_ENABLED || 'true' }}
       VIDEO_FILTER_ENABLED: ${{ github.event.inputs.use_filter || secrets.VIDEO_FILTER_ENABLED || 'true' }}
       VIDEO_WATERMARK_ENABLED: ${{ github.event.inputs.use_watermark || secrets.VIDEO_WATERMARK_ENABLED || 'true' }}
       VIDEO_LOWER_THIRD_ENABLED: ${{ secrets.VIDEO_LOWER_THIRD_ENABLED || 'true' }}
-      VIDEO_LOWER_THIRD_BRAND: ${{ secrets.VIDEO_LOWER_THIRD_BRAND || '@clipperemsapro | Podcast Highlight' }}
+      VIDEO_LOWER_THIRD_BRAND: ${{ secrets.VIDEO_LOWER_THIRD_BRAND || '@razqabermain | Ceramah Highlight' }}
       VIDEO_FRAME_ASSET: ${{ secrets.VIDEO_FRAME_ASSET || 'assets/branding/frame-1080x1920.png' }}
       VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
       VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}
@@ -284,7 +284,7 @@ jobs:
       BACKGROUND_MUSIC_MAP_FILE: ${{ github.event.inputs.background_music_map_file || secrets.BACKGROUND_MUSIC_MAP_FILE || 'assets/music/music-map.json' }}
       BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.06' }}
       BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '1.0' }}
-      THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Podcast | Highlight | Viral' }}
+      THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Ceramah | Kajian | Shorts' }}
       THUMBNAIL_INTRO_ENABLED: ${{ secrets.THUMBNAIL_INTRO_ENABLED || 'true' }}
       THUMBNAIL_INTRO_SECONDS: ${{ secrets.THUMBNAIL_INTRO_SECONDS || '0.9' }}
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
