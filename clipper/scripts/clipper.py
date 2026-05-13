@@ -21,7 +21,6 @@ YTDLP_AUTH_ERROR_PATTERNS = (
     "cookies-from-browser",
     "cookies.txt",
     "login required",
-    "private video",
 )
 
 
