@@ -634,13 +634,19 @@ Cookies dari browser lokal bisa dipakai untuk deployment, tetapi harus dipindahk
 Strategi:
 
 ```txt
-export cookies dari browser lokal
+private/incognito window baru
+login ke YouTube
+di tab yang sama buka https://www.youtube.com/robots.txt
+export hanya youtube.com cookies format Netscape
+tutup private/incognito window dan jangan buka session itu lagi
 simpan sebagai cookies.txt
 jangan commit ke GitHub
-simpan isi cookies di secret storage
+simpan isi cookies di GitHub Secret YTDLP_COOKIES_TXT
 saat workflow berjalan, generate cookies.txt dari secret
 yt-dlp memakai cookies.txt
 ```
+
+Penting: jangan export dari tab YouTube biasa yang terus terbuka, karena YouTube sering merotasi account cookies. Jika log berisi `The provided YouTube account cookies are no longer valid` atau `rotated in the browser`, export ulang dengan private/incognito flow di atas.
 
 Risiko:
 

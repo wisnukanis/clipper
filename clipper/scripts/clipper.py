@@ -21,6 +21,8 @@ YTDLP_AUTH_ERROR_PATTERNS = (
     "cookies-from-browser",
     "cookies.txt",
     "login required",
+    "no longer valid",
+    "rotated in the browser",
 )
 
 
@@ -295,8 +297,9 @@ def is_ytdlp_auth_error(error):
 def raise_ytdlp_auth_error(error):
     raise YoutubeAuthRequiredError(
         "YOUTUBE_AUTH_REQUIRED: YouTube meminta login/cookies saat yt-dlp mengambil video. "
-        "Isi GitHub Secret YTDLP_COOKIES_TXT dengan cookies Netscape dari browser yang login YouTube, "
-        "atau pilih URL lain yang tidak terkena bot-check."
+        "Jika YTDLP_COOKIES_TXT sudah diisi, cookies kemungkinan sudah dirotasi/tidak valid. "
+        "Export ulang dari private/incognito session: login YouTube, buka https://www.youtube.com/robots.txt "
+        "di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT."
     ) from error
 
 

@@ -958,7 +958,7 @@ jobs:
           fi
 
       - name: Test YouTube cookies before automation
-        if: ${{ env.YTDLP_COOKIES_TXT != '' && (github.event_name == 'workflow_dispatch' || vars.TEST_YOUTUBE_COOKIES == 'true') }}
+        if: ${{ env.YTDLP_COOKIES_TXT != '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || vars.TEST_YOUTUBE_COOKIES == 'true') }}
         working-directory: clipper
         shell: bash
         env:
@@ -972,7 +972,8 @@ jobs:
             UA_ARGS+=(--user-agent "$YTDLP_USER_AGENT")
           fi
 
-          yt-dlp \
+          set +e
+          YTDLP_OUTPUT="$(yt-dlp \
             --cookies cookies.txt \
             "${UA_ARGS[@]}" \
             --referer "$YTDLP_REFERER" \
@@ -987,7 +988,25 @@ jobs:
             --socket-timeout "$YTDLP_SOCKET_TIMEOUT" \
             --skip-download \
             --print title \
-            "$TEST_URL"
+            "$TEST_URL" 2>&1)"
+          YTDLP_STATUS=$?
+          set -e
+
+          printf '%s\n' "$YTDLP_OUTPUT"
+
+          if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
+            echo "::error::YTDLP_COOKIES_TXT sudah tidak valid/terrotasi. Export ulang dari private/incognito: login YouTube, buka https://www.youtube.com/robots.txt di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT."
+            exit 1
+          fi
+
+          if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'sign in to confirm|not a bot|use --cookies'; then
+            echo "::error::YouTube masih meminta login/cookies. Ikuti panduan export cookies yt-dlp: gunakan private/incognito session dan jangan buka lagi session itu setelah export."
+            exit 1
+          fi
+
+          if [ "$YTDLP_STATUS" -ne 0 ]; then
+            exit "$YTDLP_STATUS"
+          fi
 
       - name: Check configuration
         run: npm run check -- --offline
