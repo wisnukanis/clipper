@@ -9,5 +9,6 @@ Mapping otomatis ada di `music-map.json`:
 - Theme C: komedi, hiburan, santai.
 - Theme D: drama, konflik, kontroversi.
 - Theme E: fakta, edukasi, bisnis.
+- Theme F: religi, ceramah, kajian, dakwah.
 
 Gunakan `BACKGROUND_MUSIC_FILE=auto` supaya renderer memilih track berdasarkan tema dan kata kunci clip. Volume bawaan dibuat kecil karena hanya backsound, bukan musik utama.

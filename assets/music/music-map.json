@@ -51,6 +51,16 @@
       "volume": 0.40,
       "themes": ["edukasi", "fakta", "bisnis"],
       "keywords": ["fakta", "bisnis", "uang", "karier", "kerja", "strategi", "data", "tips", "edukasi", "pelajaran", "analisis"]
+    },
+    {
+      "id": "theme-f-religi",
+      "label": "Theme F - Religi / Ceramah",
+      "file": "theme-f-religi.mp3",
+      "mood": "spiritual-calm",
+      "priority": 3,
+      "volume": 0.32,
+      "themes": ["religi", "ceramah", "kajian", "islam", "dakwah", "tausiyah"],
+      "keywords": ["allah", "rasul", "nabi", "islam", "muslim", "iman", "doa", "shalat", "sholat", "sabar", "syukur", "hijrah", "dakwah", "ceramah", "kajian", "ustadz", "ustaz", "quran", "hadis", "hadits", "surga", "neraka", "taubat", "taqwa", "akhlak"]
     }
   ]
 }
