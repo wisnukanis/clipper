@@ -22,6 +22,14 @@ function outputTextFromOpenAi(data) {
   return texts.join("").trim();
 }
 
+function outputTextFromChatCompletion(data) {
+  return String(data?.choices?.[0]?.message?.content || "").trim();
+}
+
+function openAiUrl(pathname) {
+  return `${config.openai.baseUrl.replace(/\/+$/, "")}/${pathname.replace(/^\/+/, "")}`;
+}
+
 async function generateOpenAiText(prompt, options = {}) {
   if (!config.openai.apiKey) return "";
   const models = [...new Set([options.model, ...(config.openai.models || []), config.openai.model].filter(Boolean))];
@@ -43,6 +51,18 @@ async function generateOpenAiText(prompt, options = {}) {
 }
 
 async function generateOpenAiTextWithModel(prompt, options = {}) {
+  try {
+    return await generateOpenAiResponseTextWithModel(prompt, options);
+  } catch (error) {
+    if (config.openai.baseUrl === "https://api.openai.com/v1") throw error;
+    const status = Number(error.status || 0);
+    if (![400, 404, 405].includes(status)) throw error;
+    console.warn(`OpenAI-compatible /responses tidak tersedia, coba /chat/completions: ${error.message}`);
+    return generateOpenAiChatTextWithModel(prompt, options);
+  }
+}
+
+async function generateOpenAiResponseTextWithModel(prompt, options = {}) {
   const body = {
     model: options.model,
     input: [
@@ -58,7 +78,7 @@ async function generateOpenAiTextWithModel(prompt, options = {}) {
   }
 
   const timeout = timeoutSignal(options.timeoutMs || config.openai.requestTimeoutMs);
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch(openAiUrl("responses"), {
     method: "POST",
     signal: timeout.signal,
     headers: {
@@ -69,9 +89,43 @@ async function generateOpenAiTextWithModel(prompt, options = {}) {
   }).finally(timeout.clear);
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(data?.error?.message || `OpenAI request failed: ${response.status}`);
+    const error = new Error(data?.error?.message || `OpenAI request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return outputTextFromOpenAi(data);
+}
+
+async function generateOpenAiChatTextWithModel(prompt, options = {}) {
+  const body = {
+    model: options.model,
+    messages: [{ role: "user", content: prompt }],
+  };
+  const maxTokens = Math.max(16, Number(options.maxOutputTokens || 900));
+  if (String(body.model).startsWith("gpt-5")) {
+    body.max_completion_tokens = maxTokens;
+  } else {
+    body.max_tokens = maxTokens;
+    body.temperature = options.temperature ?? config.openai.temperature;
+  }
+
+  const timeout = timeoutSignal(options.timeoutMs || config.openai.requestTimeoutMs);
+  const response = await fetch(openAiUrl("chat/completions"), {
+    method: "POST",
+    signal: timeout.signal,
+    headers: {
+      Authorization: `Bearer ${config.openai.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  }).finally(timeout.clear);
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(data?.error?.message || `OpenAI chat request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return outputTextFromChatCompletion(data);
 }
 
 export async function generateAiText(prompt, options = {}) {

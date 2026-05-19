@@ -194,6 +194,7 @@ jobs:
 
       AI_PROVIDER: openai
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://api.openai.com/v1' }}
       OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4.1-nano' }}
       OPENAI_MODELS: ${{ secrets.OPENAI_MODELS || 'gpt-4.1-nano,gpt-5-nano,gpt-4o-mini' }}
       OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE || '0.45' }}
@@ -887,6 +888,7 @@ jobs:
           echo "THREADS_API_VERSION=$THREADS_API_VERSION"
           echo "DEEPGRAM_ENABLED=$DEEPGRAM_ENABLED"
           echo "AI_PROVIDER=$AI_PROVIDER"
+          echo "OPENAI_BASE_URL=$OPENAI_BASE_URL"
           echo "OPENAI_MODEL=$OPENAI_MODEL"
           echo "OPENAI_MODELS=$OPENAI_MODELS"
           echo "OPENAI_TRANSCRIBE_MODEL=$OPENAI_TRANSCRIBE_MODEL"

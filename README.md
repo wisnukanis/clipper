@@ -797,6 +797,7 @@ UPLOAD_DRIVER=sftp
 AI_PROVIDER=openai
 
 OPENAI_API_KEY=
+OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-nano
 OPENAI_MODELS=gpt-4.1-nano,gpt-5-nano,gpt-4o-mini
 OPENAI_TEMPERATURE=0.45
@@ -1022,6 +1023,10 @@ Provider AI untuk caption, thumbnail, review subtitle, dan pemilihan highlight d
 #### `OPENAI_API_KEY`
 
 API key OpenAI untuk semua AI teks.
+
+#### `OPENAI_BASE_URL`
+
+Base URL OpenAI API atau provider OpenAI-compatible. Default: `https://api.openai.com/v1`. Contoh: `https://ai.dinoiki.com/v1`.
 
 #### `OPENAI_MODEL`
 

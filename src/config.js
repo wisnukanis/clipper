@@ -186,8 +186,9 @@ function buildConfig() {
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || "",
+      baseUrl: cleanBaseUrl(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1"),
       model: openaiModel,
-      models: uniqueList([openaiModel, "gpt-4.1-nano", ...openaiModels, "gpt-5-nano", "gpt-4o-mini"]),
+      models: uniqueList([openaiModel, ...openaiModels, "gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"]),
       temperature: numberEnv("OPENAI_TEMPERATURE", 0.45),
       requestTimeoutMs: numberEnv("AI_REQUEST_TIMEOUT_SECONDS", 25) * 1000
     },

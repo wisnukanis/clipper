@@ -52,6 +52,7 @@ const sensitiveEnvKeys = new Set([
   "YOUTUBE_REFRESH_TOKEN",
   "YOUTUBE_OAUTH_STATE_SECRET",
   "OPENAI_API_KEY",
+  "OPENAI_BASE_URL",
   "DEEPGRAM_API_KEY",
   "DEEPGRAM_API_KEYS",
   "YTDLP_COOKIES_TXT"
@@ -211,6 +212,7 @@ const envGroups = [
     title: "AI & Transcript",
     fields: [
       field("OPENAI_API_KEY", "OpenAI key", true),
+      field("OPENAI_BASE_URL", "OpenAI base URL"),
       field("OPENAI_MODEL", "OpenAI model"),
       field("OPENAI_MODELS", "OpenAI fallback models"),
       field("OPENAI_TRANSCRIBE_MODEL", "OpenAI transcript fallback model"),

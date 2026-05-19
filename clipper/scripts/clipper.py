@@ -117,6 +117,8 @@ def cfg():
         "ai_provider": "openai",
         "openai_model": openai_model,
         "openai_models": openai_models,
+        "openai_base_url": os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+        "openai_temperature": os.environ.get("OPENAI_TEMPERATURE", "0.45"),
         "ai_request_timeout": parse_int(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS"), 25),
         "ai_clip_selection": parse_int(os.environ.get("AI_CLIP_SELECTION_ENABLED"), 1),
         "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 8),
@@ -191,6 +193,7 @@ def cfg():
         "deepgram_language": os.environ.get("DEEPGRAM_LANGUAGE") or os.environ.get("VIDEO_LANGUAGE", "id"),
         "deepgram_timeout": parse_int(os.environ.get("DEEPGRAM_TIMEOUT_SECONDS"), 900),
         "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
+        "openai_base_url": os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
         "openai_transcribe_model": os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe"),
         "openai_transcribe_timeout": parse_int(os.environ.get("OPENAI_TRANSCRIBE_TIMEOUT_SECONDS"), 900),
         "offline_model": os.environ.get("OFFLINE_TRANSCRIBE_MODEL", "small"),
@@ -954,7 +957,7 @@ def transcribe_openai(audio_path, job_id, config):
     }
     body, boundary = multipart_form(fields, {"file": audio_path})
     request = urllib.request.Request(
-        "https://api.openai.com/v1/audio/transcriptions",
+        openai_url(config, "audio/transcriptions"),
         data=body,
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -1124,12 +1127,36 @@ def openai_output_text(data):
     return "".join(texts).strip()
 
 
+def openai_chat_output_text(data):
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if not choices:
+        return ""
+    message = (choices[0] or {}).get("message") or {}
+    return str(message.get("content") or "").strip()
+
+
+def openai_url(config, path):
+    base_url = str(config.get("openai_base_url") or "https://api.openai.com/v1").strip().rstrip("/")
+    return f"{base_url}/{str(path).lstrip('/')}"
+
+
 def call_openai_text(prompt, config, model=None):
     api_key = str(config.get("openai_api_key") or "").strip()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY belum diisi.")
 
     model = str(model or config.get("openai_model") or "gpt-4.1-nano").strip()
+    try:
+        return call_openai_responses_text(prompt, config, api_key, model)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        if openai_url(config, "") == "https://api.openai.com/v1/" or exc.code not in (400, 404, 405):
+            raise RuntimeError(f"OpenAI HTTP {exc.code}: {detail}") from exc
+        log_warn(f"OpenAI-compatible /responses gagal HTTP {exc.code}, coba /chat/completions: {detail}")
+        return call_openai_chat_text(prompt, config, api_key, model)
+
+
+def call_openai_responses_text(prompt, config, api_key, model):
     body = {
         "model": model,
         "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
@@ -1137,7 +1164,32 @@ def call_openai_text(prompt, config, model=None):
     }
     payload = json.dumps(body).encode("utf-8")
     request = urllib.request.Request(
-        "https://api.openai.com/v1/responses",
+        openai_url(config, "responses"),
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=max(5, int(config.get("ai_request_timeout") or 25))) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    return openai_output_text(data)
+
+
+def call_openai_chat_text(prompt, config, api_key, model):
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if model.startswith("gpt-5"):
+        body["max_completion_tokens"] = 1600
+    else:
+        body["max_tokens"] = 1600
+        body["temperature"] = float(config.get("openai_temperature") or 0.45)
+    payload = json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(
+        openai_url(config, "chat/completions"),
         data=payload,
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -1150,8 +1202,8 @@ def call_openai_text(prompt, config, model=None):
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"OpenAI HTTP {exc.code}: {detail}") from exc
-    return openai_output_text(data)
+        raise RuntimeError(f"OpenAI chat HTTP {exc.code}: {detail}") from exc
+    return openai_chat_output_text(data)
 
 
 def call_json_with_ai_fallback(prompt, config, label):

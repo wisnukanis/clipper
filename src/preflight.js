@@ -170,7 +170,7 @@ async function checkOpenAi(online, required = false) {
   try {
     for (const model of models) {
       try {
-        await fetchJson("https://api.openai.com/v1/responses", {
+        await fetchJson(`${config.openai.baseUrl}/responses`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${config.openai.apiKey}`,
@@ -184,6 +184,31 @@ async function checkOpenAi(online, required = false) {
         });
         return checkResult("OpenAI API", true, `model valid: ${model}`, required);
       } catch (error) {
+        if (config.openai.baseUrl !== "https://api.openai.com/v1" && /404|405|not found|unsupported/i.test(error.message)) {
+          try {
+            const chatBody = {
+              model,
+              messages: [{ role: "user", content: "Balas OK saja." }]
+            };
+            if (String(model).startsWith("gpt-5")) {
+              chatBody.max_completion_tokens = 16;
+            } else {
+              chatBody.max_tokens = 16;
+            }
+            await fetchJson(`${config.openai.baseUrl}/chat/completions`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${config.openai.apiKey}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(chatBody)
+            });
+            return checkResult("OpenAI API", true, `model valid: ${model} via OpenAI-compatible chat`, required);
+          } catch (chatError) {
+            failures.push(`${model}: responses ${error.message}; chat ${chatError.message}`);
+            continue;
+          }
+        }
         failures.push(`${model}: ${error.message}`);
       }
     }
