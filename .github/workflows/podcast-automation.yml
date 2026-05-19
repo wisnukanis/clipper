@@ -342,12 +342,10 @@ jobs:
           echo "Branch/ref: ${{ github.ref }}"
           echo "Commit SHA: ${{ github.sha }}"
 
-      - name: Setup Node with cache
+      - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: package-lock.json
 
       - name: Fail fast required secrets
         shell: bash
@@ -583,21 +581,10 @@ jobs:
             echo "Facebook user token GitHub Secret updated."
           fi
 
-      - name: Setup Python with cache
+      - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: clipper/requirements.txt
-
-      - name: Restore Python virtualenv cache
-        id: python-venv-cache
-        uses: actions/cache@v5
-        with:
-          path: .venv
-          key: python-venv-${{ runner.os }}-${{ runner.arch }}-py311-v3-${{ hashFiles('clipper/requirements.txt') }}
-          restore-keys: |
-            python-venv-${{ runner.os }}-${{ runner.arch }}-py311-v3-
 
       - name: Prepare Python virtualenv
         shell: bash
@@ -639,16 +626,6 @@ jobs:
           echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/01keep-debs
           echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee -a /etc/apt/apt.conf.d/01keep-debs
 
-      - name: Cache APT packages
-        if: steps.ffmpeg-tools.outputs.ready != 'true'
-        uses: actions/cache@v5
-        timeout-minutes: 3
-        with:
-          path: /var/cache/apt/archives
-          key: apt-ffmpeg-${{ runner.os }}-${{ runner.arch }}-v2
-          restore-keys: |
-            apt-ffmpeg-${{ runner.os }}-${{ runner.arch }}-v2-
-
       - name: Install FFmpeg
         if: steps.ffmpeg-tools.outputs.ready != 'true'
         shell: bash
@@ -667,13 +644,6 @@ jobs:
             install -y --no-install-recommends ffmpeg
           sudo chmod -R a+rwx /var/cache/apt/archives || true
           ffmpeg -version | head -n 1
-
-      - name: Restore Selawik font cache
-        id: selawik-cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.local/share/fonts/selawik
-          key: selawik-fonts-v2
 
       - name: Register Selawik font
         shell: bash
@@ -699,19 +669,6 @@ jobs:
           fi
           fc-cache -f ~/.local/share/fonts/selawik
           fc-match "Selawik Semibold"
-
-      - name: Restore automation state
-        uses: actions/cache@v5
-        with:
-          path: |
-            data/history.json
-            data/jobs.json
-            data/videos.json
-            generated/metadata
-            generated/logs
-          key: podcast-history-v2-${{ github.run_id }}
-          restore-keys: |
-            podcast-history-v2-
 
       - name: Install Node dependencies
         run: npm ci --prefer-offline --no-audit --fund=false
@@ -819,7 +776,7 @@ jobs:
       - name: Install Python dependencies
         shell: bash
         run: |
-          if [ "${PYTHON_VENV_REBUILT:-false}" = "true" ] || [ "${{ steps.python-venv-cache.outputs.cache-hit }}" != "true" ]; then
+          if [ "${PYTHON_VENV_REBUILT:-false}" = "true" ]; then
             python -m pip install --upgrade pip wheel setuptools
           fi
           python -m pip install --prefer-binary -r clipper/requirements.txt
