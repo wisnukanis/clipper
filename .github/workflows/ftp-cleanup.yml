@@ -64,23 +64,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node with cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: package-lock.json
-
-      - name: Restore Node modules cache
-        id: node-modules-cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node20-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            node-modules-${{ runner.os }}-${{ runner.arch }}-node20-
 
       - name: Validate SFTP secrets
         shell: bash
@@ -100,7 +91,6 @@ jobs:
           exit "$missing"
 
       - name: Install Node dependencies
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
 
       - name: Run SFTP cleanup

@@ -330,7 +330,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Show trigger info
         shell: bash
@@ -342,20 +342,11 @@ jobs:
           echo "Commit SHA: ${{ github.sha }}"
 
       - name: Setup Node with cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: package-lock.json
-
-      - name: Restore Node modules cache
-        id: node-modules-cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node20-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            node-modules-${{ runner.os }}-${{ runner.arch }}-node20-
 
       - name: Fail fast required secrets
         shell: bash
@@ -592,7 +583,7 @@ jobs:
           fi
 
       - name: Setup Python with cache
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -600,12 +591,12 @@ jobs:
 
       - name: Restore Python virtualenv cache
         id: python-venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .venv
-          key: python-venv-${{ runner.os }}-${{ runner.arch }}-py311-${{ hashFiles('clipper/requirements.txt') }}-v2
+          key: python-venv-${{ runner.os }}-${{ runner.arch }}-py311-v3-${{ hashFiles('clipper/requirements.txt') }}
           restore-keys: |
-            python-venv-${{ runner.os }}-${{ runner.arch }}-py311-
+            python-venv-${{ runner.os }}-${{ runner.arch }}-py311-v3-
 
       - name: Prepare Python virtualenv
         shell: bash
@@ -649,13 +640,13 @@ jobs:
 
       - name: Cache APT packages
         if: steps.ffmpeg-tools.outputs.ready != 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         timeout-minutes: 3
         with:
           path: /var/cache/apt/archives
-          key: apt-ffmpeg-${{ runner.os }}-${{ runner.arch }}-v1
+          key: apt-ffmpeg-${{ runner.os }}-${{ runner.arch }}-v2
           restore-keys: |
-            apt-ffmpeg-${{ runner.os }}-${{ runner.arch }}-
+            apt-ffmpeg-${{ runner.os }}-${{ runner.arch }}-v2-
 
       - name: Install FFmpeg
         if: steps.ffmpeg-tools.outputs.ready != 'true'
@@ -678,10 +669,10 @@ jobs:
 
       - name: Restore Selawik font cache
         id: selawik-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.local/share/fonts/selawik
-          key: selawik-fonts-v1
+          key: selawik-fonts-v2
 
       - name: Register Selawik font
         shell: bash
@@ -709,7 +700,7 @@ jobs:
           fc-match "Selawik Semibold"
 
       - name: Restore automation state
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             data/history.json
@@ -717,12 +708,11 @@ jobs:
             data/videos.json
             generated/metadata
             generated/logs
-          key: podcast-history-${{ github.run_id }}
+          key: podcast-history-v2-${{ github.run_id }}
           restore-keys: |
-            podcast-history-
+            podcast-history-v2-
 
       - name: Install Node dependencies
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
 
       - name: Validate YouTube token if possible
