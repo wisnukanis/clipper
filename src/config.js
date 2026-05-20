@@ -228,7 +228,7 @@ function buildConfig() {
     clipper: {
       rootDir: path.resolve(rootDir, cleanText(process.env.CLIPPER_ROOT || "clipper")),
       pythonCommand: cleanText(process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3")),
-      clipCount: numberEnv("CLIP_COUNT", 1),
+      clipCount: numberEnv("CLIP_COUNT", 3),
       minClipSeconds: numberEnv("MIN_CLIP_SECONDS", 35),
       maxClipSeconds: numberEnv("MAX_CLIP_SECONDS", 58)
     }

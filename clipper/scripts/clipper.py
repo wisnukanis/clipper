@@ -128,7 +128,7 @@ def cfg():
         "viral_strategy": parse_int(os.environ.get("VIRAL_STRATEGY_ENABLED"), 1),
         "viral_strategy_required": parse_int(os.environ.get("VIRAL_STRATEGY_REQUIRED"), 0),
         "min_viral_score_to_publish": parse_int(os.environ.get("MIN_VIRAL_SCORE_TO_PUBLISH"), 60),
-        "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 1),
+        "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 3),
         "min_clip_seconds": parse_int(os.environ.get("MIN_CLIP_SECONDS"), 35),
         "max_clip_seconds": parse_int(os.environ.get("MAX_CLIP_SECONDS"), 58),
         "width": parse_int(os.environ.get("OUTPUT_WIDTH"), 1080),
@@ -1624,7 +1624,7 @@ def find_important_clips(segments, config):
     if int(config.get("viral_strategy", 1)) == 1:
         viral_rules = f"""
 Viral strategy wajib dipakai:
-- Buat analisis untuk 5 kandidat yang tersedia, lalu pilih 1 yang paling kuat untuk dirender.
+- Buat analisis untuk 5 kandidat yang tersedia, lalu pilih {config['clip_count']} kandidat paling kuat untuk dirender.
 - Beri viral_score_1_10 dan context_safe_score_1_10 untuk tiap kandidat.
 - Pilih kandidat dengan potensi retention paling kuat: cerita, konflik, punchline, nasihat, humor, rasa penasaran, atau kalimat yang bikin mikir.
 - selected_angle harus menjelaskan sudut viral yang jelas, bukan kalimat umum.
@@ -1639,7 +1639,7 @@ Anda adalah editor video short-form profesional.
 
 Tugas:
 Baca transcript kandidat di bawah sebagai editor Shorts/Reels Indonesia.
-Buat 5 kandidat clip terbaik, lalu pilih 1 kandidat terbaik untuk dirender.
+Buat 5 kandidat clip terbaik, lalu pilih {config['clip_count']} kandidat terbaik untuk dirender.
 
 Kriteria:
 - Hook kuat dalam 2 detik pertama.
@@ -1672,7 +1672,8 @@ Format output:
       "candidate_id": 1
     }}
   ],
-  "selected_clip": {{
+  "selected_clips": [
+  {{
     "title": "JUDUL MAKSIMAL 8 KATA",
     "best_title": "JUDUL TERBAIK MAKSIMAL 8 KATA",
     "title_alternatives": ["ALTERNATIF 1", "ALTERNATIF 2", "ALTERNATIF 3"],
@@ -1693,10 +1694,11 @@ Format output:
     "publish_decision": "publish",
     "hashtags": ["#Ceramah", "#Renungan", "#MotivasiIslami", "#HikmahHidup", "#Shorts"]
   }}
+  ]
 }}
 
 Gunakan start dan end dari candidate yang dipilih. Jangan mengarang fakta di luar candidate transcript.
-selected_clip wajib berasal dari salah satu item candidates dan hanya selected_clip yang akan dirender.
+selected_clips wajib berasal dari item candidates dan hanya selected_clips yang akan dirender.
 
 Candidate clips:
 {json.dumps(candidates, ensure_ascii=False, indent=2)}
@@ -1720,7 +1722,14 @@ def validate_clips(clips, segments, config):
             or clips.get("bestClip")
             or clips.get("selected")
         )
-        if isinstance(selected_clip, dict):
+        selected_clips = clips.get("selected_clips") or clips.get("selectedClips")
+        if isinstance(selected_clips, list):
+            selected_items = [dict(item) for item in selected_clips if isinstance(item, dict)]
+            if analysis_candidates:
+                for item in selected_items:
+                    item["analysis_candidates"] = analysis_candidates
+            clips = selected_items
+        elif isinstance(selected_clip, dict):
             selected = dict(selected_clip)
             if analysis_candidates:
                 selected["analysis_candidates"] = analysis_candidates
