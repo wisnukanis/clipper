@@ -107,17 +107,19 @@ def cfg():
     if transcribe_provider not in {"offline", "auto", "deepgram"}:
         transcribe_provider = "deepgram"
 
+    openai_base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     openai_models = parse_keys(os.environ.get("OPENAI_MODELS"))
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-4.1-nano")
+    default_openai_models = ["gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"] if openai_base_url == "https://api.openai.com/v1" else []
     openai_models = list(dict.fromkeys([
-        item for item in [openai_model, "gpt-4.1-nano", *openai_models, "gpt-5-nano", "gpt-4o-mini"] if item
+        item for item in [openai_model, *openai_models, *default_openai_models] if item
     ]))
 
     return {
         "ai_provider": "openai",
         "openai_model": openai_model,
         "openai_models": openai_models,
-        "openai_base_url": os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+        "openai_base_url": openai_base_url,
         "openai_temperature": os.environ.get("OPENAI_TEMPERATURE", "0.45"),
         "ai_request_timeout": parse_int(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS"), 25),
         "ai_clip_selection": parse_int(os.environ.get("AI_CLIP_SELECTION_ENABLED"), 1),

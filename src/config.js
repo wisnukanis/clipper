@@ -67,6 +67,10 @@ function encodePathSegment(value) {
 function buildConfig() {
   const openaiModels = listEnv("OPENAI_MODELS");
   const openaiModel = cleanText(process.env.OPENAI_MODEL || "gpt-4.1-nano");
+  const openaiBaseUrl = cleanBaseUrl(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1");
+  const openaiDefaultModels = openaiBaseUrl === "https://api.openai.com/v1"
+    ? ["gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"]
+    : [];
   const deepgramApiKeys = cleanText(process.env.DEEPGRAM_API_KEYS)
     ? listEnv("DEEPGRAM_API_KEYS")
     : listEnv("DEEPGRAM_API_KEY");
@@ -186,9 +190,9 @@ function buildConfig() {
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || "",
-      baseUrl: cleanBaseUrl(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1"),
+      baseUrl: openaiBaseUrl,
       model: openaiModel,
-      models: uniqueList([openaiModel, ...openaiModels, "gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"]),
+      models: uniqueList([openaiModel, ...openaiModels, ...openaiDefaultModels]),
       temperature: numberEnv("OPENAI_TEMPERATURE", 0.45),
       requestTimeoutMs: numberEnv("AI_REQUEST_TIMEOUT_SECONDS", 25) * 1000
     },
