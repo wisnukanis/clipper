@@ -736,7 +736,7 @@ INSTAGRAM_CONTAINER_MAX_ATTEMPTS=90
 THREADS_UPLOAD_ENABLED=false
 THREADS_CONTAINER_POLL_SECONDS=6
 THREADS_CONTAINER_MAX_ATTEMPTS=90
-MAX_SCHEDULED_POSTS_PER_DAY=15
+MAX_SCHEDULED_POSTS_PER_DAY=5
 AUTO_DISCOVER_DAILY_QUEUE_LIMIT=15
 AUTO_DISCOVER_EXPIRE_OLD_QUEUE=true
 AUTO_DISCOVER_QUEUE_TTL_DAYS=1
@@ -836,7 +836,7 @@ VIDEO_EFFECT_PRESET=veryfast
 THUMBNAIL_PILL_TEXT=Ceramah | Kajian | Shorts
 THUMBNAIL_INTRO_ENABLED=true
 THUMBNAIL_INTRO_SECONDS=0.9
-MAX_SCHEDULED_POSTS_PER_DAY=15
+MAX_SCHEDULED_POSTS_PER_DAY=5
 AUTO_DISCOVER_DAILY_QUEUE_LIMIT=15
 AUTO_DISCOVER_EXPIRE_OLD_QUEUE=true
 AUTO_DISCOVER_QUEUE_TTL_DAYS=1
@@ -990,7 +990,7 @@ Batas publish dari run terjadwal GitHub Actions per hari. Default: `15`. Jika ba
 
 #### `AUTO_DISCOVER_DAILY_QUEUE_LIMIT`
 
-Batas jumlah video auto-discovery yang boleh dibuat untuk satu `target_date`. Default mengikuti `MAX_SCHEDULED_POSTS_PER_DAY` atau `15`, sehingga 15 jadwal cron tidak membuat ratusan queue baru.
+Batas jumlah video auto-discovery yang boleh dibuat untuk satu `target_date`. Default mengikuti `MAX_SCHEDULED_POSTS_PER_DAY` atau `5`, sehingga 5 jadwal cron tidak membuat ratusan queue baru.
 
 #### `AUTO_DISCOVER_EXPIRE_OLD_QUEUE`
 

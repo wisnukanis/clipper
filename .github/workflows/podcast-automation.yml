@@ -85,23 +85,13 @@ on:
         default: "openai"
   schedule:
     # GitHub schedule uses UTC.
-    # Target 15 video/hari, disebar dari pagi sampai malam WIB.
+    # Target YouTube 4-5 video/hari, disebar dari pagi sampai malam WIB.
     # Menit dibuat ganjil agar tidak menabrak jam puncak cron GitHub.
     - cron: "3 23 * * *"  # 06:03 WIB
-    - cron: "13 0 * * *"  # 07:13 WIB
-    - cron: "23 1 * * *"  # 08:23 WIB
-    - cron: "33 2 * * *"  # 09:33 WIB
     - cron: "43 3 * * *"  # 10:43 WIB
-    - cron: "53 4 * * *"  # 11:53 WIB
     - cron: "7 6 * * *"   # 13:07 WIB
-    - cron: "17 7 * * *"  # 14:17 WIB
-    - cron: "27 8 * * *"  # 15:27 WIB
-    - cron: "37 9 * * *"  # 16:37 WIB
     - cron: "47 10 * * *" # 17:47 WIB
-    - cron: "57 11 * * *" # 18:57 WIB
-    - cron: "9 13 * * *"  # 20:09 WIB
     - cron: "19 14 * * *" # 21:19 WIB
-    - cron: "29 15 * * *" # 22:29 WIB
 
 concurrency:
   group: podcast-clipper-automation
@@ -201,7 +191,7 @@ jobs:
       OPENAI_TRANSCRIBE_MODEL: ${{ secrets.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe' }}
       AI_REQUEST_TIMEOUT_SECONDS: ${{ secrets.AI_REQUEST_TIMEOUT_SECONDS || '25' }}
       TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
-      MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '15' }}
+      MAX_SCHEDULED_POSTS_PER_DAY: ${{ secrets.MAX_SCHEDULED_POSTS_PER_DAY || '5' }}
       DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '1' }}
       DEEPGRAM_API_KEYS: ${{ secrets.DEEPGRAM_API_KEYS }}
       DEEPGRAM_MODEL: ${{ secrets.DEEPGRAM_MODEL || 'nova-3' }}
@@ -233,7 +223,7 @@ jobs:
       AUTO_DISCOVER_VALIDATE_URL: ${{ secrets.AUTO_DISCOVER_VALIDATE_URL || 'true' }}
       AUTO_DISCOVER_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_MAX_RESULTS || '5' }}
       AUTO_DISCOVER_ADD_COUNT: ${{ secrets.AUTO_DISCOVER_ADD_COUNT || '3' }}
-      AUTO_DISCOVER_DAILY_QUEUE_LIMIT: ${{ secrets.AUTO_DISCOVER_DAILY_QUEUE_LIMIT || secrets.MAX_SCHEDULED_POSTS_PER_DAY || '15' }}
+      AUTO_DISCOVER_DAILY_QUEUE_LIMIT: ${{ secrets.AUTO_DISCOVER_DAILY_QUEUE_LIMIT || secrets.MAX_SCHEDULED_POSTS_PER_DAY || '5' }}
       AUTO_DISCOVER_EXPIRE_OLD_QUEUE: ${{ secrets.AUTO_DISCOVER_EXPIRE_OLD_QUEUE || 'true' }}
       AUTO_DISCOVER_QUEUE_TTL_DAYS: ${{ secrets.AUTO_DISCOVER_QUEUE_TTL_DAYS || '1' }}
       AUTO_DISCOVER_MIN_DURATION_SECONDS: ${{ secrets.AUTO_DISCOVER_MIN_DURATION_SECONDS || '600' }}

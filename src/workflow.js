@@ -212,8 +212,8 @@ async function createManualSelection(options) {
 }
 
 function queueFailoverLimit() {
-  const configured = Number(process.env.QUEUE_FAILOVER_ATTEMPTS || process.env.MAX_SCHEDULED_POSTS_PER_DAY || 15);
-  if (!Number.isFinite(configured) || configured <= 0) return 15;
+  const configured = Number(process.env.QUEUE_FAILOVER_ATTEMPTS || process.env.MAX_SCHEDULED_POSTS_PER_DAY || 5);
+  if (!Number.isFinite(configured) || configured <= 0) return 5;
   return Math.min(Math.floor(configured), 50);
 }
 

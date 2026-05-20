@@ -100,7 +100,7 @@ function isAutoDiscoveredVideo(video) {
 }
 
 function autoDiscoveryDailyQueueLimit() {
-  const fallback = numberEnv("MAX_SCHEDULED_POSTS_PER_DAY", 15, 0, 1000);
+  const fallback = numberEnv("MAX_SCHEDULED_POSTS_PER_DAY", 5, 0, 1000);
   return numberEnv("AUTO_DISCOVER_DAILY_QUEUE_LIMIT", fallback, 0, 1000);
 }
 
