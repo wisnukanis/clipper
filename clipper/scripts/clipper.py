@@ -128,7 +128,7 @@ def cfg():
         "viral_strategy": parse_int(os.environ.get("VIRAL_STRATEGY_ENABLED"), 1),
         "viral_strategy_required": parse_int(os.environ.get("VIRAL_STRATEGY_REQUIRED"), 0),
         "min_viral_score_to_publish": parse_int(os.environ.get("MIN_VIRAL_SCORE_TO_PUBLISH"), 60),
-        "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 3),
+        "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 1),
         "min_clip_seconds": parse_int(os.environ.get("MIN_CLIP_SECONDS"), 35),
         "max_clip_seconds": parse_int(os.environ.get("MAX_CLIP_SECONDS"), 58),
         "width": parse_int(os.environ.get("OUTPUT_WIDTH"), 1080),
@@ -1624,9 +1624,9 @@ def find_important_clips(segments, config):
     if int(config.get("viral_strategy", 1)) == 1:
         viral_rules = f"""
 Viral strategy wajib dipakai:
-- Nilai 5 candidate yang tersedia, lalu pilih yang paling kuat untuk output final.
-- Beri viral_score_1_10 dan context_safe_score_1_10 untuk tiap pilihan final.
-- Pilih candidate dengan potensi retention paling kuat: konflik, rasa penasaran, emosi, pernyataan mengejutkan, punchline, atau insight yang bisa berdiri sendiri.
+- Buat analisis untuk 5 kandidat yang tersedia, lalu pilih 1 yang paling kuat untuk dirender.
+- Beri viral_score_1_10 dan context_safe_score_1_10 untuk tiap kandidat.
+- Pilih kandidat dengan potensi retention paling kuat: cerita, konflik, punchline, nasihat, humor, rasa penasaran, atau kalimat yang bikin mikir.
 - selected_angle harus menjelaskan sudut viral yang jelas, bukan kalimat umum.
 - publish_decision gunakan "publish" hanya jika viral_score_1_10 >= 7 atau hook sangat kuat; selain itu "borderline".
 - thumbnail_text dan screen_hook wajib maksimal 8 kata, tegas, universal, dan tidak clickbait palsu.
@@ -1638,26 +1638,41 @@ Viral strategy wajib dipakai:
 Anda adalah editor video short-form profesional.
 
 Tugas:
-Baca 5 candidate clip di bawah, nilai kelayakannya, lalu pilih {config['clip_count']} bagian terbaik untuk Shorts/Reels.
+Baca transcript kandidat di bawah sebagai editor Shorts/Reels Indonesia.
+Buat 5 kandidat clip terbaik, lalu pilih 1 kandidat terbaik untuk dirender.
 
 Kriteria:
 - Hook kuat dalam 2 detik pertama.
-- Cerita terasa utuh, ada punchline/insight/emosi.
+- Bisa dipahami tanpa menonton video lengkap.
+- Memiliki satu gagasan utuh.
+- Mengandung cerita, konflik, punchline, nasihat, humor, atau kalimat yang bikin mikir.
 - Durasi minimal {config['min_clip_seconds']} detik.
 - Durasi maksimal {config['max_clip_seconds']} detik.
-- Mudah dipahami tanpa konteks terlalu panjang.
-- Tidak mengubah makna asli pembicara.
-- Potensi komentar/share/save tinggi.
-- Hindari opening basa-basi.
-- Cocok untuk YouTube Shorts, Instagram Reels, dan Facebook Reels.
+- Cocok untuk penonton Indonesia dan platform YouTube Shorts, Instagram Reels, dan Facebook Reels.
+- Tidak memelintir makna narasumber.
+- Jangan mulai dari basa-basi seperti "jadi", "ee", "menurut saya", atau "pada kesempatan ini".
 - Tema utama: ceramah, renungan, podcast, cerita keluarga, motivasi, dan hikmah hidup.
-- Untuk tahap ini pilih hanya bagian paling kuat, jangan banyak-banyak.
 - Output harus JSON valid saja, tanpa markdown.
 {viral_rules}
 
 Format output:
-[
-  {{
+{{
+  "candidates": [
+    {{
+      "start_time": 80,
+      "end_time": 130,
+      "duration": 50,
+      "summary": "Ringkasan isi segmen",
+      "screen_hook": "HOOK LAYAR 8 KATA",
+      "reason": "Alasan clip ini menarik",
+      "viral_score_1_10": 8,
+      "context_safe_score_1_10": 9,
+      "main_emotion": "lucu/haru/adem/menampar/inspiratif/penasaran",
+      "risks": "Risiko jika ada, atau kosong",
+      "candidate_id": 1
+    }}
+  ],
+  "selected_clip": {{
     "title": "JUDUL MAKSIMAL 8 KATA",
     "best_title": "JUDUL TERBAIK MAKSIMAL 8 KATA",
     "title_alternatives": ["ALTERNATIF 1", "ALTERNATIF 2", "ALTERNATIF 3"],
@@ -1678,9 +1693,10 @@ Format output:
     "publish_decision": "publish",
     "hashtags": ["#Ceramah", "#Renungan", "#MotivasiIslami", "#HikmahHidup", "#Shorts"]
   }}
-]
+}}
 
 Gunakan start dan end dari candidate yang dipilih. Jangan mengarang fakta di luar candidate transcript.
+selected_clip wajib berasal dari salah satu item candidates dan hanya selected_clip yang akan dirender.
 
 Candidate clips:
 {json.dumps(candidates, ensure_ascii=False, indent=2)}
@@ -1696,7 +1712,21 @@ Candidate clips:
 
 def validate_clips(clips, segments, config):
     if isinstance(clips, dict):
-        clips = clips.get("clips") or clips.get("data") or clips.get("results")
+        analysis_candidates = clips.get("candidates") if isinstance(clips.get("candidates"), list) else []
+        selected_clip = (
+            clips.get("selected_clip")
+            or clips.get("selectedClip")
+            or clips.get("best_clip")
+            or clips.get("bestClip")
+            or clips.get("selected")
+        )
+        if isinstance(selected_clip, dict):
+            selected = dict(selected_clip)
+            if analysis_candidates:
+                selected["analysis_candidates"] = analysis_candidates
+            clips = [selected]
+        else:
+            clips = clips.get("clips") or clips.get("data") or clips.get("results") or analysis_candidates
 
     if not isinstance(clips, list):
         raise ValueError("Output clip harus array.")
@@ -1776,6 +1806,7 @@ def validate_clips(clips, segments, config):
                 "main_emotion": first_text_value(clip, "main_emotion", "mainEmotion", "emotion", "emosi_utama", default=""),
                 "context_safe_score": context_safe_score,
                 "risks": first_text_value(clip, "risks", "risk", "risiko", default=""),
+                "analysis_candidates": clip.get("analysis_candidates") or clip.get("analysisCandidates") or [],
                 "caption": clip.get("caption") or "",
                 "thumbnail_text": screen_hook,
                 "selected_angle": clip.get("selected_angle") or clip.get("selectedAngle") or "",
@@ -4170,6 +4201,7 @@ def main():
                 "mainEmotion": clip.get("main_emotion", ""),
                 "contextSafeScore": clip.get("context_safe_score", 0),
                 "risks": clip.get("risks", ""),
+                "analysisCandidates": clip.get("analysis_candidates", []),
                 "caption": clip["caption"],
                 "transcriptSource": transcript_source,
                 "thumbnailText": clip.get("thumbnail_text", ""),

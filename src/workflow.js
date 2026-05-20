@@ -962,6 +962,7 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     screen_hook: output.screenHook || thumbnail.text || "",
     main_emotion: output.mainEmotion || "",
     context_safe_score: output.contextSafeScore || 0,
+    clip_candidates: output.analysisCandidates || [],
     clipTranscript: output.clipTranscript || "",
     viralScore: output.viralScore || 0,
     viral_score_1_10: output.viralScore1To10 || 0,
