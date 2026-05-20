@@ -65,12 +65,14 @@ async function generateOpenAiTextWithModel(prompt, options = {}) {
 async function generateOpenAiResponseTextWithModel(prompt, options = {}) {
   const body = {
     model: options.model,
-    input: [
-      {
-        role: "user",
-        content: [{ type: "input_text", text: prompt }]
-      }
-    ],
+    input: config.openai.baseUrl === "https://api.openai.com/v1"
+      ? [
+          {
+            role: "user",
+            content: [{ type: "input_text", text: prompt }]
+          }
+        ]
+      : prompt,
     max_output_tokens: Math.max(16, Number(options.maxOutputTokens || 900))
   };
   if (!String(body.model).startsWith("gpt-5")) {

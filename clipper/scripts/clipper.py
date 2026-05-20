@@ -1159,7 +1159,9 @@ def call_openai_text(prompt, config, model=None):
 def call_openai_responses_text(prompt, config, api_key, model):
     body = {
         "model": model,
-        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}]
+        if str(config.get("openai_base_url") or "").rstrip("/") == "https://api.openai.com/v1"
+        else prompt,
         "max_output_tokens": 1600,
     }
     payload = json.dumps(body).encode("utf-8")
