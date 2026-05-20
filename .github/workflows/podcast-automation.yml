@@ -210,7 +210,7 @@ jobs:
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
       AUTO_DISCOVER_VIDEOS: ${{ secrets.AUTO_DISCOVER_VIDEOS || 'true' }}
       AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'ceramah islam terbaru indonesia|ceramah ustadz terbaru|kajian islam indonesia terbaru|ceramah pendek islam|renungan hidup islam|kisah inspiratif islam|podcast muslim indonesia|motivasi islami indonesia|kisah hijrah inspiratif|nasihat kehidupan islam' }}
-      AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || 'renungan hidup islam indonesia|ceramah pendek islam terbaru|kisah inspiratif islam indonesia' }}
+      AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || 'renungan hidup islam indonesia ceramah pendek terbaru' }}
       AUTO_DISCOVER_USE_API: ${{ secrets.AUTO_DISCOVER_USE_API || 'true' }}
       AUTO_DISCOVER_ALLOW_OAUTH: ${{ secrets.AUTO_DISCOVER_ALLOW_OAUTH || 'false' }}
       AUTO_DISCOVER_DAILY_SEARCH_ONLY: ${{ secrets.AUTO_DISCOVER_DAILY_SEARCH_ONLY || 'true' }}
@@ -235,7 +235,7 @@ jobs:
       AUTO_DISCOVER_REGION_CODE: ${{ secrets.AUTO_DISCOVER_REGION_CODE || 'ID' }}
       AUTO_DISCOVER_RELEVANCE_LANGUAGE: ${{ secrets.AUTO_DISCOVER_RELEVANCE_LANGUAGE || 'id' }}
       AUTO_DISCOVER_CHANNEL_IDS: ${{ secrets.AUTO_DISCOVER_CHANNEL_IDS }}
-      AUTO_DISCOVER_CHANNEL_HANDLES: ${{ secrets.AUTO_DISCOVER_CHANNEL_HANDLES }}
+      AUTO_DISCOVER_CHANNEL_HANDLES: ${{ secrets.AUTO_DISCOVER_CHANNEL_HANDLES || '@AdiHidayatOfficial|@khalidbasalamah|@yufid|@RodjaTV|@ShiftMediaId|@TafaqquhOnline|@TerasDakwah' }}
       AUTO_DISCOVER_FRESH_UPLOAD_DAYS: ${{ secrets.AUTO_DISCOVER_FRESH_UPLOAD_DAYS || '1' }}
       AUTO_DISCOVER_CHANNEL_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_CHANNEL_MAX_RESULTS || '3' }}
       QUEUE_FAILOVER_ATTEMPTS: ${{ secrets.QUEUE_FAILOVER_ATTEMPTS || '3' }}

@@ -11,42 +11,42 @@ import { extractYoutubeVideoId } from "./youtube.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
 
 const DEFAULT_QUERIES = [
-  "podcast indonesia hari ini",
-  "podcast artis indonesia hari ini",
-  "podcast artis indonesia terbaru",
-  "podcast artis indonesia viral",
-  "podcast deddy corbuzier terbaru",
-  "podcast vindes terbaru",
-  "podcast politik indonesia hari ini"
+  "ceramah islam terbaru indonesia",
+  "ceramah ustadz terbaru",
+  "kajian islam indonesia terbaru",
+  "ceramah pendek islam",
+  "renungan hidup islam",
+  "kisah inspiratif islam",
+  "podcast muslim indonesia",
+  "motivasi islami indonesia",
+  "kisah hijrah inspiratif",
+  "nasihat kehidupan islam"
 ];
 
 const FALLBACK_QUERIES = [
-  "podcast indonesia hari ini",
-  "podcast indonesia terbaru",
-  "podcast indonesia viral",
-  "podcast artis indonesia full",
-  "podcast selebriti indonesia terbaru",
-  "podcast deddy corbuzier terbaru",
-  "raditya dika podcast terbaru",
-  "podcast vindes terbaru",
-  "komika indonesia podcast terbaru",
-  "podcast politik indonesia",
-  "podcast komedi indonesia"
+  "ceramah islam terbaru hari ini",
+  "kajian sunnah terbaru indonesia",
+  "ceramah pendek ustadz indonesia",
+  "tausiyah singkat terbaru",
+  "renungan islam menyentuh hati",
+  "motivasi islami kehidupan",
+  "nasihat rumah tangga islam",
+  "kisah hijrah terbaru",
+  "podcast muslim inspiratif",
+  "hikmah hidup islam"
 ];
 
 const DEFAULT_CHANNEL_HANDLES = [
-  "@corbuzier",
-  "@VINDES",
-  "@radityadika",
-  "@DanielManantaNetwork",
-  "@HASCreative",
-  "@podkesmas",
-  "@podhub",
-  "@Kasisolusi",
-  "@TotalPolitik"
+  "@AdiHidayatOfficial",
+  "@khalidbasalamah",
+  "@yufid",
+  "@RodjaTV",
+  "@ShiftMediaId",
+  "@TafaqquhOnline",
+  "@TerasDakwah"
 ];
 
-const PODCAST_TOPIC_RE = /podcast|siniar|podhub|podkesmas|close\s*the\s*door|vindes|deddy|corbuzier|raditya|daniel\s*mananta|has\s*creative|kasisolusi|total\s*politik|podcast\s*politik|podcast\s*komedi/i;
+const PODCAST_TOPIC_RE = /ceramah|kajian|tausiyah|dakwah|ustad|ustadz|ustaz|islam|islami|muslim|sunnah|quran|alquran|hadis|hadits|renungan|hikmah|nasihat|motivasi|hijrah|taubat|sholat|doa|keluarga|rumah\s*tangga|podcast\s*muslim|yufid|rodja|adi\s*hidayat|khalid\s*basalamah|tafaqquh|teras\s*dakwah/i;
 const NON_PODCAST_NOISE_RE = /official\s*music\s*video|lirik|lyrics|trailer|teaser|sinetron|drama|full\s*movie|film\s*pendek|gameplay|live\s*stream\s*game|highlight\s*bola/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 const DISCOVERY_CACHE_FILE = "discovery-cache.json";
@@ -266,10 +266,10 @@ function passesDuration(item, options) {
 
 function topicMultiplier(text) {
   const value = String(text || "").toLowerCase();
-  if (/podcast.*artis|artis.*podcast|deddy|corbuzier|vindes|raditya|close\s*the\s*door/.test(value)) return 1.4;
-  if (/podhub|podkesmas|daniel\s*mananta|has\s*creative|kasisolusi/.test(value)) return 1.28;
-  if (/podcast.*politik|politik.*podcast|total\s*politik/.test(value)) return 1.16;
-  if (/podcast.*komedi|komedi.*podcast|komika/.test(value)) return 1.1;
+  if (/ceramah|kajian|tausiyah|dakwah|ustad|ustadz|ustaz|adi\s*hidayat|khalid\s*basalamah|yufid|rodja/.test(value)) return 1.42;
+  if (/renungan|hikmah|nasihat|motivasi|hijrah|taubat|syukur|sabar|ikhlas/.test(value)) return 1.34;
+  if (/keluarga|rumah\s*tangga|anak|orang\s*tua|rezeki|kehidupan/.test(value)) return 1.2;
+  if (/podcast\s*muslim|podcast\s*islami|kisah\s*inspiratif/.test(value)) return 1.14;
   return 1;
 }
 
@@ -1084,7 +1084,7 @@ export async function discoverAndQueueVideos(options = {}) {
     regionCode,
     relevanceLanguage
   };
-  const theme = options.theme && options.theme !== "auto" ? options.theme : "podcast artis";
+  const theme = options.theme && options.theme !== "auto" ? options.theme : "renungan islam";
 
   const videos = queueMaintenance.videos;
   const history = await readJson("history", []);
@@ -1182,7 +1182,7 @@ const isCli = process.argv[1]
 
 if (isCli) {
   discoverAndQueueVideos({
-    theme: process.env.THEME || "podcast artis",
+    theme: process.env.THEME || "renungan islam",
     targetDate: todayDate()
   })
     .then((result) => {
