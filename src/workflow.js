@@ -919,14 +919,22 @@ async function publishPlatform(name, platformResults, jobId, callback) {
 }
 
 function buildMetadata({ job, video, theme, prompt, output, clipperResult, caption, thumbnail, clipIndex = 1, clipTotal = 1, videoEffects = null }) {
+  const hashtags = metadataHashtags(output, caption, theme);
+  const titleAlternatives = Array.isArray(output.titleAlternatives)
+    ? output.titleAlternatives.slice(0, 3)
+    : [];
   return {
     job_id: job.job_id,
     clip_index: clipIndex,
     clip_total: clipTotal,
     source_type: "youtube_video",
     source_url: video.url,
+    source_video: video.url,
     youtube_video_id: video.youtube_video_id,
     source_title: output.title || "",
+    title: output.bestTitle || output.title || thumbnail.text || "",
+    best_title: output.bestTitle || output.title || thumbnail.text || "",
+    title_alternatives: titleAlternatives,
     theme: theme?.name || job.theme,
     prompt_id: prompt?.id || "",
     status: "done",
@@ -942,18 +950,62 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     thumbnailPath: thumbnail.path,
     thumbnailText: thumbnail.text,
     caption,
+    caption_short: firstCaptionSentence(caption),
     startTime: output.start,
+    start_time: output.start,
     endTime: output.end,
+    end_time: output.end,
     duration: output.duration,
+    summary: output.summary || "",
+    alasan_segmen_dipilih: output.reason || "",
+    risiko_konteks_copyright: output.risks || "",
+    screen_hook: output.screenHook || thumbnail.text || "",
+    main_emotion: output.mainEmotion || "",
+    context_safe_score: output.contextSafeScore || 0,
     clipTranscript: output.clipTranscript || "",
     viralScore: output.viralScore || 0,
+    viral_score_1_10: output.viralScore1To10 || 0,
     selectedAngle: output.selectedAngle || "",
     publishDecision: output.publishDecision || "",
     candidateId: output.candidateId || "",
-    hashtags: output.hashtags || [],
+    hashtags,
+    risks: output.risks || "",
+    validation: output.validation || {},
     clipperJobId: clipperResult.jobId,
     createdAt: new Date().toISOString()
   };
+}
+
+function firstCaptionSentence(value = "") {
+  const body = String(value || "").replace(/#[\p{L}\p{N}_]+/gu, "").trim();
+  const match = body.match(/^(.{20,220}?[.!?])(?:\s|$)/su);
+  return (match?.[1] || body.split(/\n+/)[0] || "").trim().slice(0, 220);
+}
+
+function metadataHashtags(output = {}, caption = "", theme = {}) {
+  const defaults = ["#Ceramah", "#Renungan", "#MotivasiIslami", "#HikmahHidup", "#Shorts"];
+  const raw = [
+    ...(Array.isArray(output.hashtags) ? output.hashtags : []),
+    ...(String(caption || "").match(/#[\p{L}\p{N}_]+/gu) || []),
+    ...defaults,
+    theme?.name ? `#${theme.name}` : ""
+  ];
+  const seen = new Set();
+  const tags = [];
+  for (const item of raw) {
+    const cleaned = String(item || "")
+      .trim()
+      .replace(/^#+/, "")
+      .replace(/[^\p{L}\p{N}_]/gu, "");
+    if (!cleaned) continue;
+    const tag = `#${cleaned}`;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(tag);
+    if (tags.length >= 8) break;
+  }
+  return tags.length >= 5 ? tags : [...tags, ...defaults].filter((tag, index, arr) => arr.indexOf(tag) === index).slice(0, 8);
 }
 
 async function appendHistoryEntry({ job, video, caption, output, upload, platformResults = {}, status, clipIndex = 1, clipTotal = 1 }) {

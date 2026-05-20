@@ -110,7 +110,7 @@ function buildConfig() {
       filterEnabled: boolEnv("VIDEO_FILTER_ENABLED", true),
       watermarkEnabled: boolEnv("VIDEO_WATERMARK_ENABLED", true),
       lowerThirdEnabled: boolEnv("VIDEO_LOWER_THIRD_ENABLED", true),
-      lowerThirdBrand: cleanBrandText(process.env.VIDEO_LOWER_THIRD_BRAND || "@razqabermain | Ceramah Highlight"),
+      lowerThirdBrand: cleanBrandText(process.env.VIDEO_LOWER_THIRD_BRAND || "@razqabermain | Sumber: YouTube"),
       frameAssetPath: path.resolve(rootDir, cleanText(process.env.VIDEO_FRAME_ASSET || "assets/branding/frame-1080x1920.png")),
       watermarkAssetPath: path.resolve(rootDir, cleanText(process.env.VIDEO_WATERMARK_ASSET || "assets/branding/logo.png")),
       crf: numberEnv("VIDEO_EFFECT_CRF", numberEnv("FINAL_RENDER_CRF", 27)),
@@ -193,7 +193,7 @@ function buildConfig() {
       baseUrl: openaiBaseUrl,
       model: openaiModel,
       models: uniqueList([openaiModel, ...openaiModels, ...openaiDefaultModels]),
-      temperature: numberEnv("OPENAI_TEMPERATURE", 0.45),
+      temperature: numberEnv("OPENAI_TEMPERATURE", 0.35),
       requestTimeoutMs: numberEnv("AI_REQUEST_TIMEOUT_SECONDS", 25) * 1000
     },
     deepgram: {
@@ -228,9 +228,9 @@ function buildConfig() {
     clipper: {
       rootDir: path.resolve(rootDir, cleanText(process.env.CLIPPER_ROOT || "clipper")),
       pythonCommand: cleanText(process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3")),
-      clipCount: numberEnv("CLIP_COUNT", 1),
-      minClipSeconds: numberEnv("MIN_CLIP_SECONDS", 40),
-      maxClipSeconds: numberEnv("MAX_CLIP_SECONDS", 60)
+      clipCount: numberEnv("CLIP_COUNT", 3),
+      minClipSeconds: numberEnv("MIN_CLIP_SECONDS", 35),
+      maxClipSeconds: numberEnv("MAX_CLIP_SECONDS", 58)
     }
   };
 }

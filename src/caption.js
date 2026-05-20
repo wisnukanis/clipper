@@ -59,7 +59,7 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
     "- Tambahkan CTA ringan.",
     "- Caption harus selesai utuh. Jangan akhiri dengan kalimat terpotong, koma, titik dua, kata sambung, atau ellipsis.",
     "- Jangan menyalin mentah transkrip yang terpotong; rangkum jadi kalimat lengkap.",
-    "- Akhiri dengan tepat 3 hashtag relevan. Prioritaskan 1 hashtag konteks/tokoh/topik jika ada.",
+    "- Akhiri dengan 5 sampai 8 hashtag relevan. Prioritaskan konteks/topik, jangan hashtag generik berlebihan.",
     "",
     `Tema: ${job.theme}`,
     `Gaya: ${promptTemplate?.hook_style || "natural emotional"}`,
@@ -82,8 +82,8 @@ export async function generateThumbnailText({ job, output, promptTemplate, aiPro
   const fallback = fallbackThumbnailText(output);
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
-    "Aturan: 6 sampai 16 kata, boleh panjang jika hook-nya lengkap, huruf besar, kuat, mudah dibaca, tidak clickbait menyesatkan.",
-    "- Jangan jawab satu atau dua kata, jangan hanya dua kata besar.",
+    "Aturan: maksimal 8 kata, huruf besar, kuat, universal, mudah dibaca, tidak clickbait menyesatkan.",
+    "- Jangan hanya mengandalkan nama orang.",
     "- Buat sebagai hook utama, bukan potongan kalimat yang terputus.",
     "- Buat kalimat/judul utuh yang membuat orang ingin menonton sampai akhir.",
     "- Jangan ambil potongan transkrip mentah yang tidak jelas.",
@@ -247,7 +247,7 @@ function captionHashtags({ caption = "", dynamicHashtags = [], output, promptTem
   const contextHashtags = normalizeHashtags(dynamicHashtags);
   const templateHashtags = normalizeHashtags(promptTemplate?.hashtag_template || []);
   return mergeHashtags(
-    ["#PodcastIndonesia"],
+    ["#Ceramah"],
     contextHashtags,
     outputHashtags,
     existingHashtags,
@@ -331,6 +331,12 @@ function topKeywords(value, limit) {
 function topicHashtags(value) {
   const source = String(value || "").toLowerCase();
   const tags = [];
+  if (/ceramah|ustadz|ustaz|kajian|dakwah|nasihat/.test(source)) tags.push("Ceramah");
+  if (/islam|muslim|muslimah|sunnah|quran|alquran|hadis|hadits/.test(source)) tags.push("Islam");
+  if (/renungan|hikmah|pelajaran|nasihat hidup|kehidupan/.test(source)) tags.push("Hikmah Hidup");
+  if (/motivasi|semangat|bangkit|sabar|ikhlas|syukur/.test(source)) tags.push("Motivasi Islami");
+  if (/keluarga|anak|ayah|ibu|orang tua|rumah tangga/.test(source)) tags.push("Keluarga");
+  if (/hijrah|taubat|tobat/.test(source)) tags.push("Hijrah");
   if (/\byusuf\s+hamka\b/i.test(value)) tags.push("Yusuf Hamka");
   if (/hak|adil|keadilan|nuntut|tuntut|perjuang/.test(source)) tags.push("Keadilan");
   if (/ancam|diancam|tekan|intimidasi/.test(source)) tags.push("Ancaman");
@@ -403,7 +409,7 @@ function isGenericHashtag(value) {
 function normalizeHashtags(value) {
   const rawItems = Array.isArray(value)
     ? value
-    : String(value || "#PodcastIndonesia #ReelsIndonesia")
+    : String(value || "#Ceramah #Renungan #MotivasiIslami #HikmahHidup #ReelsIndonesia")
       .split(/[\s,]+/);
 
   const seen = new Set();
@@ -445,12 +451,14 @@ const GENERIC_HASHTAGS = new Set([
 ]);
 
 const BASE_HASHTAGS = [
-  "#PodcastIndonesia",
-  "#PodcastArtis",
+  "#Ceramah",
+  "#Renungan",
+  "#MotivasiIslami",
+  "#HikmahHidup",
   "#ReelsIndonesia"
 ];
 
-const HASHTAG_LIMIT = 3;
+const HASHTAG_LIMIT = 8;
 
 const INCOMPLETE_CAPTION_END_RE = /(?:\.{3}|…|[,;:]|\s[-–]|\b(?:dan|atau|karena|yang|untuk|dengan|ke|di|dari|agar|supaya|kalau|tapi|jadi|sehingga|lalu|terus|bahwa|seperti|saat|ketika|biar))$/i;
 
@@ -554,16 +562,16 @@ function normalizeThumbnailText(value, fallback = "RAHASIA DI BALIK CERITA INI B
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
-  return cleaned.split(/\s+/).slice(0, 16).join(" ") || fallback;
+  return cleaned.split(/\s+/).slice(0, 8).join(" ") || fallback;
 }
 
 function isStrongThumbnailText(value) {
   const cleaned = String(value || "").trim();
   const words = cleaned.split(/\s+/).filter(Boolean);
-  if (words.length < 6 || words.length > 16) return false;
+  if (words.length < 3 || words.length > 8) return false;
   if (/[,:;]$/.test(cleaned)) return false;
   const meaningfulCount = words.filter((word) => !STOPWORDS.has(word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""))).length;
-  return words.join("").length >= 24 && meaningfulCount >= 4;
+  return words.join("").length >= 12 && meaningfulCount >= 2;
 }
 
 function fallbackThumbnailText(output) {
@@ -583,7 +591,7 @@ function fallbackThumbnailText(output) {
   const transcriptTitle = buildTranscriptThumbnailText(output?.clipTranscript);
   if (isStrongThumbnailText(transcriptTitle)) return transcriptTitle;
 
-  return "RAHASIA DI BALIK CERITA INI BIKIN PENASARAN";
+  return "JANGAN TERLALU MENGGENGGAM DUNIA";
 }
 
 function buildTranscriptThumbnailText(value) {
@@ -591,6 +599,6 @@ function buildTranscriptThumbnailText(value) {
     .replace(/[^\p{L}\p{N}\s?]/gu, " ")
     .split(/\s+/)
     .filter((word) => word.length >= 3 && !STOPWORDS.has(word.toLowerCase()))
-    .slice(0, 14);
+    .slice(0, 8);
   return normalizeThumbnailText(words.join(" "), "");
 }

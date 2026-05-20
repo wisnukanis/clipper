@@ -187,7 +187,7 @@ jobs:
       OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://api.openai.com/v1' }}
       OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4.1-nano' }}
       OPENAI_MODELS: ${{ secrets.OPENAI_MODELS || 'gpt-4.1-nano,gpt-5-nano,gpt-4o-mini' }}
-      OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE || '0.45' }}
+      OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE || '0.35' }}
       OPENAI_TRANSCRIBE_MODEL: ${{ secrets.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe' }}
       AI_REQUEST_TIMEOUT_SECONDS: ${{ secrets.AI_REQUEST_TIMEOUT_SECONDS || '25' }}
       TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
@@ -209,8 +209,8 @@ jobs:
       INSTAGRAM_CONTAINER_MAX_ATTEMPTS: ${{ secrets.INSTAGRAM_CONTAINER_MAX_ATTEMPTS || '90' }}
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
       AUTO_DISCOVER_VIDEOS: ${{ secrets.AUTO_DISCOVER_VIDEOS || 'true' }}
-      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'ceramah islam terbaru indonesia|ceramah ustadz terbaru|kajian islam indonesia terbaru|ceramah agama islam terbaru|ceramah pendek islam|kajian sunnah terbaru' }}
-      AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || 'ceramah islam terbaru indonesia' }}
+      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'ceramah islam terbaru indonesia|ceramah ustadz terbaru|kajian islam indonesia terbaru|ceramah pendek islam|renungan hidup islam|kisah inspiratif islam|podcast muslim indonesia|motivasi islami indonesia|kisah hijrah inspiratif|nasihat kehidupan islam' }}
+      AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || 'renungan hidup islam indonesia|ceramah pendek islam terbaru|kisah inspiratif islam indonesia' }}
       AUTO_DISCOVER_USE_API: ${{ secrets.AUTO_DISCOVER_USE_API || 'true' }}
       AUTO_DISCOVER_ALLOW_OAUTH: ${{ secrets.AUTO_DISCOVER_ALLOW_OAUTH || 'false' }}
       AUTO_DISCOVER_DAILY_SEARCH_ONLY: ${{ secrets.AUTO_DISCOVER_DAILY_SEARCH_ONLY || 'true' }}
@@ -253,20 +253,20 @@ jobs:
 
       PYTHON_CMD: python
       CLIPPER_ROOT: clipper
-      MIN_CLIP_SECONDS: "40"
-      MAX_CLIP_SECONDS: "60"
+      MIN_CLIP_SECONDS: ${{ secrets.MIN_CLIP_SECONDS || '35' }}
+      MAX_CLIP_SECONDS: ${{ secrets.MAX_CLIP_SECONDS || '58' }}
       OUTPUT_WIDTH: "1080"
       OUTPUT_HEIGHT: "1920"
       VIDEO_LANGUAGE: id
-      DOWNLOAD_MAX_HEIGHT: ${{ secrets.DOWNLOAD_MAX_HEIGHT || '720' }}
-      DOWNLOAD_COMPRESS_CRF: ${{ secrets.DOWNLOAD_COMPRESS_CRF || '30' }}
-      FINAL_RENDER_CRF: ${{ secrets.FINAL_RENDER_CRF || '27' }}
-      VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'standard' }}
+      DOWNLOAD_MAX_HEIGHT: ${{ secrets.DOWNLOAD_MAX_HEIGHT || '1080' }}
+      DOWNLOAD_COMPRESS_CRF: ${{ secrets.DOWNLOAD_COMPRESS_CRF || '24' }}
+      FINAL_RENDER_CRF: ${{ secrets.FINAL_RENDER_CRF || '22' }}
+      VIDEO_QUALITY_PROFILE: ${{ github.event.inputs.quality_profile || secrets.VIDEO_QUALITY_PROFILE || 'high' }}
       VIDEO_FRAME_ENABLED: ${{ github.event.inputs.use_frame || secrets.VIDEO_FRAME_ENABLED || 'true' }}
       VIDEO_FILTER_ENABLED: ${{ github.event.inputs.use_filter || secrets.VIDEO_FILTER_ENABLED || 'true' }}
       VIDEO_WATERMARK_ENABLED: ${{ github.event.inputs.use_watermark || secrets.VIDEO_WATERMARK_ENABLED || 'true' }}
       VIDEO_LOWER_THIRD_ENABLED: ${{ secrets.VIDEO_LOWER_THIRD_ENABLED || 'true' }}
-      VIDEO_LOWER_THIRD_BRAND: ${{ secrets.VIDEO_LOWER_THIRD_BRAND || '@razqabermain | Ceramah Highlight' }}
+      VIDEO_LOWER_THIRD_BRAND: ${{ secrets.VIDEO_LOWER_THIRD_BRAND || '@razqabermain | Sumber: YouTube' }}
       VIDEO_FRAME_ASSET: ${{ secrets.VIDEO_FRAME_ASSET || 'assets/branding/frame-1080x1920.png' }}
       VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
       VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}
@@ -274,8 +274,8 @@ jobs:
       BACKGROUND_MUSIC_ENABLED: ${{ github.event.inputs.background_music_enabled || secrets.BACKGROUND_MUSIC_ENABLED || '1' }}
       BACKGROUND_MUSIC_FILE: ${{ github.event.inputs.background_music_file || secrets.BACKGROUND_MUSIC_FILE || 'auto' }}
       BACKGROUND_MUSIC_MAP_FILE: ${{ github.event.inputs.background_music_map_file || secrets.BACKGROUND_MUSIC_MAP_FILE || 'assets/music/music-map.json' }}
-      BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.06' }}
-      BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '1.0' }}
+      BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.10' }}
+      BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '0.90' }}
       THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Ceramah | Kajian | Shorts' }}
       THUMBNAIL_INTRO_ENABLED: ${{ secrets.THUMBNAIL_INTRO_ENABLED || 'true' }}
       THUMBNAIL_INTRO_SECONDS: ${{ secrets.THUMBNAIL_INTRO_SECONDS || '0.9' }}
@@ -284,12 +284,12 @@ jobs:
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
       SCENE_MODE: ${{ github.event.inputs.scene_mode || secrets.SCENE_MODE || 'podcast' }}
       SMART_CROP_MODE: ${{ github.event.inputs.scene_mode || secrets.SMART_CROP_MODE || 'podcast' }}
-      CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '1' }}
+      CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '3' }}
       SUBTITLE_MIN_FONT_SIZE: ${{ secrets.SUBTITLE_MIN_FONT_SIZE || '34' }}
       SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || '550' }}
       SUBTITLE_MARGIN_H: ${{ github.event.inputs.subtitle_margin_h || secrets.SUBTITLE_MARGIN_H || '180' }}
       SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '2' }}
-      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H0000FFFF' }}
+      SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H00FFFFFF' }}
       SUBTITLE_OUTLINE_COLOUR: ${{ secrets.SUBTITLE_OUTLINE_COLOUR || '&H00111111' }}
       SUBTITLE_SHADOW_COLOUR: ${{ secrets.SUBTITLE_SHADOW_COLOUR || '&H66000000' }}
       SUBTITLE_OUTLINE: ${{ secrets.SUBTITLE_OUTLINE || '4' }}
@@ -300,9 +300,9 @@ jobs:
       TRANSCRIPT_REVIEW_REQUIRED: ${{ secrets.TRANSCRIPT_REVIEW_REQUIRED || '0' }}
       VIRAL_STRATEGY_ENABLED: ${{ secrets.VIRAL_STRATEGY_ENABLED || '1' }}
       VIRAL_STRATEGY_REQUIRED: ${{ secrets.VIRAL_STRATEGY_REQUIRED || '0' }}
-      AI_CANDIDATE_MAX_COUNT: ${{ secrets.AI_CANDIDATE_MAX_COUNT || '8' }}
+      AI_CANDIDATE_MAX_COUNT: ${{ secrets.AI_CANDIDATE_MAX_COUNT || '5' }}
       AI_CANDIDATE_MAX_CHARS: ${{ secrets.AI_CANDIDATE_MAX_CHARS || '7000' }}
-      MIN_VIRAL_SCORE_TO_PUBLISH: ${{ secrets.MIN_VIRAL_SCORE_TO_PUBLISH || '55' }}
+      MIN_VIRAL_SCORE_TO_PUBLISH: ${{ secrets.MIN_VIRAL_SCORE_TO_PUBLISH || '60' }}
       FORCE_PUBLISH: ${{ secrets.FORCE_PUBLISH || '1' }}
 
       YTDLP_JS_RUNTIMES: node

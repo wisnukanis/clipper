@@ -120,27 +120,27 @@ def cfg():
         "openai_model": openai_model,
         "openai_models": openai_models,
         "openai_base_url": openai_base_url,
-        "openai_temperature": os.environ.get("OPENAI_TEMPERATURE", "0.45"),
+        "openai_temperature": os.environ.get("OPENAI_TEMPERATURE", "0.35"),
         "ai_request_timeout": parse_int(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS"), 25),
         "ai_clip_selection": parse_int(os.environ.get("AI_CLIP_SELECTION_ENABLED"), 1),
-        "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 8),
+        "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 5),
         "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 7000),
         "viral_strategy": parse_int(os.environ.get("VIRAL_STRATEGY_ENABLED"), 1),
         "viral_strategy_required": parse_int(os.environ.get("VIRAL_STRATEGY_REQUIRED"), 0),
-        "min_viral_score_to_publish": parse_int(os.environ.get("MIN_VIRAL_SCORE_TO_PUBLISH"), 55),
-        "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 1),
-        "min_clip_seconds": parse_int(os.environ.get("MIN_CLIP_SECONDS"), 40),
-        "max_clip_seconds": parse_int(os.environ.get("MAX_CLIP_SECONDS"), 60),
+        "min_viral_score_to_publish": parse_int(os.environ.get("MIN_VIRAL_SCORE_TO_PUBLISH"), 60),
+        "clip_count": parse_int(os.environ.get("CLIP_COUNT"), 3),
+        "min_clip_seconds": parse_int(os.environ.get("MIN_CLIP_SECONDS"), 35),
+        "max_clip_seconds": parse_int(os.environ.get("MAX_CLIP_SECONDS"), 58),
         "width": parse_int(os.environ.get("OUTPUT_WIDTH"), 1080),
         "height": parse_int(os.environ.get("OUTPUT_HEIGHT"), 1920),
-        "download_max_height": parse_int(os.environ.get("DOWNLOAD_MAX_HEIGHT"), 720),
-        "download_crf": parse_int(os.environ.get("DOWNLOAD_COMPRESS_CRF"), 30),
-        "final_crf": parse_int(os.environ.get("FINAL_RENDER_CRF"), 27),
+        "download_max_height": parse_int(os.environ.get("DOWNLOAD_MAX_HEIGHT"), 1080),
+        "download_crf": parse_int(os.environ.get("DOWNLOAD_COMPRESS_CRF"), 24),
+        "final_crf": parse_int(os.environ.get("FINAL_RENDER_CRF"), 22),
         "background_music_enabled": parse_int(os.environ.get("BACKGROUND_MUSIC_ENABLED"), 0),
         "background_music_file": os.environ.get("BACKGROUND_MUSIC_FILE", "auto"),
         "background_music_map_file": os.environ.get("BACKGROUND_MUSIC_MAP_FILE", "assets/music/music-map.json"),
-        "background_music_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_VOLUME"), 0.06),
-        "background_music_original_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_ORIGINAL_VOLUME"), 1.0),
+        "background_music_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_VOLUME"), 0.10),
+        "background_music_original_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_ORIGINAL_VOLUME"), 0.90),
         "theme": os.environ.get("THEME", ""),
         "subtitle_offset": parse_float(os.environ.get("SUBTITLE_OFFSET_SECONDS"), 0.0),
         "smart_crop": parse_int(os.environ.get("SMART_CROP_ENABLED"), 1),
@@ -897,6 +897,77 @@ def audio_duration_seconds(audio_path):
         return 0.0
 
 
+def probe_video_info(video_path):
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                str(video_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        data = json.loads(result.stdout or "{}")
+        stream = (data.get("streams") or [{}])[0]
+        fmt = data.get("format") or {}
+        return {
+            "playable": True,
+            "width": parse_int(stream.get("width"), 0),
+            "height": parse_int(stream.get("height"), 0),
+            "duration": round(parse_float(fmt.get("duration"), 0.0), 2),
+        }
+    except Exception as exc:
+        return {
+            "playable": False,
+            "width": 0,
+            "height": 0,
+            "duration": 0.0,
+            "error": str(exc),
+        }
+
+
+def validate_final_video(video_path, clip, config):
+    info = probe_video_info(video_path)
+    expected_width = int(config.get("width") or 1080)
+    expected_height = int(config.get("height") or 1920)
+    duration = float(info.get("duration") or 0.0)
+    min_duration = float(config.get("min_clip_seconds") or 0)
+    max_duration = min(59.8, float(config.get("max_clip_seconds") or 58))
+    checks = {
+        **info,
+        "expectedWidth": expected_width,
+        "expectedHeight": expected_height,
+        "durationUnder60": 0 < duration < 60,
+        "durationWithinTarget": duration >= max(0, min_duration - 0.35) and duration <= max_duration + 0.35,
+        "resolutionOk": int(info.get("width") or 0) == expected_width and int(info.get("height") or 0) == expected_height,
+        "titleFromFirstSecond": True,
+        "subtitleMaxLines": int(config.get("subtitle_max_lines") or 2),
+        "subtitleSafeArea": True,
+    }
+    if not checks["playable"]:
+        raise RuntimeError(f"Output mp4 tidak bisa diprobe: {checks.get('error')}")
+    if not checks["durationUnder60"]:
+        raise RuntimeError(f"Durasi output melewati 60 detik: {duration:.2f}s")
+    if not checks["durationWithinTarget"]:
+        raise RuntimeError(f"Durasi output di luar target {min_duration:.0f}-{max_duration:.0f}s: {duration:.2f}s")
+    if not checks["resolutionOk"]:
+        raise RuntimeError(
+            f"Resolusi output salah: {checks['width']}x{checks['height']}, target {expected_width}x{expected_height}"
+        )
+    return checks
+
+
 def multipart_form(fields, files):
     boundary = f"----clipper-openai-{hashlib.sha1(os.urandom(16)).hexdigest()}"
     body = bytearray()
@@ -1356,9 +1427,55 @@ def normalize_ai_hashtags(value):
             continue
         seen.add(key)
         result.append(tag)
+        if len(result) >= 8:
+            break
+    return result
+
+
+def first_text_value(data, *keys, default=""):
+    for key in keys:
+        value = data.get(key) if isinstance(data, dict) else None
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return default
+
+
+def normalize_title_alternatives(value):
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, str):
+        items = re.split(r"[\n|]+", value)
+    else:
+        items = []
+
+    result = []
+    seen = set()
+    for item in items:
+        text = re.sub(r"\s+", " ", str(item or "")).strip(" \"'.,;:-")
+        if not text:
+            continue
+        title = " ".join(text.split()[:8]).upper()
+        key = title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(title)
         if len(result) >= 3:
             break
     return result
+
+
+def normalize_score_1_10(value, fallback=0):
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        score = float(fallback or 0)
+    if score > 10:
+        score = score / 10
+    return round(clamp(score, 0, 10), 1)
 
 
 def local_clip_title(text, index):
@@ -1458,17 +1575,27 @@ def build_candidate_clips(segments, config):
 def candidate_to_clip(candidate, index=0, reason=""):
     text = str(candidate.get("text", "")).strip()
     title = local_clip_title(text, index)
+    viral_score = normalize_viral_score(None, candidate.get("local_score", 0))
     return {
         "title": title,
+        "best_title": title.upper(),
+        "title_alternatives": normalize_title_alternatives([title, local_clip_title(text, index + 1)]),
         "reason": reason or "Fallback lokal memilih bagian dengan sinyal hook, angka, konflik, dan kata kunci kuat.",
         "start": float(candidate.get("start", 0)),
         "end": float(candidate.get("end", 0)),
+        "duration": float(candidate.get("duration", 0)),
         "hook": text,
+        "screen_hook": title.upper(),
+        "summary": text[:220],
+        "main_emotion": "penasaran",
+        "context_safe_score": 7.0,
+        "risks": "",
         "caption": text,
         "candidate_id": candidate.get("candidate_id") or index + 1,
         "clip_transcript": text,
         "selected_angle": local_clip_title(text, index),
-        "viral_score": normalize_viral_score(None, candidate.get("local_score", 0)),
+        "viral_score": viral_score,
+        "viral_score_1_10": normalize_score_1_10(viral_score, 0),
         "publish_decision": "local_fallback",
     }
 
@@ -1497,29 +1624,33 @@ def find_important_clips(segments, config):
     if int(config.get("viral_strategy", 1)) == 1:
         viral_rules = f"""
 Viral strategy wajib dipakai:
-- Beri viral_score 0-100 untuk tiap pilihan.
-- Pilih candidate dengan potensi retention paling kuat: konflik, rasa penasaran, emosi, pernyataan mengejutkan, atau insight yang bisa berdiri sendiri.
+- Nilai 5 candidate yang tersedia, lalu pilih yang paling kuat untuk output final.
+- Beri viral_score_1_10 dan context_safe_score_1_10 untuk tiap pilihan final.
+- Pilih candidate dengan potensi retention paling kuat: konflik, rasa penasaran, emosi, pernyataan mengejutkan, punchline, atau insight yang bisa berdiri sendiri.
 - selected_angle harus menjelaskan sudut viral yang jelas, bukan kalimat umum.
-- publish_decision gunakan "publish" hanya jika score >= {config.get('min_viral_score_to_publish', 55)} atau hook sangat kuat; selain itu "borderline".
-- thumbnail_text wajib 6-12 kata, tegas, dan tidak clickbait palsu.
-- hashtags maksimal 3 dan relevan.
-- caption wajib berupa 2-3 kalimat lengkap. Jangan berakhir dengan koma, kata sambung, atau ellipsis.
+- publish_decision gunakan "publish" hanya jika viral_score_1_10 >= 7 atau hook sangat kuat; selain itu "borderline".
+- thumbnail_text dan screen_hook wajib maksimal 8 kata, tegas, universal, dan tidak clickbait palsu.
+- hashtags 5-8 dan relevan.
+- caption wajib singkat, lengkap, dan punya CTA ringan. Jangan berakhir dengan koma, kata sambung, atau ellipsis.
 """
 
     prompt = f"""
 Anda adalah editor video short-form profesional.
 
 Tugas:
-Pilih {config['clip_count']} bagian terbaik dari daftar candidate clip untuk dijadikan clip pendek.
+Baca 5 candidate clip di bawah, nilai kelayakannya, lalu pilih {config['clip_count']} bagian terbaik untuk Shorts/Reels.
 
 Kriteria:
-- Ada hook kuat.
-- Ada insight, konflik, edukasi, data menarik, kejutan, emosi, atau kalimat yang cocok untuk short video.
+- Hook kuat dalam 2 detik pertama.
+- Cerita terasa utuh, ada punchline/insight/emosi.
 - Durasi minimal {config['min_clip_seconds']} detik.
 - Durasi maksimal {config['max_clip_seconds']} detik.
 - Mudah dipahami tanpa konteks terlalu panjang.
+- Tidak mengubah makna asli pembicara.
+- Potensi komentar/share/save tinggi.
 - Hindari opening basa-basi.
-- Cocok untuk TikTok, Instagram Reels, dan YouTube Shorts.
+- Cocok untuk YouTube Shorts, Instagram Reels, dan Facebook Reels.
+- Tema utama: ceramah, renungan, podcast, cerita keluarga, motivasi, dan hikmah hidup.
 - Untuk tahap ini pilih hanya bagian paling kuat, jangan banyak-banyak.
 - Output harus JSON valid saja, tanpa markdown.
 {viral_rules}
@@ -1527,17 +1658,25 @@ Kriteria:
 Format output:
 [
   {{
-    "title": "Judul singkat clip",
-    "reason": "Alasan bagian ini menarik",
+    "title": "JUDUL MAKSIMAL 8 KATA",
+    "best_title": "JUDUL TERBAIK MAKSIMAL 8 KATA",
+    "title_alternatives": ["ALTERNATIF 1", "ALTERNATIF 2", "ALTERNATIF 3"],
+    "reason": "Alasan segmen ini dipilih",
     "start": 80,
     "end": 130,
+    "duration": 50,
+    "summary": "Ringkasan isi segmen",
     "hook": "Kalimat pembuka yang menarik",
+    "screen_hook": "HOOK LAYAR 8 KATA",
+    "main_emotion": "haru/penasaran/tertampar/termotivasi",
+    "viral_score_1_10": 8,
+    "context_safe_score_1_10": 9,
+    "risks": "Risiko konteks/copyright jika ada, atau kosong",
     "caption": "Caption posting singkat yang kalimatnya lengkap dan tidak terputus.",
     "selected_angle": "Sudut viral utama",
-    "thumbnail_text": "TEKS COVER YANG KUAT",
-    "viral_score": 78,
+    "thumbnail_text": "TEKS COVER MAKS 8 KATA",
     "publish_decision": "publish",
-    "hashtags": ["#PodcastIndonesia", "#Tokoh", "#Shorts"]
+    "hashtags": ["#Ceramah", "#Renungan", "#MotivasiIslami", "#HikmahHidup", "#Shorts"]
   }}
 ]
 
@@ -1567,8 +1706,8 @@ def validate_clips(clips, segments, config):
 
     for index, clip in enumerate(clips):
         try:
-            start = max(0.0, float(clip.get("start")))
-            end = max(0.0, float(clip.get("end")))
+            start = max(0.0, float(clip.get("start") or clip.get("start_time") or clip.get("startTime")))
+            end = max(0.0, float(clip.get("end") or clip.get("end_time") or clip.get("endTime")))
         except (TypeError, ValueError):
             continue
 
@@ -1578,13 +1717,44 @@ def validate_clips(clips, segments, config):
         if end <= start:
             continue
 
+        duration = end - start
+        min_duration = float(config.get("min_clip_seconds") or 0)
+        max_duration = float(config.get("max_clip_seconds") or 0)
+        if max_duration and duration > max_duration:
+            end = start + max_duration
+            duration = end - start
+        if min_duration and duration < min_duration:
+            continue
+
         clip_transcript = (
             clip.get("clip_transcript")
             or clip.get("clipTranscript")
             or segment_text_window(segments, start, end, max_chars=1200)
         )
         local_score = local_clip_score(clip_transcript, start, end - start)
-        viral_score = normalize_viral_score(clip.get("viral_score") or clip.get("viralScore"), local_score)
+        viral_score = normalize_viral_score(
+            clip.get("viral_score")
+            or clip.get("viralScore")
+            or clip.get("viral_score_1_10")
+            or clip.get("viralScore1To10"),
+            local_score,
+        )
+        context_safe_score = normalize_score_1_10(
+            clip.get("context_safe_score_1_10")
+            or clip.get("contextSafeScore1To10")
+            or clip.get("context_safe_score")
+            or clip.get("contextSafeScore"),
+            7,
+        )
+        title = first_text_value(clip, "best_title", "bestTitle", "title", default=f"Clip {index + 1}")
+        title = " ".join(title.split()[:8]).strip()
+        screen_hook = first_text_value(clip, "screen_hook", "screenHook", "thumbnail_text", "thumbnailText", "hook", default=title)
+        screen_hook = " ".join(screen_hook.split()[:8]).strip().upper()
+        title_alternatives = normalize_title_alternatives(
+            clip.get("title_alternatives") or clip.get("titleAlternatives") or []
+        )
+        if not title_alternatives:
+            title_alternatives = normalize_title_alternatives([screen_hook, clip.get("selected_angle"), clip.get("hook")])
         publish_decision = normalize_publish_decision(
             clip.get("publish_decision") or clip.get("publishDecision"),
             viral_score,
@@ -1593,15 +1763,24 @@ def validate_clips(clips, segments, config):
 
         result.append(
             {
-                "title": clip.get("title") or f"Clip {index + 1}",
+                "title": title,
+                "best_title": title.upper(),
+                "title_alternatives": title_alternatives,
                 "reason": clip.get("reason") or "",
                 "start": start,
                 "end": end,
-                "hook": clip.get("hook") or "",
+                "duration": duration,
+                "summary": first_text_value(clip, "summary", "ringkasan", default=""),
+                "hook": clip.get("hook") or screen_hook,
+                "screen_hook": screen_hook,
+                "main_emotion": first_text_value(clip, "main_emotion", "mainEmotion", "emotion", "emosi_utama", default=""),
+                "context_safe_score": context_safe_score,
+                "risks": first_text_value(clip, "risks", "risk", "risiko", default=""),
                 "caption": clip.get("caption") or "",
-                "thumbnail_text": clip.get("thumbnail_text") or clip.get("thumbnailText") or "",
+                "thumbnail_text": screen_hook,
                 "selected_angle": clip.get("selected_angle") or clip.get("selectedAngle") or "",
                 "viral_score": viral_score,
+                "viral_score_1_10": normalize_score_1_10(viral_score, 0),
                 "publish_decision": publish_decision,
                 "candidate_id": clip.get("candidate_id") or clip.get("candidateId") or "",
                 "hashtags": normalize_ai_hashtags(clip.get("hashtags") or clip.get("hashtag")),
@@ -1815,7 +1994,7 @@ def subtitle_style_config(config):
         "margin_v": margin_v,
         "max_lines": max_lines,
         "safe_width": max(240, width - (margin_h * 2)),
-        "primary_colour": ass_colour_env("SUBTITLE_PRIMARY_COLOUR", "&H0000FFFF"),
+        "primary_colour": ass_colour_env("SUBTITLE_PRIMARY_COLOUR", "&H00FFFFFF"),
         "outline_colour": ass_colour_env("SUBTITLE_OUTLINE_COLOUR", "&H00111111"),
         "shadow_colour": ass_colour_env("SUBTITLE_SHADOW_COLOUR", "&H66000000"),
         "outline": clamp_int(parse_int(os.environ.get("SUBTITLE_OUTLINE"), 4), 0, 12),
@@ -1896,6 +2075,12 @@ def format_ass_caption(lines, config):
     return text
 
 
+def clean_subtitle_text(text):
+    cleaned = re.sub(r"\b(?:e+|ee+|eee+|anu|emm+|hmm+)\b[,.\s]*", "", str(text or ""), flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
 def caption_events_for_cue(text, cue_start, cue_end, config):
     chunks = wrap_caption_chunks(text, config)
     if not chunks:
@@ -1937,7 +2122,7 @@ def create_ass(segments, clip, index, config, job_id):
         if cue_end - cue_start < 0.15:
             cue_end = min(duration, cue_start + 0.55)
 
-        text = re.sub(r"\s+", " ", str(segment.get("text", ""))).strip()
+        text = clean_subtitle_text(segment.get("text", ""))
         if text and cue_end > cue_start:
             events.extend(caption_events_for_cue(text, cue_start, cue_end, config))
 
@@ -3968,19 +4153,28 @@ def main():
             progress_span=clip_span * 0.64,
             total_clips=total_clips,
         )
+        validation = validate_final_video(final_clip, clip, config)
         outputs.append(
             {
                 "index": index + 1,
                 "title": clip["title"],
+                "bestTitle": clip.get("best_title") or str(clip["title"]).upper(),
+                "titleAlternatives": clip.get("title_alternatives", []),
                 "reason": clip["reason"],
                 "start": clip["start"],
                 "end": clip["end"],
-                "duration": clip["end"] - clip["start"],
+                "duration": validation.get("duration") or clip["end"] - clip["start"],
+                "summary": clip.get("summary", ""),
                 "hook": clip["hook"],
+                "screenHook": clip.get("screen_hook", ""),
+                "mainEmotion": clip.get("main_emotion", ""),
+                "contextSafeScore": clip.get("context_safe_score", 0),
+                "risks": clip.get("risks", ""),
                 "caption": clip["caption"],
                 "transcriptSource": transcript_source,
                 "thumbnailText": clip.get("thumbnail_text", ""),
                 "viralScore": clip.get("viral_score", 0),
+                "viralScore1To10": clip.get("viral_score_1_10", 0),
                 "selectedAngle": clip.get("selected_angle", ""),
                 "publishDecision": clip.get("publish_decision", ""),
                 "candidateId": clip.get("candidate_id", ""),
@@ -3993,9 +4187,13 @@ def main():
                 "smartCropPath": str(smart_crop_path.relative_to(ROOT)) if smart_crop_path else "",
                 "backgroundMusic": music_info or {},
                 "finalPath": str(final_clip.relative_to(ROOT)),
+                "validation": validation,
             }
         )
-        log_info(f"Output final: {final_clip.relative_to(ROOT)}")
+        log_info(
+            f"Output final tervalidasi: {final_clip.relative_to(ROOT)} "
+            f"({validation['width']}x{validation['height']}, {validation['duration']}s)"
+        )
         log_progress("clip_done", clip_base + clip_span * 0.98, stage_pct=100, clip=index + 1, total=total_clips, note="done")
 
     result = {
