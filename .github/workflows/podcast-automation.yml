@@ -209,7 +209,7 @@ jobs:
       INSTAGRAM_CONTAINER_MAX_ATTEMPTS: ${{ secrets.INSTAGRAM_CONTAINER_MAX_ATTEMPTS || '90' }}
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
       AUTO_DISCOVER_VIDEOS: ${{ secrets.AUTO_DISCOVER_VIDEOS || 'true' }}
-      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'ceramah islam terbaru indonesia|ceramah ustadz terbaru|kajian islam indonesia terbaru|ceramah pendek islam|renungan hidup islam|kisah inspiratif islam|podcast muslim indonesia|motivasi islami indonesia|kisah hijrah inspiratif|nasihat kehidupan islam' }}
+      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || 'renungan hidup islam|ceramah pendek islam|kisah inspiratif indonesia|podcast keluarga indonesia|motivasi hidup indonesia|nasihat orang tua|kisah perjuangan hidup|cerita keluarga inspiratif' }}
       AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || 'renungan hidup islam indonesia ceramah pendek terbaru' }}
       AUTO_DISCOVER_USE_API: ${{ secrets.AUTO_DISCOVER_USE_API || 'true' }}
       AUTO_DISCOVER_ALLOW_OAUTH: ${{ secrets.AUTO_DISCOVER_ALLOW_OAUTH || 'false' }}
@@ -274,8 +274,8 @@ jobs:
       BACKGROUND_MUSIC_ENABLED: ${{ github.event.inputs.background_music_enabled || secrets.BACKGROUND_MUSIC_ENABLED || '1' }}
       BACKGROUND_MUSIC_FILE: ${{ github.event.inputs.background_music_file || secrets.BACKGROUND_MUSIC_FILE || 'auto' }}
       BACKGROUND_MUSIC_MAP_FILE: ${{ github.event.inputs.background_music_map_file || secrets.BACKGROUND_MUSIC_MAP_FILE || 'assets/music/music-map.json' }}
-      BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.10' }}
-      BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '0.90' }}
+      BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.08' }}
+      BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '0.92' }}
       THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Ceramah | Kajian | Shorts' }}
       THUMBNAIL_INTRO_ENABLED: ${{ secrets.THUMBNAIL_INTRO_ENABLED || 'true' }}
       THUMBNAIL_INTRO_SECONDS: ${{ secrets.THUMBNAIL_INTRO_SECONDS || '0.9' }}

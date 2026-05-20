@@ -11,16 +11,14 @@ import { extractYoutubeVideoId } from "./youtube.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
 
 const DEFAULT_QUERIES = [
-  "ceramah islam terbaru indonesia",
-  "ceramah ustadz terbaru",
-  "kajian islam indonesia terbaru",
-  "ceramah pendek islam",
   "renungan hidup islam",
-  "kisah inspiratif islam",
-  "podcast muslim indonesia",
-  "motivasi islami indonesia",
-  "kisah hijrah inspiratif",
-  "nasihat kehidupan islam"
+  "ceramah pendek islam",
+  "kisah inspiratif indonesia",
+  "podcast keluarga indonesia",
+  "motivasi hidup indonesia",
+  "nasihat orang tua",
+  "kisah perjuangan hidup",
+  "cerita keluarga inspiratif"
 ];
 
 const FALLBACK_QUERIES = [
