@@ -10,9 +10,10 @@ const BOX_W = CANVAS_WIDTH - (BOX_MARGIN_X * 2);
 const BOX_PADDING_X = 36;
 const BOX_PADDING_Y = 30;
 const BOX_BOTTOM_OFFSET = Number(process.env.THUMBNAIL_BOTTOM_OFFSET || 480);
+const BOX_TOP_OFFSET = Number(process.env.THUMBNAIL_TOP_OFFSET || 150);
 const BOX_MAX_HEIGHT = 380;
 const MAX_TITLE_LINES = 4;
-const MAX_TITLE_WORDS = 16;
+const MAX_TITLE_WORDS = Number(process.env.TITLE_MAX_WORDS || process.env.THUMBNAIL_TITLE_MAX_WORDS || 5);
 const FONT_SIZE_MAX = 74;
 const FONT_SIZE_MIN = 34;
 const CHAR_WIDTH_RATIO = 0.62;
@@ -23,7 +24,7 @@ const BG_OPACITY = clampOpacity(process.env.THUMBNAIL_BG_OPACITY, 0.6);
 const BORDER_OPACITY = clampOpacity(process.env.THUMBNAIL_BORDER_OPACITY, 0.85);
 const TEXT_OUTLINE_OPACITY = clampOpacity(process.env.THUMBNAIL_TEXT_OUTLINE_OPACITY, 0.85);
 const JPEG_Q = process.env.THUMBNAIL_JPEG_Q || "1";
-const INTRO_SECONDS = clampSeconds(process.env.THUMBNAIL_INTRO_SECONDS, 0.9);
+const INTRO_SECONDS = clampSeconds(process.env.COVER_FRAME_SECONDS || process.env.THUMBNAIL_INTRO_SECONDS, 0.8);
 const rendererPath = path.join(config.srcDir, "branding-renderer.py");
 
 export async function generateThumbnail({ job, videoPath, text }) {
@@ -105,7 +106,7 @@ export async function generateThumbnail({ job, videoPath, text }) {
 }
 
 export async function prependThumbnailIntro({ job, videoPath, thumbnailPath }) {
-  if (!boolValue(process.env.THUMBNAIL_INTRO_ENABLED, true)) return null;
+  if (!boolValue(process.env.COVER_FRAME_ENABLED ?? process.env.THUMBNAIL_INTRO_ENABLED, true)) return null;
   if (!videoPath || !thumbnailPath) return null;
   if (!await fileExists(videoPath) || !await fileExists(thumbnailPath)) return null;
 
@@ -214,8 +215,9 @@ function buildTitleLayout(value) {
   if (!lines.length) lines = ["BAGIAN INI BIKIN", "PENONTON BERHENTI SCROLL"];
   const textBlockH = estimateTextBlockHeight(lines.length, fontSize);
   const boxH = Math.min(BOX_MAX_HEIGHT, textBlockH + BOX_PADDING_Y * 2);
+  const position = String(process.env.TITLE_POSITION || "top").toLowerCase();
   const boxBottom = CANVAS_HEIGHT - BOX_BOTTOM_OFFSET;
-  const boxY = boxBottom - boxH;
+  const boxY = position === "top" ? BOX_TOP_OFFSET : boxBottom - boxH;
   const firstLineY = boxY + Math.round((boxH - textBlockH) / 2);
 
   return {
@@ -292,6 +294,9 @@ function estimateTextBlockHeight(lineCount, fontSize) {
 }
 
 async function resolveFontOption() {
+  if (process.env.TITLE_FONT) {
+    return `font='${escapeDrawtext(process.env.TITLE_FONT)}'`;
+  }
   const home = process.env.HOME || "";
   const candidates = [
     process.env.THUMBNAIL_FONT_FILE,

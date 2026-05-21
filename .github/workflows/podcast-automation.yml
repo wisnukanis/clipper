@@ -277,10 +277,15 @@ jobs:
       BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.08' }}
       BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '0.92' }}
       THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Ceramah | Kajian | Shorts' }}
+      COVER_FRAME_ENABLED: ${{ secrets.COVER_FRAME_ENABLED || 'true' }}
+      COVER_FRAME_SECONDS: ${{ secrets.COVER_FRAME_SECONDS || '0.8' }}
       THUMBNAIL_INTRO_ENABLED: ${{ secrets.THUMBNAIL_INTRO_ENABLED || 'true' }}
-      THUMBNAIL_INTRO_SECONDS: ${{ secrets.THUMBNAIL_INTRO_SECONDS || '0.9' }}
-      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
-      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik Semibold,Selawik,DejaVu Sans' }}
+      THUMBNAIL_INTRO_SECONDS: ${{ secrets.THUMBNAIL_INTRO_SECONDS || secrets.COVER_FRAME_SECONDS || '0.8' }}
+      TITLE_POSITION: ${{ secrets.TITLE_POSITION || 'top' }}
+      TITLE_MAX_WORDS: ${{ secrets.TITLE_MAX_WORDS || '5' }}
+      TITLE_FONT: ${{ secrets.TITLE_FONT || 'Anton' }}
+      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT || secrets.SUBTITLE_FONT_FAMILY || 'Poppins-Bold' }}
+      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Poppins-Bold,Poppins,Selawik Semibold,Selawik,DejaVu Sans' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
       SCENE_MODE: ${{ github.event.inputs.scene_mode || secrets.SCENE_MODE || 'podcast' }}
       SMART_CROP_MODE: ${{ github.event.inputs.scene_mode || secrets.SMART_CROP_MODE || 'podcast' }}
@@ -289,6 +294,8 @@ jobs:
       SUBTITLE_MARGIN_V: ${{ github.event.inputs.subtitle_margin_v || '550' }}
       SUBTITLE_MARGIN_H: ${{ github.event.inputs.subtitle_margin_h || secrets.SUBTITLE_MARGIN_H || '180' }}
       SUBTITLE_MAX_LINES: ${{ secrets.SUBTITLE_MAX_LINES || '2' }}
+      SUBTITLE_POSITION_Y: ${{ secrets.SUBTITLE_POSITION_Y || '0.72' }}
+      SUBTITLE_SAFE_BOTTOM: ${{ secrets.SUBTITLE_SAFE_BOTTOM || '220' }}
       SUBTITLE_PRIMARY_COLOUR: ${{ secrets.SUBTITLE_PRIMARY_COLOUR || '&H00FFFFFF' }}
       SUBTITLE_OUTLINE_COLOUR: ${{ secrets.SUBTITLE_OUTLINE_COLOUR || '&H00111111' }}
       SUBTITLE_SHADOW_COLOUR: ${{ secrets.SUBTITLE_SHADOW_COLOUR || '&H66000000' }}
@@ -296,6 +303,20 @@ jobs:
       SUBTITLE_SHADOW: ${{ secrets.SUBTITLE_SHADOW || '1' }}
       SUBTITLE_BOLD: ${{ secrets.SUBTITLE_BOLD || '1' }}
       SMART_CROP_ENABLED: "1"
+      THEME_BG_DARKEN: ${{ secrets.THEME_BG_DARKEN || '0.45' }}
+      THEME_BLUR_STRENGTH: ${{ secrets.THEME_BLUR_STRENGTH || '28' }}
+      THEME_PRIMARY_COLOR: "${{ secrets.THEME_PRIMARY_COLOR || '#FFFFFF' }}"
+      THEME_HIGHLIGHT_COLOR: "${{ secrets.THEME_HIGHLIGHT_COLOR || '#F5C542' }}"
+      THEME_OUTLINE_COLOR: "${{ secrets.THEME_OUTLINE_COLOR || '#000000' }}"
+      FULLSCREEN_BLUR_STRENGTH: ${{ secrets.FULLSCREEN_BLUR_STRENGTH || secrets.THEME_BLUR_STRENGTH || '28' }}
+      FACE_CROP_ENABLED: ${{ secrets.FACE_CROP_ENABLED || 'true' }}
+      FACE_CROP_ZOOM_MIN: ${{ secrets.FACE_CROP_ZOOM_MIN || '1.15' }}
+      FACE_CROP_ZOOM_MAX: ${{ secrets.FACE_CROP_ZOOM_MAX || '1.40' }}
+      PODCAST_ACTIVE_SPEAKER_CROP: ${{ secrets.PODCAST_ACTIVE_SPEAKER_CROP || 'true' }}
+      AVOID_WIDE_SHOT: ${{ secrets.AVOID_WIDE_SHOT || 'true' }}
+      EDITORIAL_CLOSING_ENABLED: ${{ secrets.EDITORIAL_CLOSING_ENABLED || 'true' }}
+      EDITORIAL_CLOSING_SECONDS: ${{ secrets.EDITORIAL_CLOSING_SECONDS || '3' }}
+      CTA_ENABLED: ${{ secrets.CTA_ENABLED || 'true' }}
       TRANSCRIPT_REVIEW_ENABLED: "1"
       TRANSCRIPT_REVIEW_REQUIRED: ${{ secrets.TRANSCRIPT_REVIEW_REQUIRED || '0' }}
       VIRAL_STRATEGY_ENABLED: ${{ secrets.VIRAL_STRATEGY_ENABLED || '1' }}

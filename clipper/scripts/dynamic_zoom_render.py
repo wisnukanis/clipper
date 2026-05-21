@@ -217,6 +217,7 @@ def _compose_frame(
     out_h: int,
     blur_kernel: int,
     blur_sigma: float,
+    bg_darken: float = 0.0,
 ) -> np.ndarray:
     """Crop a window from `frame` and compose it onto a 1080x1920 canvas.
 
@@ -264,6 +265,8 @@ def _compose_frame(
         bx = max(0, (bg_w - out_w) // 2)
         by = max(0, (bg_h - out_h) // 2)
         out = bg[by:by + out_h, bx:bx + out_w].copy()
+        if bg_darken > 0:
+            out = (out.astype(np.float32) * max(0.0, 1.0 - float(bg_darken))).astype(np.uint8)
         if out.shape[0] != out_h or out.shape[1] != out_w:
             out = cv2.resize(out, (out_w, out_h))
         ox = (out_w - scaled_w) // 2
@@ -283,6 +286,8 @@ def _compose_frame(
     bx = max(0, (bg_w - out_w) // 2)
     by = max(0, (bg_h - out_h) // 2)
     out = bg[by:by + out_h, bx:bx + out_w].copy()
+    if bg_darken > 0:
+        out = (out.astype(np.float32) * max(0.0, 1.0 - float(bg_darken))).astype(np.uint8)
     if out.shape[0] != out_h or out.shape[1] != out_w:
         out = cv2.resize(out, (out_w, out_h))
     oy = (out_h - scaled_h) // 2
@@ -310,6 +315,7 @@ def render_dynamic_zoom_clip(
     confidence_fall_alpha: float = 0.72,
     confidence_rise_alpha: float = 0.24,
     transition_lead_seconds: float = 0.25,
+    bg_darken: float = 0.0,
 ) -> None:
     """Render `source` to `output` with continuous-zoom dynamic crop window.
 
@@ -414,9 +420,10 @@ def render_dynamic_zoom_clip(
                     crop_width=crop_width,
                     out_w=width,
                     out_h=height,
-                    blur_kernel=blur_kernel,
-                    blur_sigma=blur_sigma,
-                )
+                blur_kernel=blur_kernel,
+                blur_sigma=blur_sigma,
+                bg_darken=bg_darken,
+            )
             except Exception as exc:
                 log(f"compose error frame {written}: {exc}")
                 composed = cv2.resize(frame, (width, height))

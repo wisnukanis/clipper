@@ -960,8 +960,18 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     alasan_segmen_dipilih: output.reason || "",
     risiko_konteks_copyright: output.risks || "",
     screen_hook: output.screenHook || thumbnail.text || "",
+    cover_hook: output.coverHook || output.screenHook || thumbnail.text || "",
     main_emotion: output.mainEmotion || "",
     context_safe_score: output.contextSafeScore || 0,
+    scoring: {
+      hook_score: output.hookScore || 0,
+      retention_score: output.retentionScore || 0,
+      emotion_score: output.emotionScore || 0,
+      clarity_score: output.clarityScore || 0,
+      context_safety_score: output.contextSafetyScore || output.contextSafeScore || 0,
+      shareability_score: output.shareabilityScore || 0,
+      final_score: output.finalScore || 0
+    },
     clip_candidates: output.analysisCandidates || [],
     clipTranscript: output.clipTranscript || "",
     viralScore: output.viralScore || 0,

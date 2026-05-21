@@ -167,6 +167,16 @@ def cfg():
         "active_speaker_initial_sample_seconds": parse_float(os.environ.get("ACTIVE_SPEAKER_INITIAL_SAMPLE_SECONDS"), 0.5),
         "active_speaker_initial_min_score": parse_float(os.environ.get("ACTIVE_SPEAKER_INITIAL_MIN_SCORE"), 0.010),
         "active_speaker_initial_side_bias": parse_float(os.environ.get("ACTIVE_SPEAKER_INITIAL_SIDE_BIAS"), 0.06),
+        "theme_bg_darken": parse_float(os.environ.get("THEME_BG_DARKEN"), 0.45),
+        "theme_blur_strength": parse_int(os.environ.get("THEME_BLUR_STRENGTH"), 28),
+        "face_crop_enabled": parse_int(os.environ.get("FACE_CROP_ENABLED"), 1),
+        "face_crop_zoom_min": parse_float(os.environ.get("FACE_CROP_ZOOM_MIN"), 1.15),
+        "face_crop_zoom_max": parse_float(os.environ.get("FACE_CROP_ZOOM_MAX"), 1.40),
+        "podcast_active_speaker_crop": parse_int(os.environ.get("PODCAST_ACTIVE_SPEAKER_CROP"), 1),
+        "avoid_wide_shot": parse_int(os.environ.get("AVOID_WIDE_SHOT"), 1),
+        "editorial_closing_enabled": parse_int(os.environ.get("EDITORIAL_CLOSING_ENABLED"), 1),
+        "editorial_closing_seconds": parse_float(os.environ.get("EDITORIAL_CLOSING_SECONDS"), 3.0),
+        "cta_enabled": parse_int(os.environ.get("CTA_ENABLED"), 1),
         # ---- Scene mode + new face engine ----
         "scene_mode": (os.environ.get("SCENE_MODE") or os.environ.get("SMART_CROP_MODE") or "auto").strip().lower(),
         "face_engine_pack": os.environ.get("FACE_ENGINE_PACK", "buffalo_sc"),
@@ -176,7 +186,7 @@ def cfg():
         "face_engine_max_lost": parse_int(os.environ.get("FACE_ENGINE_MAX_LOST"), 15),
         "face_engine_min_score": parse_float(os.environ.get("FACE_ENGINE_MIN_SCORE"), 0.55),
         "face_engine_use_insightface": parse_int(os.environ.get("FACE_ENGINE_USE_INSIGHTFACE"), 1),
-        "fullscreen_blur_strength": parse_int(os.environ.get("FULLSCREEN_BLUR_STRENGTH"), 22),
+        "fullscreen_blur_strength": parse_int(os.environ.get("FULLSCREEN_BLUR_STRENGTH") or os.environ.get("THEME_BLUR_STRENGTH"), 28),
         "fullscreen_min_segment_seconds": parse_float(os.environ.get("FULLSCREEN_MIN_SEGMENT_SECONDS"), 0.7),
         "crossfade_seconds": parse_float(os.environ.get("CROSSFADE_SECONDS"), 0.4),
         "dynamic_zoom_enabled": parse_int(os.environ.get("DYNAMIC_ZOOM_ENABLED"), 1),
@@ -1478,6 +1488,37 @@ def normalize_score_1_10(value, fallback=0):
     return round(clamp(score, 0, 10), 1)
 
 
+def clip_component_scores(clip):
+    return {
+        "hook_score": normalize_score_1_10(clip.get("hook_score") or clip.get("hookScore"), 0),
+        "retention_score": normalize_score_1_10(clip.get("retention_score") or clip.get("retentionScore"), 0),
+        "emotion_score": normalize_score_1_10(clip.get("emotion_score") or clip.get("emotionScore"), 0),
+        "clarity_score": normalize_score_1_10(clip.get("clarity_score") or clip.get("clarityScore"), 0),
+        "context_safety_score": normalize_score_1_10(
+            clip.get("context_safety_score")
+            or clip.get("contextSafetyScore")
+            or clip.get("context_safe_score_1_10")
+            or clip.get("contextSafeScore1To10")
+            or clip.get("context_safe_score")
+            or clip.get("contextSafeScore"),
+            7,
+        ),
+        "shareability_score": normalize_score_1_10(clip.get("shareability_score") or clip.get("shareabilityScore"), 0),
+    }
+
+
+def weighted_final_score(scores):
+    return round(
+        float(scores.get("hook_score", 0)) * 0.25
+        + float(scores.get("retention_score", 0)) * 0.20
+        + float(scores.get("emotion_score", 0)) * 0.20
+        + float(scores.get("clarity_score", 0)) * 0.15
+        + float(scores.get("context_safety_score", 0)) * 0.15
+        + float(scores.get("shareability_score", 0)) * 0.05,
+        2,
+    )
+
+
 def local_clip_title(text, index):
     words = [word for word in re.split(r"\s+", text.strip()) if word]
     title = " ".join(words[:8]).strip(" .,!?;:-")
@@ -1625,11 +1666,13 @@ def find_important_clips(segments, config):
         viral_rules = f"""
 Viral strategy wajib dipakai:
 - Buat analisis untuk 5 kandidat yang tersedia, lalu pilih {config['clip_count']} kandidat paling kuat untuk dirender.
-- Beri viral_score_1_10 dan context_safe_score_1_10 untuk tiap kandidat.
+- Beri hook_score, retention_score, emotion_score, clarity_score, context_safety_score, shareability_score, viral_score_1_10, dan context_safe_score_1_10 untuk tiap kandidat.
+- Hitung final_score = hook_score*0.25 + retention_score*0.20 + emotion_score*0.20 + clarity_score*0.15 + context_safety_score*0.15 + shareability_score*0.05.
+- Tolak kandidat dengan context_safety_score < 7 karena risiko salah konteks terlalu tinggi.
 - Pilih kandidat dengan potensi retention paling kuat: cerita, konflik, punchline, nasihat, humor, rasa penasaran, atau kalimat yang bikin mikir.
 - selected_angle harus menjelaskan sudut viral yang jelas, bukan kalimat umum.
 - publish_decision gunakan "publish" hanya jika viral_score_1_10 >= 7 atau hook sangat kuat; selain itu "borderline".
-- thumbnail_text dan screen_hook wajib maksimal 8 kata, tegas, universal, dan tidak clickbait palsu.
+- thumbnail_text, cover_hook, dan screen_hook wajib maksimal 5 kata, tegas, universal, dan tidak clickbait palsu.
 - hashtags 5-8 dan relevan.
 - caption wajib singkat, lengkap, dan punya CTA ringan. Jangan berakhir dengan koma, kata sambung, atau ellipsis.
 """
@@ -1650,6 +1693,7 @@ Kriteria:
 - Durasi maksimal {config['max_clip_seconds']} detik.
 - Cocok untuk penonton Indonesia dan platform YouTube Shorts, Instagram Reels, dan Facebook Reels.
 - Tidak memelintir makna narasumber.
+- Utamakan keamanan konteks dan kekuatan hook.
 - Jangan mulai dari basa-basi seperti "jadi", "ee", "menurut saya", atau "pada kesempatan ini".
 - Tema utama: ceramah, renungan, podcast, cerita keluarga, motivasi, dan hikmah hidup.
 - Output harus JSON valid saja, tanpa markdown.
@@ -1663,8 +1707,17 @@ Format output:
       "end_time": 130,
       "duration": 50,
       "summary": "Ringkasan isi segmen",
-      "screen_hook": "HOOK LAYAR 8 KATA",
-      "reason": "Alasan clip ini menarik",
+      "cover_hook": "HOOK 5 KATA",
+      "screen_hook": "HOOK 5 KATA",
+      "upload_title": "Title upload maksimal 70 karakter",
+      "reason_selected": "Alasan clip ini menarik",
+      "hook_score": 8,
+      "retention_score": 8,
+      "emotion_score": 8,
+      "clarity_score": 8,
+      "context_safety_score": 9,
+      "shareability_score": 7,
+      "final_score": 8.15,
       "viral_score_1_10": 8,
       "context_safe_score_1_10": 9,
       "main_emotion": "lucu/haru/adem/menampar/inspiratif/penasaran",
@@ -1683,8 +1736,17 @@ Format output:
     "duration": 50,
     "summary": "Ringkasan isi segmen",
     "hook": "Kalimat pembuka yang menarik",
-    "screen_hook": "HOOK LAYAR 8 KATA",
+    "cover_hook": "HOOK 5 KATA",
+    "screen_hook": "HOOK 5 KATA",
+    "upload_title": "Title upload maksimal 70 karakter",
     "main_emotion": "haru/penasaran/tertampar/termotivasi",
+    "hook_score": 8,
+    "retention_score": 8,
+    "emotion_score": 8,
+    "clarity_score": 8,
+    "context_safety_score": 9,
+    "shareability_score": 7,
+    "final_score": 8.15,
     "viral_score_1_10": 8,
     "context_safe_score_1_10": 9,
     "risks": "Risiko konteks/copyright jika ada, atau kosong",
@@ -1778,17 +1840,28 @@ def validate_clips(clips, segments, config):
             or clip.get("viralScore1To10"),
             local_score,
         )
-        context_safe_score = normalize_score_1_10(
-            clip.get("context_safe_score_1_10")
-            or clip.get("contextSafeScore1To10")
-            or clip.get("context_safe_score")
-            or clip.get("contextSafeScore"),
-            7,
+        component_scores = clip_component_scores(clip)
+        context_safe_score = component_scores["context_safety_score"]
+        if context_safe_score < 7:
+            log_warn(
+                f"Clip kandidat ditolak: context_safety_score={context_safe_score} "
+                "Risiko salah konteks terlalu tinggi."
+            )
+            continue
+        final_score = weighted_final_score(component_scores)
+        title = first_text_value(
+            clip,
+            "upload_title",
+            "uploadTitle",
+            "best_title",
+            "bestTitle",
+            "title",
+            default=f"Clip {index + 1}",
         )
-        title = first_text_value(clip, "best_title", "bestTitle", "title", default=f"Clip {index + 1}")
+        title = title[:70]
         title = " ".join(title.split()[:8]).strip()
-        screen_hook = first_text_value(clip, "screen_hook", "screenHook", "thumbnail_text", "thumbnailText", "hook", default=title)
-        screen_hook = " ".join(screen_hook.split()[:8]).strip().upper()
+        screen_hook = first_text_value(clip, "cover_hook", "coverHook", "screen_hook", "screenHook", "thumbnail_text", "thumbnailText", "hook", default=title)
+        screen_hook = " ".join(screen_hook.split()[:5]).strip().upper()
         title_alternatives = normalize_title_alternatives(
             clip.get("title_alternatives") or clip.get("titleAlternatives") or []
         )
@@ -1805,15 +1878,18 @@ def validate_clips(clips, segments, config):
                 "title": title,
                 "best_title": title.upper(),
                 "title_alternatives": title_alternatives,
-                "reason": clip.get("reason") or "",
+                "reason": clip.get("reason") or clip.get("reason_selected") or clip.get("reasonSelected") or "",
                 "start": start,
                 "end": end,
                 "duration": duration,
                 "summary": first_text_value(clip, "summary", "ringkasan", default=""),
                 "hook": clip.get("hook") or screen_hook,
+                "cover_hook": screen_hook,
                 "screen_hook": screen_hook,
                 "main_emotion": first_text_value(clip, "main_emotion", "mainEmotion", "emotion", "emosi_utama", default=""),
                 "context_safe_score": context_safe_score,
+                **component_scores,
+                "final_score": final_score,
                 "risks": first_text_value(clip, "risks", "risk", "risiko", default=""),
                 "analysis_candidates": clip.get("analysis_candidates") or clip.get("analysisCandidates") or [],
                 "caption": clip.get("caption") or "",
@@ -1829,7 +1905,14 @@ def validate_clips(clips, segments, config):
         )
 
     if int(config.get("viral_strategy", 1)) == 1:
-        result.sort(key=lambda item: int(item.get("viral_score") or 0), reverse=True)
+        result.sort(
+            key=lambda item: (
+                float(item.get("final_score") or 0),
+                float(item.get("context_safety_score") or item.get("context_safe_score") or 0),
+                int(item.get("viral_score") or 0),
+            ),
+            reverse=True,
+        )
         min_score = int(config.get("min_viral_score_to_publish") or 0)
         if min_score > 0:
             preferred = [
@@ -2021,7 +2104,10 @@ def subtitle_style_config(config):
     font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46), 28, 84)
     min_font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_MIN_FONT_SIZE"), 34), 24, font_size)
     margin_h = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_H"), default_margin_h), min_margin_h, max_margin_h)
-    margin_v = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_V"), 550), 550, max(550, int(height * 0.48)))
+    subtitle_y = parse_float(os.environ.get("SUBTITLE_POSITION_Y"), 0.72)
+    safe_bottom = clamp_int(parse_int(os.environ.get("SUBTITLE_SAFE_BOTTOM"), 220), 120, max(120, int(height * 0.40)))
+    default_margin_v = max(safe_bottom, int(height * (1.0 - clamp(subtitle_y, 0.50, 0.88))))
+    margin_v = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_V"), default_margin_v), safe_bottom, max(safe_bottom, int(height * 0.48)))
     max_lines = clamp_int(parse_int(os.environ.get("SUBTITLE_MAX_LINES"), 2), 1, 3)
 
     return {
@@ -3746,6 +3832,7 @@ def render_clip(source_clip, ass_path, clip, index, config, job_id, *, progress_
                 confidence_fall_alpha=float(config.get("dynamic_zoom_confidence_fall", 0.72)),
                 confidence_rise_alpha=float(config.get("dynamic_zoom_confidence_rise", 0.24)),
                 transition_lead_seconds=float(config.get("dynamic_zoom_transition_lead", 0.25)),
+                bg_darken=float(config.get("theme_bg_darken", 0.45)),
             )
             music_info = apply_background_music(final_clip, config, job_id, index, clip)
             log_progress(
@@ -4207,8 +4294,16 @@ def main():
                 "summary": clip.get("summary", ""),
                 "hook": clip["hook"],
                 "screenHook": clip.get("screen_hook", ""),
+                "coverHook": clip.get("cover_hook", ""),
                 "mainEmotion": clip.get("main_emotion", ""),
                 "contextSafeScore": clip.get("context_safe_score", 0),
+                "hookScore": clip.get("hook_score", 0),
+                "retentionScore": clip.get("retention_score", 0),
+                "emotionScore": clip.get("emotion_score", 0),
+                "clarityScore": clip.get("clarity_score", 0),
+                "contextSafetyScore": clip.get("context_safety_score", 0),
+                "shareabilityScore": clip.get("shareability_score", 0),
+                "finalScore": clip.get("final_score", 0),
                 "risks": clip.get("risks", ""),
                 "analysisCandidates": clip.get("analysis_candidates", []),
                 "caption": clip["caption"],

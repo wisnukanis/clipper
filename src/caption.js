@@ -82,7 +82,7 @@ export async function generateThumbnailText({ job, output, promptTemplate, aiPro
   const fallback = fallbackThumbnailText(output);
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
-    "Aturan: maksimal 8 kata, huruf besar, kuat, universal, mudah dibaca, tidak clickbait menyesatkan.",
+    `Aturan: maksimal ${titleMaxWords()} kata, huruf besar, kuat, universal, mudah dibaca, tidak clickbait menyesatkan.`,
     "- Jangan hanya mengandalkan nama orang.",
     "- Buat sebagai hook utama, bukan potongan kalimat yang terputus.",
     "- Buat kalimat/judul utuh yang membuat orang ingin menonton sampai akhir.",
@@ -562,13 +562,13 @@ function normalizeThumbnailText(value, fallback = "RAHASIA DI BALIK CERITA INI B
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
-  return cleaned.split(/\s+/).slice(0, 8).join(" ") || fallback;
+  return cleaned.split(/\s+/).slice(0, titleMaxWords()).join(" ") || fallback;
 }
 
 function isStrongThumbnailText(value) {
   const cleaned = String(value || "").trim();
   const words = cleaned.split(/\s+/).filter(Boolean);
-  if (words.length < 3 || words.length > 8) return false;
+  if (words.length < 3 || words.length > titleMaxWords()) return false;
   if (/[,:;]$/.test(cleaned)) return false;
   const meaningfulCount = words.filter((word) => !STOPWORDS.has(word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""))).length;
   return words.join("").length >= 12 && meaningfulCount >= 2;
@@ -599,6 +599,11 @@ function buildTranscriptThumbnailText(value) {
     .replace(/[^\p{L}\p{N}\s?]/gu, " ")
     .split(/\s+/)
     .filter((word) => word.length >= 3 && !STOPWORDS.has(word.toLowerCase()))
-    .slice(0, 8);
+    .slice(0, titleMaxWords());
   return normalizeThumbnailText(words.join(" "), "");
+}
+
+function titleMaxWords() {
+  const value = Number(process.env.TITLE_MAX_WORDS || process.env.THUMBNAIL_TITLE_MAX_WORDS || 5);
+  return Number.isFinite(value) ? Math.min(Math.max(Math.floor(value), 3), 8) : 5;
 }
