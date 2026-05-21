@@ -167,12 +167,27 @@ async function finishFacebookReel({ videoId, title, description }) {
 
 async function publishFacebookReel({ videoUrl, videoPath, title, description }) {
   const started = await startFacebookReel();
-  try {
-    await uploadFacebookReelFromUrl({ uploadUrl: started.uploadUrl, videoUrl });
-  } catch (error) {
-    console.warn(`Facebook reel URL upload gagal, coba upload file lokal: ${error.message}`);
-    await uploadFacebookReelFromFile({ uploadUrl: started.uploadUrl, videoPath });
+  const method = ["file", "url", "auto"].includes(config.facebook.reelUploadMethod)
+    ? config.facebook.reelUploadMethod
+    : "file";
+
+  if (method === "url") {
+    try {
+      await uploadFacebookReelFromUrl({ uploadUrl: started.uploadUrl, videoUrl });
+    } catch (error) {
+      console.warn(`Facebook reel URL upload gagal, coba upload file lokal: ${error.message}`);
+      await uploadFacebookReelFromFile({ uploadUrl: started.uploadUrl, videoPath });
+    }
+  } else {
+    try {
+      await uploadFacebookReelFromFile({ uploadUrl: started.uploadUrl, videoPath });
+    } catch (error) {
+      if (!videoUrl) throw error;
+      console.warn(`Facebook reel file upload gagal, coba upload via URL publik: ${error.message}`);
+      await uploadFacebookReelFromUrl({ uploadUrl: started.uploadUrl, videoUrl });
+    }
   }
+
   return finishFacebookReel({
     videoId: started.videoId,
     title,

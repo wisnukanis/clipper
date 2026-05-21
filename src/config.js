@@ -136,6 +136,7 @@ function buildConfig() {
       userAccessToken: process.env.FACEBOOK_USER_ACCESS_TOKEN || "",
       autoRefreshToken: boolEnv("AUTO_REFRESH_FACEBOOK_TOKEN", true),
       mediaType: cleanText(process.env.FACEBOOK_MEDIA_TYPE || "reel").toLowerCase(),
+      reelUploadMethod: cleanText(process.env.FACEBOOK_REEL_UPLOAD_METHOD || "file").toLowerCase(),
       videoState: cleanText(process.env.FACEBOOK_VIDEO_STATE || "PUBLISHED"),
       titlePrefix: cleanText(process.env.FACEBOOK_TITLE_PREFIX)
     },
