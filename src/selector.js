@@ -58,7 +58,7 @@ export async function selectNextVideo(options = {}) {
   const prompts = await readJson("prompts", []);
 
   const activeThemes = themes.filter((theme) => theme.status === "active");
-  const requestedTheme = options.theme && options.theme !== "auto" ? options.theme : "";
+  const requestedTheme = options.theme && !["auto", "mixed_best"].includes(options.theme) ? options.theme : "";
   const preferredVideoIds = new Set((options.preferredVideoIds || []).filter(Boolean));
   const excludedVideoIds = new Set((options.excludeVideoIds || []).filter(Boolean));
 
@@ -104,6 +104,7 @@ export async function addVideo(input) {
     source_url: url,
     youtube_video_id: extractYoutubeVideoId(url),
     theme: input.theme || "podcast artis",
+    content_type: input.content_type || input.theme || "",
     priority: Number(input.priority || 1),
     target_date: input.target_date || "",
     active: input.active !== false,
@@ -128,6 +129,11 @@ export async function addVideo(input) {
     published_at_source: input.published_at_source || "",
     discovery_source: input.discovery_source || "",
     discovery_query: input.discovery_query || "",
+    discovered_query: input.discovered_query || input.discovery_query || "",
+    classification_reason: input.classification_reason || "",
+    confidence_score: Number(input.confidence_score || 1),
+    publish_slot_wib: input.publish_slot_wib || "",
+    publish_date_wib: input.publish_date_wib || input.target_date || "",
     discovery_fallback_mode: input.discovery_fallback_mode || "",
     discovery_score: Number(input.discovery_score || 0),
     discovery_views: Number(input.discovery_views || 0),
@@ -222,6 +228,7 @@ export function normalizeVideo(video) {
     source_url: url,
     youtube_video_id: video.youtube_video_id || extractYoutubeVideoId(url),
     theme: video.theme || "podcast artis",
+    content_type: video.content_type || video.theme || "",
     priority: Number(video.priority || 1),
     quality_profile: video.quality_profile || "standard",
     ai_provider: "openai",

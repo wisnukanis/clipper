@@ -21,9 +21,19 @@ import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflight.js";
 import { discoverAndQueueVideos } from "./video-discovery.js";
 import { applyVideoEffects } from "./video-effects.js";
+import { appendQueueItem, applyDailyPlanToEnv, ensureQueueFiles, resolveDailyPlan } from "./daily-theme.js";
 
 export async function runWorkflow(options = {}) {
   await ensureProjectDirs();
+  await ensureQueueFiles();
+  const dailyPlan = resolveDailyPlan(options);
+  applyDailyPlanToEnv(dailyPlan);
+  options = {
+    ...options,
+    theme: options.theme && options.theme !== "auto" ? options.theme : dailyPlan.contentType,
+    clipCount: Number(options.clipCount || dailyPlan.targetMax || process.env.CLIP_COUNT || 3),
+    dailyPlan
+  };
 
   const publishRequired = Boolean(options.publish && canPublish());
   const preflight = await runPreflight({
@@ -59,7 +69,7 @@ export async function runWorkflow(options = {}) {
   let scheduledPostedToday = 0;
 
   if (options.scheduled && options.publish) {
-    scheduledDailyLimit = Math.max(0, Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY) || 0);
+    scheduledDailyLimit = Math.max(0, Number(process.env.MAX_SCHEDULED_POSTS_PER_DAY || dailyPlan.targetMax) || 0);
     scheduledPostedToday = scheduledDailyLimit > 0 ? await publishedCountToday() : 0;
     if (scheduledDailyLimit > 0 && scheduledPostedToday >= scheduledDailyLimit) {
       await appendLog("scheduled_skip", {
@@ -82,15 +92,16 @@ export async function runWorkflow(options = {}) {
   if (options.url) {
     const selection = await createManualSelection(options);
     if (!selection) {
-      return noVideoSelectedResult({ discoveryResult, failedSelections: [] });
+      return dailyReport(await noVideoSelectedResult({ discoveryResult, failedSelections: [] }));
     }
-    return processSelectedWorkflow({
+    const result = await processSelectedWorkflow({
       selection,
       options,
       scheduledDailyLimit,
       scheduledPostedToday,
       keepVideoQueued: false
     });
+    return dailyReport({ ...result, dailyPlan, discoveryResult, failedSelections: [] });
   }
 
   let discoveryAttempted = false;
@@ -105,6 +116,15 @@ export async function runWorkflow(options = {}) {
     if (!selection && !discoveryAttempted) {
       discoveryAttempted = true;
       discoveryResult = await discoverQueuedVideos(options);
+      if (options.mode === "discover") {
+        return dailyReport({
+          status: "discovered",
+          dailyPlan,
+          discoveryResult,
+          clips: [],
+          failedSelections
+        });
+      }
       discoveredVideoIds = (discoveryResult?.added || [])
         .map((video) => video.id)
         .filter(Boolean);
@@ -123,7 +143,7 @@ export async function runWorkflow(options = {}) {
     }
 
     if (!selection) {
-      return noVideoSelectedResult({ discoveryResult, failedSelections });
+      return dailyReport(await noVideoSelectedResult({ discoveryResult, failedSelections }));
     }
 
     try {
@@ -135,13 +155,20 @@ export async function runWorkflow(options = {}) {
         keepVideoQueued
       });
       if (failedSelections.length) {
-        return {
+        return dailyReport({
           ...result,
+          dailyPlan,
+          discoveryResult,
           skipped_failed_video_count: failedSelections.length,
           skipped_failed_videos: failedSelections
-        };
+        });
       }
-      return result;
+      return dailyReport({
+        ...result,
+        dailyPlan,
+        discoveryResult,
+        failedSelections
+      });
     } catch (error) {
       const failed = summarizeFailedSelection(selection, error);
       failedSelections.push(failed);
@@ -183,10 +210,12 @@ export async function runWorkflow(options = {}) {
 }
 
 async function createManualSelection(options) {
+  const plan = options.dailyPlan || resolveDailyPlan(options);
   const video = await addVideo({
     url: options.url,
-    theme: options.theme && options.theme !== "auto" ? options.theme : "podcast artis",
-    target_date: todayDate(),
+    theme: options.theme && options.theme !== "auto" ? options.theme : plan.contentType,
+    content_type: plan.contentType,
+    target_date: plan.dateWib || todayDate(),
     priority: 0,
     manual_range: options.range || "",
     quality_profile: options.qualityProfile || "standard",
@@ -249,11 +278,16 @@ async function selectQueuedWorkflowVideo({ options, excludedVideoIds, preferredV
 }
 
 async function discoverQueuedVideos(options) {
+  const plan = options.dailyPlan || resolveDailyPlan(options);
   try {
     const discoveryResult = await discoverAndQueueVideos({
-      theme: options.theme || config.defaultTheme,
-      targetDate: todayDate(),
-      ignoreDailyQueueLimit: !options.scheduled
+      theme: plan.contentType || options.theme || config.defaultTheme,
+      contentType: plan.contentType,
+      targetDate: plan.dateWib || todayDate(),
+      ignoreDailyQueueLimit: !options.scheduled,
+      queries: splitList(plan.query),
+      channelHandles: splitList(plan.channelHandles),
+      publishSlots: plan.slots
     });
     await appendLog("discovery_result", {
       skipped: Boolean(discoveryResult?.skipped),
@@ -297,6 +331,7 @@ async function noVideoSelectedResult({ discoveryResult, failedSelections }) {
 
 async function processSelectedWorkflow({ selection, options, scheduledDailyLimit, scheduledPostedToday, keepVideoQueued = false }) {
   const { video, theme, prompt } = selection;
+  const dailyPlan = options.dailyPlan || resolveDailyPlan({ theme: video.theme });
   const job = await createJobRecord(selection, { keepVideoStatus: keepVideoQueued });
   const maybeUpdateVideoStatus = async (status, patch) => {
     if (keepVideoQueued) return;
@@ -330,7 +365,7 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
     }
 
     const remainingScheduledSlots = options.scheduled && options.publish && scheduledDailyLimit > 0
-      ? Math.max(0, scheduledDailyLimit - scheduledPostedToday)
+      ? Math.min(1, Math.max(0, scheduledDailyLimit - scheduledPostedToday))
       : allOutputs.length;
     const outputs = allOutputs.slice(0, remainingScheduledSlots);
 
@@ -383,7 +418,12 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
           clipperResult,
           index,
           total: outputs.length,
-          options
+          options: {
+            ...options,
+            dailyPlan,
+            publishSlotWib: dailyPlan.slots[index] || dailyPlan.publishSlotWib || "",
+            publishDateWib: dailyPlan.dateWib
+          }
         });
         clipResults.push(result);
       } catch (error) {
@@ -480,6 +520,9 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
 async function processClipOutput({ job, video, theme, prompt, output, clipperResult, index, total, options }) {
   const clipIndex = index + 1;
   const storageJob = buildClipStorageJob(job, index, total);
+  const dailyPlan = options.dailyPlan || resolveDailyPlan({ theme: video.content_type || video.theme || theme?.name });
+  const publishSlotWib = options.publishSlotWib || dailyPlan.publishSlotWib || "";
+  const publishDateWib = options.publishDateWib || dailyPlan.dateWib || todayDate();
   const aiProvider = "openai";
   const thumbnailText = await generateThumbnailText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
   const frameQuoteText = await generateFrameQuoteText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
@@ -563,7 +606,11 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     thumbnail,
     clipIndex,
     clipTotal: total,
-    videoEffects: effectsResult.effects
+    videoEffects: effectsResult.effects,
+    dailyPlan,
+    publishSlotWib,
+    publishDateWib,
+    publishStatus: options.publish && canPublish() ? "pending_publish" : "rendered_waiting_review"
   });
   const metadataPath = await saveGeneratedJson("metadata", `${storageJob.job_id}.json`, metadata);
 
@@ -599,8 +646,8 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
   console.log(`Public video URL valid clip ${clipIndex}/${total}:`, upload.videoUrl);
 
   await updateJob(job.job_id, {
-    status: "ready_to_publish",
-    publish_status: "ready",
+    status: options.publish ? "ready_to_publish" : "rendered_waiting_review",
+    publish_status: options.publish ? "ready" : "rendered_waiting_review",
     metadata_path: metadataPath,
     public_video_url: upload.videoUrl,
     public_thumbnail_url: upload.thumbnailUrl,
@@ -664,6 +711,16 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
       clipIndex,
       clipTotal: total
     });
+    await appendRenderedQueueItem({
+      dailyPlan,
+      video,
+      output,
+      metadataPath,
+      publishSlotWib,
+      publishDateWib,
+      status: primaryPublished ? "published" : publishStatus,
+      metadata
+    });
 
     return {
       ok: true,
@@ -674,12 +731,23 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
       caption,
       platformResults,
       primaryPublished,
-      publishStatus
+      publishStatus,
+      metadata
     };
   }
 
-  const status = options.publish ? "dry_run" : "ready_to_publish";
+  const status = options.publish ? "dry_run" : "rendered_waiting_review";
   await appendHistoryEntry({ job: storageJob, video, caption, output, upload, status, clipIndex, clipTotal: total });
+  await appendRenderedQueueItem({
+    dailyPlan,
+    video,
+    output,
+    metadataPath,
+    publishSlotWib,
+    publishDateWib,
+    status,
+    metadata
+  });
   return {
     ok: true,
     clipIndex,
@@ -689,8 +757,48 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     caption,
     platformResults: null,
     primaryPublished: false,
-    publishStatus: status
+    publishStatus: status,
+    metadata
   };
+}
+
+async function appendRenderedQueueItem({
+  dailyPlan,
+  video,
+  output,
+  metadataPath,
+  publishSlotWib,
+  publishDateWib,
+  status,
+  metadata
+}) {
+  const contentType = dailyPlan.contentType || video.content_type || video.theme || "mixed_best";
+  const confidenceScore = Number(metadata?.confidence_score ?? video.confidence_score ?? 1);
+  const queueName = confidenceScore < 0.6 ? "review" : contentType;
+  await appendQueueItem(queueName, {
+    source_video_id: video.youtube_video_id || "",
+    source_url: video.url || video.source_url || "",
+    source_title: video.source_title || output.title || "",
+    source_channel: video.source_channel || video.channel_title || output.channel || "",
+    content_type: contentType,
+    discovered_query: video.discovered_query || dailyPlan.query || "",
+    discovered_at: video.discovered_at || video.created_at || "",
+    classification_reason: metadata?.classification_reason || video.classification_reason || "",
+    confidence_score: confidenceScore,
+    candidate_clips: output.analysisCandidates || [],
+    selected_clip: {
+      start_time: output.start,
+      end_time: output.end,
+      duration: output.duration,
+      title_best: metadata?.title_best || output.bestTitle || output.title || "",
+      final_score: metadata?.final_score || output.finalScore || 0
+    },
+    output_file: output.finalAbsPath || "",
+    metadata_file: metadataPath || "",
+    publish_slot_wib: publishSlotWib || "",
+    publish_date_wib: publishDateWib || dailyPlan.dateWib || "",
+    status
+  });
 }
 
 function buildClipStorageJob(job, index, total) {
@@ -707,6 +815,11 @@ function summarizeClipResult(result) {
     clip_index: result.clipIndex,
     clip_job_id: result.clipJobId,
     status: result.publishStatus || (result.ok ? "ready" : "failed"),
+    content_type: result.metadata?.content_type || "",
+    title_best: result.metadata?.title_best || result.metadata?.best_title || "",
+    publish_slot_wib: result.metadata?.publish_slot_wib || "",
+    final_score: result.metadata?.final_score || result.metadata?.scoring?.final_score || 0,
+    candidate_clip_count: Array.isArray(result.metadata?.clip_candidates) ? result.metadata.clip_candidates.length : 0,
     error: result.error || "",
     public_video_url: result.upload?.videoUrl || "",
     public_thumbnail_url: result.upload?.thumbnailUrl || "",
@@ -737,10 +850,10 @@ function finalStatusFromClipResults(clipResults, publishEnabled) {
 
   if (!publishEnabled) {
     return {
-      status: failedClips ? "partial_ready" : "ready_to_publish",
-      publishStatus: failedClips ? "partial_ready" : "ready_to_publish",
-      videoStatus: failedClips ? "partial_ready" : "ready_to_publish",
-      event: failedClips ? "partial_ready" : "ready_to_publish",
+      status: failedClips ? "partial_rendered_waiting_review" : "rendered_waiting_review",
+      publishStatus: failedClips ? "partial_rendered_waiting_review" : "rendered_waiting_review",
+      videoStatus: failedClips ? "partial_rendered_waiting_review" : "rendered_waiting_review",
+      event: failedClips ? "partial_rendered_waiting_review" : "rendered_waiting_review",
       successfulClips,
       failedClips,
       publishedClips,
@@ -918,11 +1031,31 @@ async function publishPlatform(name, platformResults, jobId, callback) {
   }
 }
 
-function buildMetadata({ job, video, theme, prompt, output, clipperResult, caption, thumbnail, clipIndex = 1, clipTotal = 1, videoEffects = null }) {
-  const hashtags = metadataHashtags(output, caption, theme);
+function buildMetadata({
+  job,
+  video,
+  theme,
+  prompt,
+  output,
+  clipperResult,
+  caption,
+  thumbnail,
+  clipIndex = 1,
+  clipTotal = 1,
+  videoEffects = null,
+  dailyPlan = null,
+  publishSlotWib = "",
+  publishDateWib = "",
+  publishStatus = "rendered_waiting_review"
+}) {
+  const contentType = dailyPlan?.contentType || video.content_type || job.theme || theme?.name || "mixed_best";
+  const hashtags = metadataHashtags(output, caption, theme, dailyPlan);
   const titleAlternatives = Array.isArray(output.titleAlternatives)
     ? output.titleAlternatives.slice(0, 3)
     : [];
+  const titleBest = output.bestTitle || output.title || thumbnail.text || "";
+  const contextSafetyScore = output.contextSafetyScore || output.contextSafeScore || 0;
+  const finalScore = output.finalScore || 0;
   return {
     job_id: job.job_id,
     clip_index: clipIndex,
@@ -931,9 +1064,15 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     source_url: video.url,
     source_video: video.url,
     youtube_video_id: video.youtube_video_id,
-    source_title: output.title || "",
-    title: output.bestTitle || output.title || thumbnail.text || "",
-    best_title: output.bestTitle || output.title || thumbnail.text || "",
+    output_file: output.finalAbsPath || "",
+    content_type: contentType,
+    daily_theme: dailyPlan?.dailyTheme || contentType,
+    source_channel: video.source_channel || video.channel_title || output.channel || "",
+    discovered_query: video.discovered_query || dailyPlan?.query || "",
+    source_title: video.source_title || output.title || "",
+    title: titleBest,
+    title_best: titleBest,
+    best_title: titleBest,
     title_alternatives: titleAlternatives,
     theme: theme?.name || job.theme,
     prompt_id: prompt?.id || "",
@@ -957,12 +1096,27 @@ function buildMetadata({ job, video, theme, prompt, output, clipperResult, capti
     end_time: output.end,
     duration: output.duration,
     summary: output.summary || "",
+    reason_selected: output.reason || "",
     alasan_segmen_dipilih: output.reason || "",
+    risk_notes: output.risks || "",
     risiko_konteks_copyright: output.risks || "",
     screen_hook: output.screenHook || thumbnail.text || "",
     cover_hook: output.coverHook || output.screenHook || thumbnail.text || "",
+    emotion: output.mainEmotion || "",
     main_emotion: output.mainEmotion || "",
-    context_safe_score: output.contextSafeScore || 0,
+    context_safe_score: contextSafetyScore,
+    final_score: finalScore,
+    hook_score: output.hookScore || 0,
+    retention_score: output.retentionScore || 0,
+    emotion_score: output.emotionScore || 0,
+    clarity_score: output.clarityScore || 0,
+    context_safety_score: contextSafetyScore,
+    shareability_score: output.shareabilityScore || 0,
+    classification_reason: video.classification_reason || output.classificationReason || "",
+    confidence_score: Number(video.confidence_score ?? output.confidenceScore ?? 1),
+    publish_date_wib: publishDateWib || dailyPlan?.dateWib || "",
+    publish_slot_wib: publishSlotWib || "",
+    publish_status: publishStatus,
     scoring: {
       hook_score: output.hookScore || 0,
       retention_score: output.retentionScore || 0,
@@ -993,10 +1147,11 @@ function firstCaptionSentence(value = "") {
   return (match?.[1] || body.split(/\n+/)[0] || "").trim().slice(0, 220);
 }
 
-function metadataHashtags(output = {}, caption = "", theme = {}) {
+function metadataHashtags(output = {}, caption = "", theme = {}, dailyPlan = null) {
   const defaults = ["#Ceramah", "#Renungan", "#MotivasiIslami", "#HikmahHidup", "#Shorts"];
   const raw = [
     ...(Array.isArray(output.hashtags) ? output.hashtags : []),
+    ...(Array.isArray(dailyPlan?.hashtags) ? dailyPlan.hashtags : []),
     ...(String(caption || "").match(/#[\p{L}\p{N}_]+/gu) || []),
     ...defaults,
     theme?.name ? `#${theme.name}` : ""
@@ -1019,6 +1174,55 @@ function metadataHashtags(output = {}, caption = "", theme = {}) {
   return tags.length >= 5 ? tags : [...tags, ...defaults].filter((tag, index, arr) => arr.indexOf(tag) === index).slice(0, 8);
 }
 
+function dailyReport(result = {}) {
+  const plan = result.dailyPlan || resolveDailyPlan({});
+  const clips = Array.isArray(result.clips) ? result.clips : [];
+  const discovery = result.discoveryResult || {};
+  const foundCount = discovery.found_count || discovery.candidate_count || discovery.raw_count || discovery.added?.length || 0;
+  const renderedCount = clips.filter((clip) => clip.ok).length;
+  const scheduledOrPublishedCount = clips.filter((clip) => {
+    const status = String(clip.status || "").toLowerCase();
+    return ["scheduled", "published", "published_with_warnings", "queued"].includes(status);
+  }).length;
+  const candidateClipCount = clips.reduce((total, clip) => {
+    return total + (Number(clip.candidate_clip_count) || 0);
+  }, 0);
+  const errorOrSkippedCount = clips.filter((clip) => !clip.ok).length + (result.failedSelections?.length || 0);
+
+  return {
+    ...result,
+    tanggal_wib: plan.dateWib,
+    tema_hari_ini: plan.contentType,
+    target_video_hari_ini: `${plan.targetMin}-${plan.targetMax}`,
+    query_yang_dipakai: plan.query,
+    jumlah_video_ditemukan: foundCount,
+    jumlah_video_lolos_filter: discovery.added?.length || 0,
+    jumlah_transcript_berhasil: renderedCount,
+    jumlah_kandidat_clip_dibuat: candidateClipCount,
+    jumlah_video_dirender: renderedCount,
+    jumlah_video_scheduled_published: scheduledOrPublishedCount,
+    jumlah_error_skipped: errorOrSkippedCount,
+    shortage: renderedCount < plan.targetMin
+      ? `Stok/render kurang dari target minimum ${plan.targetMin}; tersedia ${renderedCount}.`
+      : "",
+    outputs: clips.map((clip) => ({
+      content_type: clip.content_type || "",
+      title_best: clip.title_best || "",
+      publish_slot_wib: clip.publish_slot_wib || "",
+      final_score: clip.final_score || 0,
+      status: clip.status || "",
+      output_file: clip.final_video_path || ""
+    }))
+  };
+}
+
+function splitList(value) {
+  return String(value || "")
+    .split(/[\n,|;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 async function appendHistoryEntry({ job, video, caption, output, upload, platformResults = {}, status, clipIndex = 1, clipTotal = 1 }) {
   await appendHistory({
     job_id: job.job_id,
@@ -1028,6 +1232,11 @@ async function appendHistoryEntry({ job, video, caption, output, upload, platfor
     source_url: video.url,
     youtube_video_id: video.youtube_video_id,
     theme: job.theme,
+    content_type: video.content_type || job.theme,
+    source_title: video.source_title || output.title || "",
+    title_best: output.bestTitle || output.title || "",
+    start_time: output.start,
+    end_time: output.end,
     status,
     publish_date: status === "published" ? todayDate() : "",
     final_video_path: output.finalAbsPath,

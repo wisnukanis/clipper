@@ -1,11 +1,47 @@
 [
   {
-    "id": "caption_podcast_artis",
-    "theme": "podcast artis",
-    "hook_style": "emotional curiosity",
+    "id": "caption_renungan",
+    "theme": "renungan",
+    "hook_style": "adem, reflektif, universal, maksimal 5 kata",
     "language": "id",
-    "cta": "Menurut kamu, bagian paling relate yang mana?",
-    "hashtag_template": "#PodcastIndonesia #PodcastArtis #ReelsIndonesia",
-    "thumbnail_style": "3 sampai 7 kata, kuat, mudah dibaca di HP"
+    "cta": "Simpan kalau nasihat ini kamu butuhkan hari ini.",
+    "hashtag_template": "#Renungan #Ceramah #HikmahHidup #NasihatAgama #Shorts",
+    "thumbnail_style": "3 sampai 5 kata, putih dengan highlight kuning emas"
+  },
+  {
+    "id": "caption_inspiratif",
+    "theme": "inspiratif",
+    "hook_style": "hangat, personal, relatable, maksimal 5 kata",
+    "language": "id",
+    "cta": "Pernah mengalami hal seperti ini?",
+    "hashtag_template": "#KisahInspiratif #Keluarga #MotivasiHidup #CeritaHidup #Shorts",
+    "thumbnail_style": "3 sampai 5 kata, dekat dengan pengalaman sehari-hari"
+  },
+  {
+    "id": "caption_opini",
+    "theme": "opini",
+    "hook_style": "tajam, bikin mikir, tidak provokatif berlebihan",
+    "language": "id",
+    "cta": "Menurut kamu, bagian paling penting yang mana?",
+    "hashtag_template": "#Opini #KritikSosial #BikinMikir #Indonesia #Shorts",
+    "thumbnail_style": "pertanyaan pendek atau pernyataan kuat maksimal 5 kata"
+  },
+  {
+    "id": "caption_mindset",
+    "theme": "mindset",
+    "hook_style": "praktis, menampar elegan, actionable",
+    "language": "id",
+    "cta": "Mulai dari langkah kecil hari ini.",
+    "hashtag_template": "#Mindset #Karier #Produktivitas #PengembanganDiri #Shorts",
+    "thumbnail_style": "3 sampai 5 kata, langsung ke masalah atau aksi"
+  },
+  {
+    "id": "caption_mixed_best",
+    "theme": "mixed_best",
+    "hook_style": "pilih hook paling kuat lintas tema tanpa salah konteks",
+    "language": "id",
+    "cta": "Bagikan ke orang yang perlu dengar ini.",
+    "hashtag_template": "#Renungan #KisahInspiratif #Mindset #Opini #Shorts",
+    "thumbnail_style": "3 sampai 5 kata, universal dan mudah dibaca"
   }
 ]

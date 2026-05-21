@@ -34,15 +34,7 @@ const FALLBACK_QUERIES = [
   "hikmah hidup islam"
 ];
 
-const DEFAULT_CHANNEL_HANDLES = [
-  "@AdiHidayatOfficial",
-  "@khalidbasalamah",
-  "@yufid",
-  "@RodjaTV",
-  "@ShiftMediaId",
-  "@TafaqquhOnline",
-  "@TerasDakwah"
-];
+const DEFAULT_CHANNEL_HANDLES = [];
 
 const PODCAST_TOPIC_RE = /ceramah|kajian|tausiyah|dakwah|ustad|ustadz|ustaz|islam|islami|muslim|sunnah|quran|alquran|hadis|hadits|renungan|hikmah|nasihat|motivasi|hijrah|taubat|sholat|doa|keluarga|rumah\s*tangga|podcast\s*muslim|yufid|rodja|adi\s*hidayat|khalid\s*basalamah|tafaqquh|teras\s*dakwah/i;
 const NON_PODCAST_NOISE_RE = /official\s*music\s*video|lirik|lyrics|trailer|teaser|sinetron|drama|full\s*movie|film\s*pendek|gameplay|live\s*stream\s*game|highlight\s*bola/i;
@@ -644,7 +636,7 @@ async function youtubeDiscoveryCredentials() {
   return [];
 }
 
-async function discoverWithYoutubeApi({ queries, knownIds, options, channelOnly = false }) {
+async function discoverWithYoutubeApi({ queries, knownIds, options, channelOnly = false, channelHandlesOverride = [] }) {
   if (youtubeApiQuotaExhausted) {
     console.log("AUTO DISCOVERY: YouTube API quota sudah habis, langsung fallback ke yt-dlp search.");
     return null;
@@ -657,7 +649,7 @@ async function discoverWithYoutubeApi({ queries, knownIds, options, channelOnly 
   }
 
   const configuredChannelIds = listEnv("AUTO_DISCOVER_CHANNEL_IDS", []);
-  const channelHandles = listEnv("AUTO_DISCOVER_CHANNEL_HANDLES", DEFAULT_CHANNEL_HANDLES);
+  const channelHandles = channelHandlesOverride.length ? channelHandlesOverride : listEnv("AUTO_DISCOVER_CHANNEL_HANDLES", DEFAULT_CHANNEL_HANDLES);
   let lastError = null;
   for (const credential of credentials) {
     const ids = [];
@@ -837,8 +829,8 @@ async function discoverWithYtDlp({ queries, knownIds, options }) {
   return [...candidates.values()];
 }
 
-async function discoverChannelsWithYtDlp({ knownIds, options }) {
-  const channelHandles = listEnv("AUTO_DISCOVER_CHANNEL_HANDLES", DEFAULT_CHANNEL_HANDLES);
+async function discoverChannelsWithYtDlp({ knownIds, options, channelHandlesOverride = [] }) {
+  const channelHandles = channelHandlesOverride.length ? channelHandlesOverride : listEnv("AUTO_DISCOVER_CHANNEL_HANDLES", DEFAULT_CHANNEL_HANDLES);
   const candidates = new Map();
   for (const handle of channelHandles) {
     try {
@@ -862,7 +854,7 @@ async function discoverChannelsWithYtDlp({ knownIds, options }) {
   return [...candidates.values()];
 }
 
-async function loadRawCandidates({ queries, knownIds, options, targetDate, channelOnly = false, useApi = true, dailyApiSearch = false, trending = false }) {
+async function loadRawCandidates({ queries, knownIds, options, targetDate, channelOnly = false, useApi = true, dailyApiSearch = false, trending = false, channelHandles = [] }) {
   let rawCandidates = null;
   if (trending) {
     try {
@@ -881,7 +873,7 @@ async function loadRawCandidates({ queries, knownIds, options, targetDate, chann
     }
   } else if (useApi) {
     try {
-      rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options, channelOnly });
+      rawCandidates = await discoverWithYoutubeApi({ queries, knownIds, options, channelOnly, channelHandlesOverride: channelHandles });
     } catch (error) {
       console.warn(`YouTube API discovery dilewati: ${error.message}`);
     }
@@ -891,7 +883,7 @@ async function loadRawCandidates({ queries, knownIds, options, targetDate, chann
 
   if (!rawCandidates) {
     rawCandidates = channelOnly
-      ? await discoverChannelsWithYtDlp({ knownIds, options })
+      ? await discoverChannelsWithYtDlp({ knownIds, options, channelHandlesOverride: channelHandles })
       : await discoverWithYtDlp({ queries, knownIds, options });
   }
 
@@ -1057,7 +1049,12 @@ export async function discoverAndQueueVideos(options = {}) {
     };
   }
 
-  const queries = listEnv("AUTO_DISCOVER_QUERY", DEFAULT_QUERIES);
+  const queries = Array.isArray(options.queries) && options.queries.length
+    ? uniqueList(options.queries)
+    : listEnv("AUTO_DISCOVER_QUERY", DEFAULT_QUERIES);
+  const channelHandles = Array.isArray(options.channelHandles) && options.channelHandles.length
+    ? uniqueList(options.channelHandles)
+    : [];
   const maxResults = numberEnv("AUTO_DISCOVER_MAX_RESULTS", 4, 1, 25);
   const requestedAddCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 1, 1, 10);
   const addCount = ignoreDailyQueueLimit
@@ -1082,7 +1079,8 @@ export async function discoverAndQueueVideos(options = {}) {
     regionCode,
     relevanceLanguage
   };
-  const theme = options.theme && options.theme !== "auto" ? options.theme : "renungan islam";
+  const theme = options.theme && options.theme !== "auto" ? options.theme : "renungan";
+  const contentType = options.contentType || theme;
 
   const videos = queueMaintenance.videos;
   const history = await readJson("history", []);
@@ -1090,6 +1088,7 @@ export async function discoverAndQueueVideos(options = {}) {
 
   let selected = [];
   let selectedPass = "";
+  let totalRawCandidates = 0;
   for (const pass of fallbackPasses(queries, discoveryOptions)) {
     console.log(`AUTO DISCOVERY pass=${pass.mode}, queries=${pass.queries.length}, maxResults=${pass.options.maxResults}, days=${pass.options.publishedAfterDays}`);
     const rawCandidates = await loadRawCandidates({
@@ -1100,8 +1099,10 @@ export async function discoverAndQueueVideos(options = {}) {
       channelOnly: Boolean(pass.channelOnly),
       useApi: pass.useApi !== false,
       dailyApiSearch: Boolean(pass.dailyApiSearch),
-      trending: Boolean(pass.trending)
+      trending: Boolean(pass.trending),
+      channelHandles
     });
+    totalRawCandidates += rawCandidates.length;
     selected = await selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
     if (selected.length) {
       selectedPass = pass.mode;
@@ -1118,6 +1119,7 @@ export async function discoverAndQueueVideos(options = {}) {
     const video = await addVideo({
       url,
       theme,
+      content_type: contentType,
       target_date: targetDate,
       priority: 10 + index,
       status: "queued",
@@ -1144,6 +1146,11 @@ export async function discoverAndQueueVideos(options = {}) {
       published_at_source: item.publishedAt || "",
       discovery_source: item.discovery_source || "",
       discovery_query: item.discovery_query || "",
+      discovered_query: item.discovery_query || "",
+      classification_reason: `Auto discovery ${contentType}`,
+      confidence_score: 1,
+      publish_slot_wib: options.publishSlots?.[index] || "",
+      publish_date_wib: targetDate,
       discovery_fallback_mode: item.discovery_fallback_mode || selectedPass || "strict",
       discovery_score: item.discovery_score || 0,
       discovery_views: stats.views || 0,
@@ -1169,6 +1176,10 @@ export async function discoverAndQueueVideos(options = {}) {
   return {
     skipped: false,
     added,
+    content_type: contentType,
+    query: queries.join("|"),
+    found_count: totalRawCandidates,
+    passed_filter_count: selected.length,
     expired_count: queueMaintenance.expired,
     daily_queue_count: currentDailyQueue + added.length,
     daily_queue_limit: dailyQueueLimit

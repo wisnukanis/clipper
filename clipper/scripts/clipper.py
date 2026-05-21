@@ -142,6 +142,9 @@ def cfg():
         "background_music_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_VOLUME"), 0.08),
         "background_music_original_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_ORIGINAL_VOLUME"), 0.92),
         "theme": os.environ.get("THEME", ""),
+        "content_type": os.environ.get("CONTENT_TYPE", ""),
+        "theme_prompt": os.environ.get("THEME_PROMPT", ""),
+        "theme_hashtags": os.environ.get("THEME_HASHTAGS", ""),
         "subtitle_offset": parse_float(os.environ.get("SUBTITLE_OFFSET_SECONDS"), 0.0),
         "smart_crop": parse_int(os.environ.get("SMART_CROP_ENABLED"), 1),
         "smart_crop_mode": os.environ.get("SMART_CROP_MODE", "auto"),
@@ -1683,6 +1686,11 @@ Anda adalah editor video short-form profesional.
 Tugas:
 Baca transcript kandidat di bawah sebagai editor Shorts/Reels Indonesia.
 Buat 5 kandidat clip terbaik, lalu pilih {config['clip_count']} kandidat terbaik untuk dirender.
+
+Content type hari ini: {config.get('content_type') or config.get('theme') or 'auto'}.
+Arahan tema hari ini:
+{config.get('theme_prompt') or 'Ikuti kriteria umum dengan prioritas hook kuat, aman konteks, dan mudah dipahami.'}
+Hashtag prioritas tema: {config.get('theme_hashtags') or '-'}
 
 Kriteria:
 - Hook kuat dalam 2 detik pertama.

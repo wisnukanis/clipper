@@ -19,10 +19,19 @@ function optionalBoolArg(name) {
   return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
 }
 
+function boolEnv(name, fallback = false) {
+  const value = process.env[name];
+  if (value === undefined || value === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
 const options = {
-  publish: hasArg("--publish"),
+  mode: argValue("--mode", process.env.CLIPPER_MODE || "full"),
+  publish: hasArg("--publish") || boolEnv("AUTO_PUBLISH", false),
   scheduled: hasArg("--scheduled"),
   theme: argValue("--theme", process.env.THEME || config.defaultTheme),
+  targetCount: Number(argValue("--target-count", process.env.DAILY_TARGET_MAX || process.env.CLIP_COUNT || "5")),
+  forcePublish: optionalBoolArg("--force-publish"),
   url: argValue("--url", ""),
   range: argValue("--range", ""),
   aiProvider: "openai",
@@ -39,6 +48,15 @@ const options = {
 };
 
 if (hasArg("--dry-run")) {
+  options.publish = false;
+}
+if (options.forcePublish === true) {
+  options.publish = true;
+}
+if (options.mode === "publish") {
+  options.publish = true;
+}
+if (options.mode === "discover" || options.mode === "render") {
   options.publish = false;
 }
 
