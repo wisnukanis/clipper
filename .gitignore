@@ -12,11 +12,16 @@ data/history.json
 data/discovery-cache.json
 
 .env
+.env.*
 *.env
+!.env.example
 cookies.txt
 clipper/cookies.txt
 clipper/.env
 
+output/
+tmp/
+downloads/
 clipper/input/
 clipper/downloads/
 clipper/temp/
@@ -31,6 +36,9 @@ generated/logs/*.log
 generated/logs/*.jsonl
 
 *.zip
+*.mp4
+*.mov
+*.mkv
 .DS_Store
 Thumbs.db
 .vercel

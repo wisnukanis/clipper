@@ -3,7 +3,10 @@ import path from "node:path";
 import { config } from "./config.js";
 import { todayDate } from "./job-id.js";
 
-export const CONTENT_TYPES = ["renungan", "inspiratif", "opini", "mindset", "mixed_best"];
+const DEFAULT_CONTENT_TYPES = ["renungan", "inspiratif", "opini", "mindset", "mixed_best"];
+export const CONTENT_TYPES = parseList(process.env.CONTENT_TYPES).length
+  ? parseList(process.env.CONTENT_TYPES)
+  : DEFAULT_CONTENT_TYPES;
 
 const DEFAULT_WEEKLY = {
   monday: "renungan",
@@ -16,11 +19,11 @@ const DEFAULT_WEEKLY = {
 };
 
 const DEFAULT_QUERIES = {
-  renungan: "ceramah pendek islam|renungan hidup islam|nasihat kehidupan islam|ceramah tentang rezeki|ceramah tentang sabar|ceramah tentang sedekah|kajian keluarga islam|ceramah tentang ikhlas|kajian islam terbaru indonesia",
-  inspiratif: "kisah inspiratif indonesia|podcast keluarga indonesia|nasihat orang tua|kisah perjuangan hidup|cerita keluarga inspiratif|motivasi hidup indonesia|kisah orang biasa inspiratif|pengalaman hidup inspiratif",
-  opini: "opini tokoh indonesia|podcast politik indonesia|demokrasi indonesia|kritik sosial indonesia|isu sosial indonesia|politik ringan indonesia|obrolan tokoh indonesia|podcast indonesia terbaru",
-  mindset: "motivasi karier indonesia|mindset sukses indonesia|podcast bisnis indonesia|motivasi anak muda indonesia|zona nyaman|kerja keras sukses|skill masa depan indonesia|pengembangan diri indonesia",
-  mixed_best: "renungan hidup islam|kisah inspiratif indonesia|podcast keluarga indonesia|opini tokoh indonesia|motivasi hidup indonesia|mindset sukses indonesia"
+  renungan: "ceramah pendek islam|renungan hidup islam|nasihat kehidupan islam|ceramah tentang rezeki|ceramah tentang sabar|ceramah tentang sedekah|ceramah tentang ikhlas|ceramah tentang ujian hidup|kajian keluarga islam|kajian islam terbaru indonesia|ceramah tentang kehilangan|ceramah tentang keluarga",
+  inspiratif: "kisah inspiratif indonesia|podcast keluarga indonesia|nasihat orang tua|kisah perjuangan hidup|cerita keluarga inspiratif|motivasi hidup indonesia|kisah orang biasa inspiratif|pengalaman hidup inspiratif|cerita sukses dari nol|kisah keluarga menyentuh|perjuangan orang tua|kisah hidup inspiratif",
+  opini: "opini tokoh indonesia|podcast politik indonesia|demokrasi indonesia|kritik sosial indonesia|isu sosial indonesia|politik ringan indonesia|obrolan tokoh indonesia|podcast indonesia terbaru|diskusi publik indonesia|analisis sosial indonesia|kritik masyarakat indonesia|opini publik indonesia",
+  mindset: "motivasi karier indonesia|mindset sukses indonesia|podcast bisnis indonesia|motivasi anak muda indonesia|zona nyaman|kerja keras sukses|skill masa depan indonesia|pengembangan diri indonesia|produktif indonesia|nasihat karier indonesia|mindset bisnis indonesia|cara berpikir sukses",
+  mixed_best: "renungan hidup islam|kisah inspiratif indonesia|podcast keluarga indonesia|opini tokoh indonesia|motivasi hidup indonesia|mindset sukses indonesia|ceramah pendek islam|nasihat kehidupan|podcast indonesia inspiratif|cerita hidup inspiratif"
 };
 
 const DEFAULT_CHANNELS = {
@@ -58,7 +61,9 @@ export function resolveDailyPlan(options = {}) {
   const targetMax = clampNumber(options.targetCount || process.env.DAILY_TARGET_MAX, 5, 4, 5);
   const targetMin = clampNumber(process.env.DAILY_TARGET_MIN, 4, 1, targetMax);
   const slots = publishSlots(targetMax);
-  const query = envForTheme(theme, "DISCOVER_QUERY") || process.env.AUTO_DISCOVER_QUERY || DEFAULT_QUERIES[theme] || DEFAULT_QUERIES.mixed_best;
+  const themeAware = process.env.THEME_AWARE_DISCOVERY !== "false";
+  const themeQuery = themeAware ? envForTheme(theme, "DISCOVER_QUERY") || DEFAULT_QUERIES[theme] || "" : "";
+  const query = themeQuery || process.env.AUTO_DISCOVER_DAILY_QUERY || process.env.AUTO_DISCOVER_QUERY || DEFAULT_QUERIES.mixed_best;
   const dailyQuery = process.env[`${theme.toUpperCase()}_DAILY_QUERY`] || query.split("|")[0] || process.env.AUTO_DISCOVER_DAILY_QUERY || "";
   const channelHandles = envForTheme(theme, "CHANNEL_HANDLES") || process.env.AUTO_DISCOVER_CHANNEL_HANDLES || DEFAULT_CHANNELS[theme] || "";
 
@@ -73,6 +78,7 @@ export function resolveDailyPlan(options = {}) {
     slots,
     query,
     dailyQuery,
+    discoveryMode: themeAware ? "theme_aware" : "legacy",
     channelHandles,
     themePrompt: THEME_PROMPTS[theme] || THEME_PROMPTS.mixed_best,
     hashtags: THEME_HASHTAGS[theme] || THEME_HASHTAGS.mixed_best,
@@ -93,6 +99,7 @@ export function applyDailyPlanToEnv(plan) {
   process.env.THEME_PROMPT = plan.themePrompt;
   process.env.THEME_HASHTAGS = plan.hashtags.join(" ");
   process.env.DAILY_PUBLISH_SLOTS_WIB = plan.slots.join(",");
+  process.env.DISCOVERY_MODE = plan.discoveryMode;
 }
 
 export async function ensureQueueFiles() {
@@ -135,6 +142,13 @@ function weekdayKey(date, timeZone) {
 
 function envForTheme(theme, suffix) {
   return process.env[`${String(theme || "").toUpperCase()}_${suffix}`] || "";
+}
+
+function parseList(value) {
+  return String(value || "")
+    .split(/[\n,|;]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 function clampNumber(value, fallback, min, max) {

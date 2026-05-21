@@ -24,7 +24,6 @@ const BG_OPACITY = clampOpacity(process.env.THUMBNAIL_BG_OPACITY, 0.6);
 const BORDER_OPACITY = clampOpacity(process.env.THUMBNAIL_BORDER_OPACITY, 0.85);
 const TEXT_OUTLINE_OPACITY = clampOpacity(process.env.THUMBNAIL_TEXT_OUTLINE_OPACITY, 0.85);
 const JPEG_Q = process.env.THUMBNAIL_JPEG_Q || "1";
-const INTRO_SECONDS = clampSeconds(process.env.COVER_FRAME_SECONDS || process.env.THUMBNAIL_INTRO_SECONDS, 0.8);
 const rendererPath = path.join(config.srcDir, "branding-renderer.py");
 
 export async function generateThumbnail({ job, videoPath, text }) {
@@ -106,9 +105,29 @@ export async function generateThumbnail({ job, videoPath, text }) {
 }
 
 export async function prependThumbnailIntro({ job, videoPath, thumbnailPath }) {
-  if (!boolValue(process.env.COVER_FRAME_ENABLED ?? process.env.THUMBNAIL_INTRO_ENABLED, true)) return null;
+  if (!boolValue(process.env.OPENING_TITLE_ENABLED ?? process.env.RENDER_COVER_FRAME_ENABLED ?? process.env.COVER_FRAME_ENABLED ?? process.env.THUMBNAIL_INTRO_ENABLED, true)) return null;
   if (!videoPath || !thumbnailPath) return null;
   if (!await fileExists(videoPath) || !await fileExists(thumbnailPath)) return null;
+
+  const introSeconds = clampSeconds(
+    process.env.OPENING_TITLE_SECONDS || process.env.RENDER_COVER_FRAME_SECONDS || process.env.COVER_FRAME_SECONDS || process.env.THUMBNAIL_INTRO_SECONDS,
+    0.9,
+    0.3,
+    3
+  );
+  const transitionEnabled = boolValue(process.env.OPENING_TRANSITION_ENABLED, true);
+  const transitionSeconds = transitionEnabled
+    ? clampSeconds(process.env.OPENING_TRANSITION_SECONDS, 0.3, 0.05, 0.5)
+    : 0;
+  const transitionType = normalizeTransitionType(process.env.OPENING_TRANSITION_TYPE || "zoom_blur");
+  const maxFinalSeconds = clampSeconds(process.env.MAX_CLIP_SECONDS || process.env.OPENING_FINAL_MAX_SECONDS, 58, 35, 60);
+  const sourceDuration = await probeDurationSeconds(videoPath);
+  const maxMainSeconds = sourceDuration
+    ? Math.max(1, maxFinalSeconds - introSeconds + transitionSeconds)
+    : null;
+  const mainSeconds = sourceDuration && sourceDuration > maxMainSeconds
+    ? maxMainSeconds
+    : null;
 
   await fs.mkdir(config.generatedVideoDir, { recursive: true });
   const introPath = path.join(config.generatedVideoDir, `${job.job_id}-thumb-intro.mp4`);
@@ -122,12 +141,12 @@ export async function prependThumbnailIntro({ job, videoPath, thumbnailPath }) {
     "-y",
     "-loop", "1",
     "-framerate", "30",
-    "-t", String(INTRO_SECONDS),
+    "-t", String(introSeconds),
     "-i", thumbnailPath,
     "-f", "lavfi",
-    "-t", String(INTRO_SECONDS),
+    "-t", String(introSeconds),
     "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-    "-vf", "setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,fps=30,format=yuv420p",
+    "-vf", openingIntroFilter(),
     "-af", "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS",
     "-r", "30",
     "-c:v", "libx264",
@@ -143,20 +162,19 @@ export async function prependThumbnailIntro({ job, videoPath, thumbnailPath }) {
     introPath
   ]);
 
+  const mainInputArgs = mainSeconds ? ["-t", formatSeconds(mainSeconds)] : [];
+  const filter = transitionSeconds > 0
+    ? transitionFilter(transitionSeconds, transitionType, introSeconds)
+    : concatFilter();
   await runFfmpeg([
     "-y",
     "-fflags", "+genpts",
     "-i", introPath,
     "-fflags", "+genpts",
+    ...mainInputArgs,
     "-i", videoPath,
     "-filter_complex",
-    [
-      "[0:v]setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1,fps=30,format=yuv420p[v0]",
-      "[1:v]setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1,fps=30,format=yuv420p[v1]",
-      "[0:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[a0]",
-      "[1:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[a1]",
-      "[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
-    ].join(";"),
+    filter,
     "-map", "[v]",
     "-map", "[a]",
     "-c:v", "libx264",
@@ -175,8 +193,58 @@ export async function prependThumbnailIntro({ job, videoPath, thumbnailPath }) {
   return {
     path: outputPath,
     introPath,
-    durationSeconds: INTRO_SECONDS
+    durationSeconds: introSeconds,
+    transitionEnabled,
+    transitionSeconds,
+    transitionType,
+    trimmedMainSeconds: mainSeconds,
+    finalMaxSeconds: maxFinalSeconds
   };
+}
+
+function openingIntroFilter() {
+  const style = String(process.env.OPENING_STYLE || "bold_hook").toLowerCase();
+  const zoom = style === "bold_hook" ? "zoompan=z='min(zoom+0.0015,1.08)':d=1:s=1080x1920:fps=30," : "";
+  return [
+    "setpts=PTS-STARTPTS",
+    "scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos",
+    "crop=1080:1920",
+    zoom ? zoom.replace(/,$/, "") : "",
+    "fps=30",
+    "format=yuv420p"
+  ].filter(Boolean).join(",");
+}
+
+function baseVideoFilters(label, out) {
+  return `${label}setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1,fps=30,format=yuv420p${out}`;
+}
+
+function concatFilter() {
+  return [
+    baseVideoFilters("[0:v]", "[v0]"),
+    baseVideoFilters("[1:v]", "[v1]"),
+    "[0:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[a0]",
+    "[1:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[a1]",
+    "[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
+  ].join(";");
+}
+
+function transitionFilter(seconds, type, introSeconds) {
+  const transition = type === "fade_flash_soft" ? "fadewhite" : type === "slide_up" ? "slideup" : type === "quick_push" ? "smoothup" : "fade";
+  const offset = Math.max(0, introSeconds - seconds);
+  return [
+    baseVideoFilters("[0:v]", "[v0]"),
+    baseVideoFilters("[1:v]", "[v1]"),
+    "[0:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[a0]",
+    "[1:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[a1]",
+    `[v0][v1]xfade=transition=${transition}:duration=${formatSeconds(seconds)}:offset=${formatSeconds(offset)}[v]`,
+    `[a0][a1]acrossfade=d=${formatSeconds(seconds)}[a]`
+  ].join(";");
+}
+
+function normalizeTransitionType(value) {
+  const type = String(value || "").toLowerCase().trim();
+  return ["zoom_blur", "quick_push", "fade_flash_soft", "slide_up", "whip_blur"].includes(type) ? type : "zoom_blur";
 }
 
 function runRenderer(args) {
@@ -388,10 +456,14 @@ function boolValue(value, fallback = false) {
   return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
 }
 
-function clampSeconds(value, fallback) {
+function clampSeconds(value, fallback, min = 0.3, max = 3) {
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
-  return Math.min(3, Math.max(0.3, num));
+  return Math.min(max, Math.max(min, num));
+}
+
+function formatSeconds(value) {
+  return Number(value || 0).toFixed(3);
 }
 
 function formatTimestamp(seconds) {

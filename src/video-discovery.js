@@ -249,8 +249,21 @@ function isPodcastCandidate(item) {
 
 function passesDuration(item, options) {
   const duration = numberValue(item.duration);
+  if (boolEnv("AUTO_DISCOVER_EXCLUDE_SHORTS", true) && duration && duration <= 60) return false;
   if (duration && duration < options.minDuration) return false;
   if (duration && duration > options.maxDuration) return false;
+  return true;
+}
+
+function passesSourceType(item) {
+  const liveStatus = String(item.live_status || item.is_live || item.was_live || "").toLowerCase();
+  const title = candidateText(item).toLowerCase();
+  if (boolEnv("AUTO_DISCOVER_EXCLUDE_LIVE", true) && (liveStatus.includes("live") || /\blive\b|siaran langsung/.test(title))) {
+    return false;
+  }
+  if (boolEnv("AUTO_DISCOVER_EXCLUDE_PREMIERE", true) && (liveStatus.includes("premiere") || /premiere|premier/.test(title))) {
+    return false;
+  }
   return true;
 }
 
@@ -284,6 +297,7 @@ function scoreCandidate(item) {
 function isViralCandidate(item, options) {
   const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
   if (!id) return false;
+  if (!passesSourceType(item)) return false;
 
   if (!passesDuration(item, options)) return false;
 
@@ -298,6 +312,7 @@ function isViralCandidate(item, options) {
 function isTopicCandidate(item, options) {
   const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
   if (!id) return false;
+  if (!passesSourceType(item)) return false;
 
   if (!passesDuration(item, options)) return false;
 
@@ -307,6 +322,7 @@ function isTopicCandidate(item, options) {
 function isFreshChannelCandidate(item, options) {
   const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
   if (!id) return false;
+  if (!passesSourceType(item)) return false;
 
   if (!passesDuration(item, options)) return false;
 
@@ -320,6 +336,7 @@ function isFreshChannelCandidate(item, options) {
 function isTrendingPodcastCandidate(item, options) {
   const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
   if (!id) return false;
+  if (!passesSourceType(item)) return false;
   if (!passesDuration(item, options)) return false;
   if (ageHours(candidatePublishedAt(item)) > options.trendingMaxAgeHours) return false;
   return isPodcastCandidate(item);
@@ -1178,8 +1195,12 @@ export async function discoverAndQueueVideos(options = {}) {
     added,
     content_type: contentType,
     query: queries.join("|"),
+    selected_channel_handles: channelHandles,
     found_count: totalRawCandidates,
     passed_filter_count: selected.length,
+    channel_found_count: selected.filter((item) => String(item.discovery_source || "").includes("channel")).length,
+    query_found_count: selected.filter((item) => !String(item.discovery_source || "").includes("channel") && !String(item.discovery_source || "").includes("trending")).length,
+    trending_found_count: selected.filter((item) => String(item.discovery_source || "").includes("trending")).length,
     expired_count: queueMaintenance.expired,
     daily_queue_count: currentDailyQueue + added.length,
     daily_queue_limit: dailyQueueLimit

@@ -140,6 +140,20 @@ export async function runWorkflow(options = {}) {
       if (!selection) {
         selection = await selectQueuedWorkflowVideo({ options, excludedVideoIds });
       }
+
+      if (!selection && dailyPlan.contentType !== "mixed_best") {
+        const fallbackPlan = resolveDailyPlan({ ...options, theme: "mixed_best" });
+        applyDailyPlanToEnv(fallbackPlan);
+        discoveryResult = await discoverQueuedVideos({ ...options, dailyPlan: fallbackPlan, theme: "mixed_best" });
+        discoveredVideoIds = (discoveryResult?.added || [])
+          .map((video) => video.id)
+          .filter(Boolean);
+        selection = await selectQueuedWorkflowVideo({
+          options: { ...options, theme: "mixed_best", dailyPlan: fallbackPlan },
+          excludedVideoIds,
+          preferredVideoIds: discoveredVideoIds
+        });
+      }
     }
 
     if (!selection) {
@@ -526,7 +540,8 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
   const aiProvider = "openai";
   const thumbnailText = await generateThumbnailText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
   const frameQuoteText = await generateFrameQuoteText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
-  output = { ...output, thumbnailText, frameQuoteText };
+  const openingHook = buildOpeningHook({ output, thumbnailText });
+  output = { ...output, thumbnailText, openingHook, frameQuoteText };
 
   const effectsResult = await applyVideoEffects({
     job: storageJob,
@@ -583,6 +598,10 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
       thumbnailIntro: {
         applied: true,
         durationSeconds: thumbnailIntro.durationSeconds,
+        transitionEnabled: thumbnailIntro.transitionEnabled,
+        transitionSeconds: thumbnailIntro.transitionSeconds,
+        transitionType: thumbnailIntro.transitionType,
+        trimmedMainSeconds: thumbnailIntro.trimmedMainSeconds,
         introPath: thumbnailIntro.introPath
       }
     };
@@ -653,6 +672,41 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     public_thumbnail_url: upload.thumbnailUrl,
     public_metadata_url: upload.metadataUrl
   });
+
+  const publishBlockReason = publishValidationBlockReason(metadata);
+  if (options.publish && canPublish() && publishBlockReason) {
+    const status = "skipped";
+    await updateJob(job.job_id, {
+      status,
+      publish_status: "skipped",
+      error_message: publishBlockReason
+    });
+    await appendHistoryEntry({ job: storageJob, video, caption, output, upload, status, clipIndex, clipTotal: total });
+    await appendRenderedQueueItem({
+      dailyPlan,
+      video,
+      output,
+      metadataPath,
+      publishSlotWib,
+      publishDateWib,
+      status,
+      metadata: { ...metadata, publish_status: status, risk_notes: publishBlockReason }
+    });
+    return {
+      ok: false,
+      clipIndex,
+      clipJobId: storageJob.job_id,
+      output,
+      upload,
+      caption,
+      platformResults: null,
+      primaryPublished: false,
+      publishStatus: status,
+      error: publishBlockReason,
+      metadataPath,
+      metadata: { ...metadata, publish_status: status, risk_notes: publishBlockReason }
+    };
+  }
 
   if (options.publish && canPublish()) {
     const platformResults = await publishPlatforms({
@@ -732,6 +786,7 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
       platformResults,
       primaryPublished,
       publishStatus,
+      metadataPath,
       metadata
     };
   }
@@ -758,6 +813,7 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
     platformResults: null,
     primaryPublished: false,
     publishStatus: status,
+    metadataPath,
     metadata
   };
 }
@@ -782,6 +838,8 @@ async function appendRenderedQueueItem({
     source_channel: video.source_channel || video.channel_title || output.channel || "",
     content_type: contentType,
     discovered_query: video.discovered_query || dailyPlan.query || "",
+    daily_theme: dailyPlan.dailyTheme || contentType,
+    selected_channel_handles: splitList(dailyPlan.channelHandles || ""),
     discovered_at: video.discovered_at || video.created_at || "",
     classification_reason: metadata?.classification_reason || video.classification_reason || "",
     confidence_score: confidenceScore,
@@ -797,6 +855,8 @@ async function appendRenderedQueueItem({
     metadata_file: metadataPath || "",
     publish_slot_wib: publishSlotWib || "",
     publish_date_wib: publishDateWib || dailyPlan.dateWib || "",
+    publish_status: status,
+    error: "",
     status
   });
 }
@@ -817,8 +877,12 @@ function summarizeClipResult(result) {
     status: result.publishStatus || (result.ok ? "ready" : "failed"),
     content_type: result.metadata?.content_type || "",
     title_best: result.metadata?.title_best || result.metadata?.best_title || "",
+    opening_hook: result.metadata?.opening_hook || "",
+    cover_hook: result.metadata?.cover_hook || "",
     publish_slot_wib: result.metadata?.publish_slot_wib || "",
     final_score: result.metadata?.final_score || result.metadata?.scoring?.final_score || 0,
+    context_safety_score: result.metadata?.context_safety_score || 0,
+    confidence_score: result.metadata?.confidence_score || 0,
     candidate_clip_count: Array.isArray(result.metadata?.clip_candidates) ? result.metadata.clip_candidates.length : 0,
     error: result.error || "",
     public_video_url: result.upload?.videoUrl || "",
@@ -831,6 +895,7 @@ function summarizeClipResult(result) {
     threads_media_id: result.platformResults?.threads?.mediaId || "",
     final_video_path: result.output?.finalAbsPath || "",
     original_final_video_path: result.output?.originalFinalAbsPath || "",
+    metadata_path: result.metadataPath || result.metadata?.metadata_file || "",
     video_effects: result.output?.videoEffects || null,
     background_music: result.output?.backgroundMusic || null,
     thumbnail_intro: result.output?.thumbnailIntro || { applied: false },
@@ -1049,6 +1114,7 @@ function buildMetadata({
   publishStatus = "rendered_waiting_review"
 }) {
   const contentType = dailyPlan?.contentType || video.content_type || job.theme || theme?.name || "mixed_best";
+  const classification = classifyContentType({ dailyPlan, video, output, contentType });
   const hashtags = metadataHashtags(output, caption, theme, dailyPlan);
   const titleAlternatives = Array.isArray(output.titleAlternatives)
     ? output.titleAlternatives.slice(0, 3)
@@ -1056,6 +1122,9 @@ function buildMetadata({
   const titleBest = output.bestTitle || output.title || thumbnail.text || "";
   const contextSafetyScore = output.contextSafetyScore || output.contextSafeScore || 0;
   const finalScore = output.finalScore || 0;
+  const thumbnailIntro = output.thumbnailIntro || { applied: false };
+  const openingEnabled = Boolean(thumbnailIntro.applied);
+  const openingHook = output.openingHook || output.coverHook || output.screenHook || thumbnail.text || "INI BIKIN MIKIR";
   return {
     job_id: job.job_id,
     clip_index: clipIndex,
@@ -1064,11 +1133,14 @@ function buildMetadata({
     source_url: video.url,
     source_video: video.url,
     youtube_video_id: video.youtube_video_id,
+    source_video_id: video.youtube_video_id,
     output_file: output.finalAbsPath || "",
-    content_type: contentType,
+    content_type: classification.contentType,
     daily_theme: dailyPlan?.dailyTheme || contentType,
     source_channel: video.source_channel || video.channel_title || output.channel || "",
     discovered_query: video.discovered_query || dailyPlan?.query || "",
+    selected_channel_handles: splitList(dailyPlan?.channelHandles || process.env.AUTO_DISCOVER_CHANNEL_HANDLES || ""),
+    discovery_mode: dailyPlan?.discoveryMode || (process.env.THEME_AWARE_DISCOVERY === "false" ? "legacy" : "theme_aware"),
     source_title: video.source_title || output.title || "",
     title: titleBest,
     title_best: titleBest,
@@ -1082,7 +1154,16 @@ function buildMetadata({
     originalFinalPath: output.originalFinalAbsPath || "",
     videoEffects,
     backgroundMusic: output.backgroundMusic || {},
-    thumbnailIntro: output.thumbnailIntro || { applied: false },
+    thumbnailIntro,
+    opening_title_enabled: openingEnabled,
+    opening_hook: openingHook,
+    opening_style: process.env.OPENING_STYLE || "bold_hook",
+    opening_duration: openingEnabled ? Number(thumbnailIntro.durationSeconds || 0) : 0,
+    opening_transition_enabled: Boolean(thumbnailIntro.transitionEnabled),
+    opening_transition_type: thumbnailIntro.transitionType || process.env.OPENING_TRANSITION_TYPE || "zoom_blur",
+    opening_transition_duration: Number(thumbnailIntro.transitionSeconds || 0),
+    opening_frame_source_time: output.start || "",
+    opening_hook_reason: output.reason || "Fallback dari cover hook/title clip.",
     frameQuoteText: output.frameQuoteText || "",
     transcriptPath: output.transcriptReviewAbsPath || "",
     subtitlePath: output.subtitleAbsPath || "",
@@ -1112,8 +1193,9 @@ function buildMetadata({
     clarity_score: output.clarityScore || 0,
     context_safety_score: contextSafetyScore,
     shareability_score: output.shareabilityScore || 0,
-    classification_reason: video.classification_reason || output.classificationReason || "",
-    confidence_score: Number(video.confidence_score ?? output.confidenceScore ?? 1),
+    classification_reason: classification.reason,
+    confidence_score: classification.confidenceScore,
+    classifier_version: classification.version,
     publish_date_wib: publishDateWib || dailyPlan?.dateWib || "",
     publish_slot_wib: publishSlotWib || "",
     publish_status: publishStatus,
@@ -1137,8 +1219,43 @@ function buildMetadata({
     risks: output.risks || "",
     validation: output.validation || {},
     clipperJobId: clipperResult.jobId,
+    created_at: new Date().toISOString(),
     createdAt: new Date().toISOString()
   };
+}
+
+function buildOpeningHook({ output, thumbnailText }) {
+  const source = output.openingHook
+    || output.coverHook
+    || output.screenHook
+    || thumbnailText
+    || output.bestTitle
+    || output.title
+    || "INI BIKIN MIKIR";
+  const words = String(source || "")
+    .replace(/[`"'*_#]/g, "")
+    .replace(/[?!.,;:]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, Number(process.env.OPENING_TITLE_MAX_WORDS || process.env.TITLE_MAX_WORDS || 5));
+  return words.join(" ") || "INI BIKIN MIKIR";
+}
+
+function publishValidationBlockReason(metadata = {}) {
+  if (Number(metadata.context_safety_score || 0) < 7) {
+    return "context_safety_score < 7; tidak aman untuk auto-publish.";
+  }
+  const minConfidence = Number(process.env.MIN_CLASSIFICATION_CONFIDENCE || 0.6);
+  if (Number(metadata.confidence_score || 0) < minConfidence) {
+    return `confidence_score < ${minConfidence}; masuk review.`;
+  }
+  if (!metadata.cover_hook && !metadata.opening_hook) return "opening_hook/cover_hook kosong.";
+  if (!metadata.caption) return "caption kosong.";
+  if (!Array.isArray(metadata.hashtags) || metadata.hashtags.length < 5) return "hashtag kurang dari 5.";
+  return "";
 }
 
 function firstCaptionSentence(value = "") {
@@ -1174,6 +1291,53 @@ function metadataHashtags(output = {}, caption = "", theme = {}, dailyPlan = nul
   return tags.length >= 5 ? tags : [...tags, ...defaults].filter((tag, index, arr) => arr.indexOf(tag) === index).slice(0, 8);
 }
 
+function classifyContentType({ dailyPlan, video, output, contentType }) {
+  if (process.env.AUTO_CLASSIFY_CONTENT_TYPE === "false") {
+    return {
+      contentType,
+      confidenceScore: Number(video.confidence_score ?? output.confidenceScore ?? 1),
+      reason: video.classification_reason || "Auto classify disabled; memakai daily theme.",
+      version: "manual_theme_v1"
+    };
+  }
+
+  const text = [
+    video.source_title,
+    video.channel_title,
+    video.discovered_query,
+    output.title,
+    output.summary,
+    output.reason,
+    output.clipTranscript
+  ].join(" ").toLowerCase();
+  const keywordMap = {
+    renungan: ["allah", "rezeki", "sabar", "ikhlas", "sedekah", "dosa", "ujian", "kehilangan", "ceramah", "kajian", "nasihat agama", "keluarga"],
+    inspiratif: ["keluarga", "orang tua", "perjuangan", "kisah hidup", "pengalaman", "haru", "motivasi", "bangkit", "kerja keras"],
+    opini: ["politik", "demokrasi", "negara", "sosial", "ekonomi", "kritik", "isu publik", "opini", "masyarakat"],
+    mindset: ["karier", "bisnis", "uang", "produktivitas", "skill", "zona nyaman", "cara berpikir", "sukses", "anak muda"]
+  };
+  const scores = Object.fromEntries(Object.entries(keywordMap).map(([themeName, words]) => [
+    themeName,
+    words.reduce((score, word) => score + (text.includes(word) ? 1 : 0), 0)
+  ]));
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const [bestTheme, bestScore] = sorted[0] || [contentType, 0];
+  const totalHits = Object.values(scores).reduce((sum, score) => sum + score, 0);
+  const dailyTheme = dailyPlan?.contentType || contentType;
+  const resolved = bestScore > 0 ? bestTheme : dailyTheme;
+  const confidenceScore = bestScore > 0
+    ? Math.max(0.6, Math.min(0.95, bestScore / Math.max(totalHits, bestScore)))
+    : Number(video.confidence_score ?? output.confidenceScore ?? 0.75);
+  return {
+    contentType: dailyTheme === "mixed_best" ? resolved : dailyTheme,
+    confidenceScore,
+    reason: bestScore > 0
+      ? `Keyword classifier memilih ${resolved} (${bestScore} hit). Daily theme=${dailyTheme}.`
+      : `Tidak ada keyword dominan; memakai daily theme ${dailyTheme}.`,
+    version: "keyword_classifier_v1"
+  };
+}
+
 function dailyReport(result = {}) {
   const plan = result.dailyPlan || resolveDailyPlan({});
   const clips = Array.isArray(result.clips) ? result.clips : [];
@@ -1196,6 +1360,9 @@ function dailyReport(result = {}) {
     target_video_hari_ini: `${plan.targetMin}-${plan.targetMax}`,
     query_yang_dipakai: plan.query,
     jumlah_video_ditemukan: foundCount,
+    jumlah_video_ditemukan_dari_channel: discovery.channel_found_count || 0,
+    jumlah_video_ditemukan_dari_query: discovery.query_found_count || 0,
+    jumlah_video_dari_trending: discovery.trending_found_count || 0,
     jumlah_video_lolos_filter: discovery.added?.length || 0,
     jumlah_transcript_berhasil: renderedCount,
     jumlah_kandidat_clip_dibuat: candidateClipCount,
@@ -1208,10 +1375,15 @@ function dailyReport(result = {}) {
     outputs: clips.map((clip) => ({
       content_type: clip.content_type || "",
       title_best: clip.title_best || "",
+      opening_hook: clip.opening_hook || "",
+      cover_hook: clip.cover_hook || "",
       publish_slot_wib: clip.publish_slot_wib || "",
       final_score: clip.final_score || 0,
+      context_safety_score: clip.context_safety_score || 0,
+      confidence_score: clip.confidence_score || 0,
       status: clip.status || "",
-      output_file: clip.final_video_path || ""
+      output_file: clip.final_video_path || "",
+      metadata_file: clip.metadata_path || ""
     }))
   };
 }
