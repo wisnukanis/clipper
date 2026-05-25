@@ -27,6 +27,7 @@ function boolEnv(name, fallback = false) {
 
 const options = {
   mode: argValue("--mode", process.env.CLIPPER_MODE || "full"),
+  slot: argValue("--slot", process.env.CLIPPER_SLOT || "all"),
   publish: hasArg("--publish") || boolEnv("AUTO_PUBLISH", false),
   scheduled: hasArg("--scheduled"),
   theme: argValue("--theme", process.env.THEME || config.defaultTheme),

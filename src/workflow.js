@@ -6,7 +6,7 @@ import { appendLog } from "./logger.js";
 import { appendHistory, publishedCountToday } from "./history.js";
 import { addVideo, createJobRecord, selectNextVideo, updateVideoStatus } from "./selector.js";
 import { runClipper } from "./clipper-runner.js";
-import { generateCaption, generateFrameQuoteText, generateThumbnailText } from "./caption.js";
+import { generateBumperSpec, generateCaption, generateFrameQuoteText, generateThumbnailText } from "./caption.js";
 import { ensureCaptionSourceCredit } from "./caption-policy.js";
 import { generateThumbnail, prependThumbnailIntro } from "./thumbnail.js";
 import { fileExists, uploadHistoryFile, uploadJobFiles, validatePublicUrl } from "./uploader.js";
@@ -21,7 +21,7 @@ import { downloadStateFromRemote, uploadStateToRemote } from "./state-sync.js";
 import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflight.js";
 import { discoverAndQueueVideos } from "./video-discovery.js";
 import { applyVideoEffects } from "./video-effects.js";
-import { appendQueueItem, applyDailyPlanToEnv, ensureQueueFiles, resolveDailyPlan } from "./daily-theme.js";
+import { appendQueueItem, applyDailyPlanToEnv, applySlotPlanToEnv, ensureQueueFiles, resolveDailyPlan } from "./daily-theme.js";
 
 export async function runWorkflow(options = {}) {
   await ensureProjectDirs();
@@ -86,6 +86,20 @@ export async function runWorkflow(options = {}) {
     }
   }
 
+  const requestedSlot = String(options.slot || process.env.CLIPPER_SLOT || "all").toLowerCase();
+  const mode = String(options.mode || "full").toLowerCase();
+  const shouldUseMixedDailyLoop = !options.url
+    && dailyPlan.mode === "mixed_daily"
+    && (!options.scheduled || ["discover", "render"].includes(mode) || requestedSlot !== "all");
+  if (shouldUseMixedDailyLoop) {
+    return runMixedDailyWorkflow({
+      options,
+      dailyPlan,
+      scheduledDailyLimit,
+      scheduledPostedToday
+    });
+  }
+
   let discoveryResult = null;
   const keepVideoQueued = !options.url && !options.scheduled;
 
@@ -141,15 +155,15 @@ export async function runWorkflow(options = {}) {
         selection = await selectQueuedWorkflowVideo({ options, excludedVideoIds });
       }
 
-      if (!selection && dailyPlan.contentType !== "mixed_best") {
-        const fallbackPlan = resolveDailyPlan({ ...options, theme: "mixed_best" });
+      if (!selection && dailyPlan.contentType !== "misteri_trending") {
+        const fallbackPlan = resolveDailyPlan({ ...options, theme: "misteri_trending" });
         applyDailyPlanToEnv(fallbackPlan);
-        discoveryResult = await discoverQueuedVideos({ ...options, dailyPlan: fallbackPlan, theme: "mixed_best" });
+        discoveryResult = await discoverQueuedVideos({ ...options, dailyPlan: fallbackPlan, theme: "misteri_trending" });
         discoveredVideoIds = (discoveryResult?.added || [])
           .map((video) => video.id)
           .filter(Boolean);
         selection = await selectQueuedWorkflowVideo({
-          options: { ...options, theme: "mixed_best", dailyPlan: fallbackPlan },
+          options: { ...options, theme: "misteri_trending", dailyPlan: fallbackPlan },
           excludedVideoIds,
           preferredVideoIds: discoveredVideoIds
         });
@@ -269,6 +283,140 @@ function summarizeFailedSelection(selection, error) {
   };
 }
 
+async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, scheduledPostedToday }) {
+  const slotPlans = Array.isArray(dailyPlan.slotPlans) ? dailyPlan.slotPlans : [];
+  const clips = [];
+  const discoveryResults = [];
+  const failedSelections = [];
+  const excludedVideoIds = new Set();
+
+  if (!slotPlans.length) {
+    return dailyReport({
+      status: "no_slots",
+      dailyPlan,
+      discoveryResult: null,
+      clips,
+      failedSelections
+    });
+  }
+
+  for (const slotPlan of slotPlans) {
+    applySlotPlanToEnv(slotPlan, dailyPlan);
+    const slotDailyPlan = {
+      ...dailyPlan,
+      contentType: slotPlan.content_type,
+      dailyTheme: dailyPlan.dailyTheme || "mixed_daily",
+      query: slotPlan.discover_query,
+      dailyQuery: slotPlan.discover_query?.split("|")[0] || dailyPlan.dailyQuery || "",
+      channelHandles: slotPlan.channel_handles,
+      themePrompt: slotPlan.theme_prompt,
+      hashtags: slotPlan.hashtags,
+      publishSlotWib: slotPlan.slot_time_wib,
+      activeSlot: slotPlan
+    };
+
+    if (!slotPlan.discover_query) {
+      const error = `Query kosong untuk slot ${slotPlan.slot_index} (${slotPlan.content_type}).`;
+      failedSelections.push({ slot_index: slotPlan.slot_index, error });
+      await appendLog("slot_discovery_skipped", {
+        slot_index: slotPlan.slot_index,
+        slot_time_wib: slotPlan.slot_time_wib,
+        slot_content_type: slotPlan.content_type,
+        error
+      });
+      continue;
+    }
+
+    const discoveryResult = await discoverQueuedVideos({
+      ...options,
+      theme: slotPlan.content_type,
+      dailyPlan: slotDailyPlan,
+      slot: slotPlan.slot_index,
+      clipCount: 1
+    });
+    discoveryResults.push({
+      slot_index: slotPlan.slot_index,
+      slot_time_wib: slotPlan.slot_time_wib,
+      slot_content_type: slotPlan.content_type,
+      ...summarizeDiscoveryForReport(discoveryResult)
+    });
+
+    if (options.mode === "discover") continue;
+
+    let selection = await selectQueuedWorkflowVideo({
+      options: {
+        ...options,
+        theme: slotPlan.content_type,
+        dailyPlan: slotDailyPlan,
+        forceReprocess: options.forceReprocess
+      },
+      excludedVideoIds,
+      preferredVideoIds: (discoveryResult?.added || []).map((video) => video.id).filter(Boolean)
+    });
+
+    if (!selection && slotPlan.content_type !== "misteri_trending") {
+      selection = await selectQueuedWorkflowVideo({
+        options: { ...options, theme: "misteri_trending", dailyPlan: { ...slotDailyPlan, contentType: "misteri_trending" } },
+        excludedVideoIds
+      });
+    }
+
+    if (!selection) {
+      failedSelections.push({
+        slot_index: slotPlan.slot_index,
+        slot_time_wib: slotPlan.slot_time_wib,
+        slot_content_type: slotPlan.content_type,
+        error: "Tidak ada kandidat slot yang lolos queue/fallback."
+      });
+      continue;
+    }
+
+    excludedVideoIds.add(selection.video.id);
+    try {
+      const result = await processSelectedWorkflow({
+        selection,
+        options: {
+          ...options,
+          theme: slotPlan.content_type,
+          clipCount: 1,
+          dailyPlan: slotDailyPlan,
+          slotPlan
+        },
+        scheduledDailyLimit,
+        scheduledPostedToday,
+        keepVideoQueued: false
+      });
+      clips.push(...(result.clips || []).map((clip) => ({
+        ...clip,
+        slot_index: slotPlan.slot_index,
+        slot_time_wib: slotPlan.slot_time_wib,
+        slot_content_type: slotPlan.content_type
+      })));
+    } catch (error) {
+      failedSelections.push({
+        slot_index: slotPlan.slot_index,
+        slot_time_wib: slotPlan.slot_time_wib,
+        slot_content_type: slotPlan.content_type,
+        video_id: selection.video.id,
+        url: selection.video.url,
+        error: error.message
+      });
+    }
+  }
+
+  await uploadStateToRemote().catch(() => {});
+  return dailyReport({
+    status: options.mode === "discover" ? "discovered" : options.publish && canPublish() ? "mixed_daily_publish_done" : "mixed_daily_rendered",
+    dailyPlan,
+    discoveryResult: aggregateDiscoveryResults(discoveryResults),
+    discoveryResults,
+    clips,
+    failedSelections,
+    successful_clip_count: clips.filter((clip) => clip.ok).length,
+    failed_clip_count: failedSelections.length
+  });
+}
+
 function isYoutubeSourceBlocked(error) {
   const message = String(error?.message || error || "").toLowerCase();
   return [
@@ -293,6 +441,7 @@ async function selectQueuedWorkflowVideo({ options, excludedVideoIds, preferredV
 
 async function discoverQueuedVideos(options) {
   const plan = options.dailyPlan || resolveDailyPlan(options);
+  const activeSlot = plan.activeSlot || null;
   try {
     const discoveryResult = await discoverAndQueueVideos({
       theme: plan.contentType || options.theme || config.defaultTheme,
@@ -301,7 +450,10 @@ async function discoverQueuedVideos(options) {
       ignoreDailyQueueLimit: !options.scheduled,
       queries: splitList(plan.query),
       channelHandles: splitList(plan.channelHandles),
-      publishSlots: plan.slots
+      publishSlots: activeSlot ? [activeSlot.slot_time_wib] : plan.slots,
+      slotIndex: activeSlot?.slot_index || options.slot || "",
+      slotTimeWib: activeSlot?.slot_time_wib || "",
+      slotContentType: activeSlot?.slot_content_type || plan.contentType || ""
     });
     await appendLog("discovery_result", {
       skipped: Boolean(discoveryResult?.skipped),
@@ -318,6 +470,38 @@ async function discoverQueuedVideos(options) {
     await appendLog("discovery_failed", { error: error.message });
     return null;
   }
+}
+
+function summarizeDiscoveryForReport(discoveryResult = {}) {
+  return {
+    skipped: Boolean(discoveryResult?.skipped),
+    reason: discoveryResult?.reason || "",
+    query: discoveryResult?.query || "",
+    selected_channel_handles: discoveryResult?.selected_channel_handles || [],
+    found_count: discoveryResult?.found_count || 0,
+    channel_found_count: discoveryResult?.channel_found_count || 0,
+    query_found_count: discoveryResult?.query_found_count || 0,
+    trending_found_count: discoveryResult?.trending_found_count || 0,
+    passed_filter_count: discoveryResult?.passed_filter_count || 0,
+    added_count: discoveryResult?.added?.length || 0
+  };
+}
+
+function aggregateDiscoveryResults(results = []) {
+  return {
+    per_slot: results,
+    found_count: sumBy(results, "found_count"),
+    channel_found_count: sumBy(results, "channel_found_count"),
+    query_found_count: sumBy(results, "query_found_count"),
+    trending_found_count: sumBy(results, "trending_found_count"),
+    passed_filter_count: sumBy(results, "passed_filter_count"),
+    added: [],
+    added_count: sumBy(results, "added_count")
+  };
+}
+
+function sumBy(items, key) {
+  return items.reduce((sum, item) => sum + (Number(item?.[key]) || 0), 0);
 }
 
 async function noVideoSelectedResult({ discoveryResult, failedSelections }) {
@@ -435,7 +619,7 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
           options: {
             ...options,
             dailyPlan,
-            publishSlotWib: dailyPlan.slots[index] || dailyPlan.publishSlotWib || "",
+            publishSlotWib: dailyPlan.activeSlot?.slot_time_wib || dailyPlan.slots[index] || dailyPlan.publishSlotWib || "",
             publishDateWib: dailyPlan.dateWib
           }
         });
@@ -542,6 +726,8 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
   const frameQuoteText = await generateFrameQuoteText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
   const openingHook = buildOpeningHook({ output, thumbnailText });
   output = { ...output, thumbnailText, openingHook, frameQuoteText };
+  const bumper = await generateBumperSpec({ job: storageJob, output, promptTemplate: prompt, aiProvider });
+  output = { ...output, bumper };
 
   const effectsResult = await applyVideoEffects({
     job: storageJob,
@@ -586,7 +772,8 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
   const thumbnailIntro = await prependThumbnailIntro({
     job: storageJob,
     videoPath: output.finalAbsPath,
-    thumbnailPath: thumbnail.path
+    thumbnailPath: thumbnail.path,
+    bumper
   }).catch((error) => {
     console.warn(`Intro thumbnail dilewati: ${error.message}`);
     return null;
@@ -602,7 +789,11 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
         transitionSeconds: thumbnailIntro.transitionSeconds,
         transitionType: thumbnailIntro.transitionType,
         trimmedMainSeconds: thumbnailIntro.trimmedMainSeconds,
-        introPath: thumbnailIntro.introPath
+        introPath: thumbnailIntro.introPath,
+        bumperApplied: thumbnailIntro.bumperApplied,
+        bumperPath: thumbnailIntro.bumperPath,
+        bumperDurationSeconds: thumbnailIntro.bumperDurationSeconds,
+        bumper
       }
     };
   }
@@ -828,19 +1019,33 @@ async function appendRenderedQueueItem({
   status,
   metadata
 }) {
-  const contentType = dailyPlan.contentType || video.content_type || video.theme || "mixed_best";
+  const contentType = dailyPlan.contentType || video.content_type || video.theme || "misteri_trending";
   const confidenceScore = Number(metadata?.confidence_score ?? video.confidence_score ?? 1);
-  const queueName = confidenceScore < 0.6 ? "review" : contentType;
+  const minConfidence = Number(process.env.MIN_CLASSIFICATION_CONFIDENCE || 0.6);
+  const queueName = confidenceScore < minConfidence && process.env.LOW_CONFIDENCE_TO_REVIEW !== "false" ? "review" : contentType;
   await appendQueueItem(queueName, {
     source_video_id: video.youtube_video_id || "",
     source_url: video.url || video.source_url || "",
     source_title: video.source_title || output.title || "",
     source_channel: video.source_channel || video.channel_title || output.channel || "",
+    source_published_at: video.published_at_source || "",
+    source_duration_seconds: Number(video.source_duration_seconds || video.discovery_duration || 0),
+    source_views: Number(video.discovery_views || 0),
+    source_views_per_hour: Number(video.discovery_views_per_hour || 0),
     content_type: contentType,
+    slot_index: Number(dailyPlan.activeSlot?.slot_index || video.slot_index || 0),
+    slot_time_wib: dailyPlan.activeSlot?.slot_time_wib || video.slot_time_wib || "",
+    slot_content_type: dailyPlan.activeSlot?.slot_content_type || video.slot_content_type || contentType,
     discovered_query: video.discovered_query || dailyPlan.query || "",
     daily_theme: dailyPlan.dailyTheme || contentType,
-    selected_channel_handles: splitList(dailyPlan.channelHandles || ""),
+    selected_channel_handles: Array.isArray(video.selected_channel_handles) && video.selected_channel_handles.length
+      ? video.selected_channel_handles
+      : splitList(dailyPlan.channelHandles || ""),
+    discovery_source: video.discovery_source || "",
     discovered_at: video.discovered_at || video.created_at || "",
+    filter_passed: true,
+    filter_reason: "",
+    dedup_status: "new",
     classification_reason: metadata?.classification_reason || video.classification_reason || "",
     confidence_score: confidenceScore,
     candidate_clips: output.analysisCandidates || [],
@@ -849,7 +1054,11 @@ async function appendRenderedQueueItem({
       end_time: output.end,
       duration: output.duration,
       title_best: metadata?.title_best || output.bestTitle || output.title || "",
-      final_score: metadata?.final_score || output.finalScore || 0
+      final_score: metadata?.final_score || output.finalScore || 0,
+      concrete_hook_score: metadata?.concrete_hook_score || output.concreteHookScore || 0,
+      thumbnail_readability_score: metadata?.thumbnail_readability_score || output.thumbnailReadabilityScore || 0,
+      face_expression_score: metadata?.face_expression_score || output.faceExpressionScore || 0,
+      reason_hook_selected: metadata?.reason_hook_selected || output.reasonHookSelected || ""
     },
     output_file: output.finalAbsPath || "",
     metadata_file: metadataPath || "",
@@ -882,6 +1091,9 @@ function summarizeClipResult(result) {
     publish_slot_wib: result.metadata?.publish_slot_wib || "",
     final_score: result.metadata?.final_score || result.metadata?.scoring?.final_score || 0,
     context_safety_score: result.metadata?.context_safety_score || 0,
+    concrete_hook_score: result.metadata?.concrete_hook_score || 0,
+    thumbnail_readability_score: result.metadata?.thumbnail_readability_score || 0,
+    face_expression_score: result.metadata?.face_expression_score || 0,
     confidence_score: result.metadata?.confidence_score || 0,
     candidate_clip_count: Array.isArray(result.metadata?.clip_candidates) ? result.metadata.clip_candidates.length : 0,
     error: result.error || "",
@@ -1113,7 +1325,8 @@ function buildMetadata({
   publishDateWib = "",
   publishStatus = "rendered_waiting_review"
 }) {
-  const contentType = dailyPlan?.contentType || video.content_type || job.theme || theme?.name || "mixed_best";
+  const contentType = dailyPlan?.contentType || video.content_type || job.theme || theme?.name || "misteri_trending";
+  const activeSlot = dailyPlan?.activeSlot || {};
   const classification = classifyContentType({ dailyPlan, video, output, contentType });
   const hashtags = metadataHashtags(output, caption, theme, dailyPlan);
   const titleAlternatives = Array.isArray(output.titleAlternatives)
@@ -1121,8 +1334,12 @@ function buildMetadata({
     : [];
   const titleBest = output.bestTitle || output.title || thumbnail.text || "";
   const contextSafetyScore = output.contextSafetyScore || output.contextSafeScore || 0;
+  const concreteHookScore = output.concreteHookScore || 0;
+  const thumbnailReadabilityScore = output.thumbnailReadabilityScore || 0;
+  const faceExpressionScore = output.faceExpressionScore || 0;
   const finalScore = output.finalScore || 0;
   const thumbnailIntro = output.thumbnailIntro || { applied: false };
+  const bumper = output.bumper || thumbnailIntro.bumper || {};
   const openingEnabled = Boolean(thumbnailIntro.applied);
   const openingHook = output.openingHook || output.coverHook || output.screenHook || thumbnail.text || "INI BIKIN MIKIR";
   return {
@@ -1136,11 +1353,21 @@ function buildMetadata({
     source_video_id: video.youtube_video_id,
     output_file: output.finalAbsPath || "",
     content_type: classification.contentType,
+    slot_index: Number(activeSlot.slot_index || video.slot_index || 0),
+    slot_time_wib: activeSlot.slot_time_wib || video.slot_time_wib || "",
+    slot_content_type: activeSlot.slot_content_type || video.slot_content_type || contentType,
     daily_theme: dailyPlan?.dailyTheme || contentType,
     source_channel: video.source_channel || video.channel_title || output.channel || "",
+    source_published_at: video.published_at_source || "",
+    source_duration_seconds: Number(video.source_duration_seconds || video.discovery_duration || 0),
+    source_views: Number(video.discovery_views || 0),
+    source_views_per_hour: Number(video.discovery_views_per_hour || 0),
     discovered_query: video.discovered_query || dailyPlan?.query || "",
-    selected_channel_handles: splitList(dailyPlan?.channelHandles || process.env.AUTO_DISCOVER_CHANNEL_HANDLES || ""),
+    selected_channel_handles: Array.isArray(video.selected_channel_handles) && video.selected_channel_handles.length
+      ? video.selected_channel_handles
+      : splitList(dailyPlan?.channelHandles || process.env.AUTO_DISCOVER_CHANNEL_HANDLES || ""),
     discovery_mode: dailyPlan?.discoveryMode || (process.env.THEME_AWARE_DISCOVERY === "false" ? "legacy" : "theme_aware"),
+    discovery_source: video.discovery_source || "",
     source_title: video.source_title || output.title || "",
     title: titleBest,
     title_best: titleBest,
@@ -1155,6 +1382,18 @@ function buildMetadata({
     videoEffects,
     backgroundMusic: output.backgroundMusic || {},
     thumbnailIntro,
+    bumper_enabled: Boolean(bumper.bumper_enabled ?? process.env.BUMPER_ENABLED !== "false"),
+    bumper_adaptive_enabled: Boolean(bumper.bumper_adaptive_enabled ?? process.env.BUMPER_ADAPTIVE_ENABLED !== "false"),
+    bumper_duration: Number(thumbnailIntro.bumperDurationSeconds || bumper.bumper_duration || 0),
+    bumper_series_label: bumper.bumper_series_label || process.env.BUMPER_SERIES_LABEL || "MENIT HIKMAH",
+    bumper_tagline: bumper.bumper_tagline || process.env.BUMPER_DEFAULT_TAGLINE || "1 menit yang bikin mikir",
+    bumper_mood: bumper.bumper_mood || "",
+    bumper_icon: bumper.bumper_icon || "",
+    bumper_accent_color: bumper.bumper_accent_color || process.env.BUMPER_ACCENT_LINE_COLOR || "#F5C542",
+    bumper_motion: bumper.bumper_motion || "",
+    bumper_style: bumper.bumper_style || process.env.BUMPER_STYLE || "adaptive_theme_stamp",
+    bumper_reason: bumper.bumper_reason || "",
+    bumper_risk_notes: bumper.bumper_risk_notes || "",
     opening_title_enabled: openingEnabled,
     opening_hook: openingHook,
     opening_style: process.env.OPENING_STYLE || "bold_hook",
@@ -1163,7 +1402,8 @@ function buildMetadata({
     opening_transition_type: thumbnailIntro.transitionType || process.env.OPENING_TRANSITION_TYPE || "zoom_blur",
     opening_transition_duration: Number(thumbnailIntro.transitionSeconds || 0),
     opening_frame_source_time: output.start || "",
-    opening_hook_reason: output.reason || "Fallback dari cover hook/title clip.",
+    opening_hook_reason: output.reasonHookSelected || output.reason || "Fallback dari cover hook/title clip.",
+    reason_hook_selected: output.reasonHookSelected || output.reason || "Hook dipilih karena paling konkret dan terbaca cepat.",
     frameQuoteText: output.frameQuoteText || "",
     transcriptPath: output.transcriptReviewAbsPath || "",
     subtitlePath: output.subtitleAbsPath || "",
@@ -1188,10 +1428,13 @@ function buildMetadata({
     context_safe_score: contextSafetyScore,
     final_score: finalScore,
     hook_score: output.hookScore || 0,
+    concrete_hook_score: concreteHookScore,
     retention_score: output.retentionScore || 0,
     emotion_score: output.emotionScore || 0,
     clarity_score: output.clarityScore || 0,
     context_safety_score: contextSafetyScore,
+    thumbnail_readability_score: thumbnailReadabilityScore,
+    face_expression_score: faceExpressionScore,
     shareability_score: output.shareabilityScore || 0,
     classification_reason: classification.reason,
     confidence_score: classification.confidenceScore,
@@ -1201,10 +1444,13 @@ function buildMetadata({
     publish_status: publishStatus,
     scoring: {
       hook_score: output.hookScore || 0,
+      concrete_hook_score: concreteHookScore,
       retention_score: output.retentionScore || 0,
       emotion_score: output.emotionScore || 0,
       clarity_score: output.clarityScore || 0,
       context_safety_score: output.contextSafetyScore || output.contextSafeScore || 0,
+      thumbnail_readability_score: thumbnailReadabilityScore,
+      face_expression_score: faceExpressionScore,
       shareability_score: output.shareabilityScore || 0,
       final_score: output.finalScore || 0
     },
@@ -1232,7 +1478,8 @@ function buildOpeningHook({ output, thumbnailText }) {
     || output.bestTitle
     || output.title
     || "INI BIKIN MIKIR";
-  const words = String(source || "")
+  const normalized = prioritizeHookPattern(String(source || ""));
+  const words = normalized
     .replace(/[`"'*_#]/g, "")
     .replace(/[?!.,;:]+$/g, "")
     .replace(/\s+/g, " ")
@@ -1244,9 +1491,30 @@ function buildOpeningHook({ output, thumbnailText }) {
   return words.join(" ") || "INI BIKIN MIKIR";
 }
 
+function prioritizeHookPattern(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const upper = text.toUpperCase();
+  const patterns = [
+    "RAHASIA",
+    "TERNYATA",
+    "JANGAN",
+    "KENAPA",
+    "INI BUKAN",
+    "KITA HARUS"
+  ];
+  for (const pattern of patterns) {
+    const index = upper.indexOf(pattern);
+    if (index !== -1) return upper.slice(index);
+  }
+  return upper;
+}
+
 function publishValidationBlockReason(metadata = {}) {
   if (Number(metadata.context_safety_score || 0) < 7) {
     return "context_safety_score < 7; tidak aman untuk auto-publish.";
+  }
+  if (Number(metadata.thumbnail_readability_score || 0) < 7) {
+    return "thumbnail_readability_score < 7; opening/thumbnail belum cukup terbaca untuk auto-publish.";
   }
   const minConfidence = Number(process.env.MIN_CLASSIFICATION_CONFIDENCE || 0.6);
   if (Number(metadata.confidence_score || 0) < minConfidence) {
@@ -1311,10 +1579,11 @@ function classifyContentType({ dailyPlan, video, output, contentType }) {
     output.clipTranscript
   ].join(" ").toLowerCase();
   const keywordMap = {
-    renungan: ["allah", "rezeki", "sabar", "ikhlas", "sedekah", "dosa", "ujian", "kehilangan", "ceramah", "kajian", "nasihat agama", "keluarga"],
-    inspiratif: ["keluarga", "orang tua", "perjuangan", "kisah hidup", "pengalaman", "haru", "motivasi", "bangkit", "kerja keras"],
-    opini: ["politik", "demokrasi", "negara", "sosial", "ekonomi", "kritik", "isu publik", "opini", "masyarakat"],
-    mindset: ["karier", "bisnis", "uang", "produktivitas", "skill", "zona nyaman", "cara berpikir", "sukses", "anak muda"]
+    motivasi_renungan: ["motivasi", "renungan", "keluarga", "orang tua", "perjuangan", "kisah hidup", "pengalaman", "bangkit", "kerja keras", "pelajaran hidup"],
+    sejarah_tokoh: ["sejarah", "tokoh", "biografi", "pahlawan", "kisah nyata", "peristiwa", "kerajaan", "peradaban", "tokoh dunia"],
+    kisah_islami: ["allah", "rezeki", "sabar", "ikhlas", "sedekah", "dosa", "ujian", "ceramah", "kajian", "hikmah", "akhlak", "kisah islami"],
+    fakta_sains: ["fakta", "sains", "pengetahuan", "teknologi", "psikologi", "tubuh manusia", "fenomena alam", "edukasi", "ilmu"],
+    misteri_trending: ["misteri sejarah", "fenomena", "arkeologi", "teka teki", "fakta menarik", "trending", "viral edukatif"]
   };
   const scores = Object.fromEntries(Object.entries(keywordMap).map(([themeName, words]) => [
     themeName,
@@ -1329,7 +1598,7 @@ function classifyContentType({ dailyPlan, video, output, contentType }) {
     ? Math.max(0.6, Math.min(0.95, bestScore / Math.max(totalHits, bestScore)))
     : Number(video.confidence_score ?? output.confidenceScore ?? 0.75);
   return {
-    contentType: dailyTheme === "mixed_best" ? resolved : dailyTheme,
+    contentType: dailyTheme === "misteri_trending" ? resolved : dailyTheme,
     confidenceScore,
     reason: bestScore > 0
       ? `Keyword classifier memilih ${resolved} (${bestScore} hit). Daily theme=${dailyTheme}.`
@@ -1356,6 +1625,15 @@ function dailyReport(result = {}) {
   return {
     ...result,
     tanggal_wib: plan.dateWib,
+    mode: plan.mode || "legacy",
+    target_count: plan.targetCount || plan.targetMax,
+    slots: (plan.slotPlans || []).map((slot) => ({
+      slot_index: slot.slot_index,
+      slot_time_wib: slot.slot_time_wib,
+      slot_content_type: slot.slot_content_type || slot.content_type,
+      query: slot.discover_query || "",
+      selected_channel_handles: slot.selected_channel_handles || []
+    })),
     tema_hari_ini: plan.contentType,
     target_video_hari_ini: `${plan.targetMin}-${plan.targetMax}`,
     query_yang_dipakai: plan.query,
@@ -1363,7 +1641,7 @@ function dailyReport(result = {}) {
     jumlah_video_ditemukan_dari_channel: discovery.channel_found_count || 0,
     jumlah_video_ditemukan_dari_query: discovery.query_found_count || 0,
     jumlah_video_dari_trending: discovery.trending_found_count || 0,
-    jumlah_video_lolos_filter: discovery.added?.length || 0,
+    jumlah_video_lolos_filter: discovery.passed_filter_count || discovery.added?.length || 0,
     jumlah_transcript_berhasil: renderedCount,
     jumlah_kandidat_clip_dibuat: candidateClipCount,
     jumlah_video_dirender: renderedCount,
@@ -1373,6 +1651,8 @@ function dailyReport(result = {}) {
       ? `Stok/render kurang dari target minimum ${plan.targetMin}; tersedia ${renderedCount}.`
       : "",
     outputs: clips.map((clip) => ({
+      slot_index: clip.slot_index || "",
+      slot_time_wib: clip.slot_time_wib || clip.publish_slot_wib || "",
       content_type: clip.content_type || "",
       title_best: clip.title_best || "",
       opening_hook: clip.opening_hook || "",
@@ -1380,6 +1660,9 @@ function dailyReport(result = {}) {
       publish_slot_wib: clip.publish_slot_wib || "",
       final_score: clip.final_score || 0,
       context_safety_score: clip.context_safety_score || 0,
+      concrete_hook_score: clip.concrete_hook_score || 0,
+      thumbnail_readability_score: clip.thumbnail_readability_score || 0,
+      face_expression_score: clip.face_expression_score || 0,
       confidence_score: clip.confidence_score || 0,
       status: clip.status || "",
       output_file: clip.final_video_path || "",

@@ -140,7 +140,12 @@ def cfg():
         "background_music_file": os.environ.get("BACKGROUND_MUSIC_FILE", "auto"),
         "background_music_map_file": os.environ.get("BACKGROUND_MUSIC_MAP_FILE", "assets/music/music-map.json"),
         "background_music_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_VOLUME"), 0.08),
+        "background_music_default_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_DEFAULT_VOLUME"), 0.06),
         "background_music_original_volume": parse_float(os.environ.get("BACKGROUND_MUSIC_ORIGINAL_VOLUME"), 0.92),
+        "background_music_ducking_enabled": bool_env("BACKGROUND_MUSIC_DUCKING_ENABLED", True),
+        "background_music_ducking_target_db": parse_float(os.environ.get("BACKGROUND_MUSIC_DUCKING_TARGET_DB"), -24),
+        "background_music_fade_in_seconds": parse_float(os.environ.get("BACKGROUND_MUSIC_FADE_IN_SECONDS"), 0.5),
+        "background_music_fade_out_seconds": parse_float(os.environ.get("BACKGROUND_MUSIC_FADE_OUT_SECONDS"), 1.0),
         "theme": os.environ.get("THEME", ""),
         "content_type": os.environ.get("CONTENT_TYPE", ""),
         "theme_prompt": os.environ.get("THEME_PROMPT", ""),
@@ -173,8 +178,8 @@ def cfg():
         "theme_bg_darken": parse_float(os.environ.get("THEME_BG_DARKEN"), 0.45),
         "theme_blur_strength": parse_int(os.environ.get("THEME_BLUR_STRENGTH"), 28),
         "face_crop_enabled": parse_int(os.environ.get("FACE_CROP_ENABLED"), 1),
-        "face_crop_zoom_min": parse_float(os.environ.get("FACE_CROP_ZOOM_MIN"), 1.15),
-        "face_crop_zoom_max": parse_float(os.environ.get("FACE_CROP_ZOOM_MAX"), 1.40),
+        "face_crop_zoom_min": parse_float(os.environ.get("FACE_CROP_ZOOM_MIN"), 1.25),
+        "face_crop_zoom_max": parse_float(os.environ.get("FACE_CROP_ZOOM_MAX"), 1.55),
         "podcast_active_speaker_crop": parse_int(os.environ.get("PODCAST_ACTIVE_SPEAKER_CROP"), 1),
         "avoid_wide_shot": parse_int(os.environ.get("AVOID_WIDE_SHOT"), 1),
         "editorial_closing_enabled": parse_int(os.environ.get("EDITORIAL_CLOSING_ENABLED"), 1),
@@ -1492,8 +1497,18 @@ def normalize_score_1_10(value, fallback=0):
 
 
 def clip_component_scores(clip):
+    hook_text = " ".join(
+        str(clip.get(key) or "")
+        for key in ["cover_hook", "coverHook", "screen_hook", "screenHook", "thumbnail_text", "thumbnailText", "hook", "summary"]
+    )
+    concrete_fallback = concrete_hook_score(hook_text)
+    readability_fallback = thumbnail_readability_score(hook_text)
     return {
         "hook_score": normalize_score_1_10(clip.get("hook_score") or clip.get("hookScore"), 0),
+        "concrete_hook_score": normalize_score_1_10(
+            clip.get("concrete_hook_score") or clip.get("concreteHookScore"),
+            concrete_fallback,
+        ),
         "retention_score": normalize_score_1_10(clip.get("retention_score") or clip.get("retentionScore"), 0),
         "emotion_score": normalize_score_1_10(clip.get("emotion_score") or clip.get("emotionScore"), 0),
         "clarity_score": normalize_score_1_10(clip.get("clarity_score") or clip.get("clarityScore"), 0),
@@ -1506,20 +1521,63 @@ def clip_component_scores(clip):
             or clip.get("contextSafeScore"),
             7,
         ),
+        "thumbnail_readability_score": normalize_score_1_10(
+            clip.get("thumbnail_readability_score") or clip.get("thumbnailReadabilityScore"),
+            readability_fallback,
+        ),
+        "face_expression_score": normalize_score_1_10(
+            clip.get("face_expression_score") or clip.get("faceExpressionScore"),
+            7,
+        ),
         "shareability_score": normalize_score_1_10(clip.get("shareability_score") or clip.get("shareabilityScore"), 0),
     }
 
 
 def weighted_final_score(scores):
     return round(
-        float(scores.get("hook_score", 0)) * 0.25
-        + float(scores.get("retention_score", 0)) * 0.20
-        + float(scores.get("emotion_score", 0)) * 0.20
-        + float(scores.get("clarity_score", 0)) * 0.15
+        float(scores.get("hook_score", 0)) * 0.20
+        + float(scores.get("concrete_hook_score", 0)) * 0.15
+        + float(scores.get("retention_score", 0)) * 0.15
+        + float(scores.get("emotion_score", 0)) * 0.15
+        + float(scores.get("clarity_score", 0)) * 0.10
         + float(scores.get("context_safety_score", 0)) * 0.15
+        + float(scores.get("thumbnail_readability_score", 0)) * 0.05
         + float(scores.get("shareability_score", 0)) * 0.05,
         2,
     )
+
+
+def concrete_hook_score(text):
+    value = str(text or "").lower()
+    strong_patterns = [
+        "rahasia", "ternyata", "jangan", "kenapa", "ini yang jarang dibahas",
+        "pengalaman nyata", "cerita personal", "konflik", "ini bukan", "kita harus",
+    ]
+    weak_patterns = ["nasihat umum", "secara umum", "pada kesempatan ini", "menurut saya", "sebenarnya gini"]
+    score = 5.5
+    for pattern in strong_patterns:
+        if pattern in value:
+            score += 1.1
+    for pattern in weak_patterns:
+        if pattern in value:
+            score -= 1.2
+    if re.search(r"\b(rahasia|ternyata|jangan|kenapa)\b", value):
+        score += 0.8
+    return normalize_score_1_10(score, 6)
+
+
+def thumbnail_readability_score(text):
+    words = [word for word in re.split(r"\s+", str(text or "").strip()) if word]
+    if not words:
+        return 5
+    score = 8.0
+    if len(words) > 5:
+        score -= min(3, (len(words) - 5) * 0.7)
+    if any(len(word) > 14 for word in words):
+        score -= 1
+    if re.search(r"\b(rahasia|ternyata|jangan|kenapa|ini|bukan)\b", " ".join(words).lower()):
+        score += 0.8
+    return normalize_score_1_10(score, 7)
 
 
 def local_clip_title(text, index):
@@ -1633,8 +1691,18 @@ def candidate_to_clip(candidate, index=0, reason=""):
         "summary": text[:220],
         "main_emotion": "penasaran",
         "context_safe_score": 7.0,
+        "hook_score": concrete_hook_score(text),
+        "concrete_hook_score": concrete_hook_score(text),
+        "retention_score": normalize_score_1_10(viral_score, 6),
+        "emotion_score": 6.5,
+        "clarity_score": 7.0,
+        "context_safety_score": 7.0,
+        "thumbnail_readability_score": thumbnail_readability_score(title),
+        "face_expression_score": 7.0,
+        "shareability_score": 6.5,
         "risks": "",
         "caption": text,
+        "reason_hook_selected": "Fallback lokal memilih hook paling konkret dari awal transcript.",
         "candidate_id": candidate.get("candidate_id") or index + 1,
         "clip_transcript": text,
         "selected_angle": local_clip_title(text, index),
@@ -1669,13 +1737,17 @@ def find_important_clips(segments, config):
         viral_rules = f"""
 Viral strategy wajib dipakai:
 - Buat analisis untuk 5 kandidat yang tersedia, lalu pilih {config['clip_count']} kandidat paling kuat untuk dirender.
-- Beri hook_score, retention_score, emotion_score, clarity_score, context_safety_score, shareability_score, viral_score_1_10, dan context_safe_score_1_10 untuk tiap kandidat.
-- Hitung final_score = hook_score*0.25 + retention_score*0.20 + emotion_score*0.20 + clarity_score*0.15 + context_safety_score*0.15 + shareability_score*0.05.
+- Beri hook_score, concrete_hook_score, retention_score, emotion_score, clarity_score, context_safety_score, thumbnail_readability_score, face_expression_score, shareability_score, viral_score_1_10, dan context_safe_score_1_10 untuk tiap kandidat.
+- Hitung final_score = hook_score*0.20 + concrete_hook_score*0.15 + retention_score*0.15 + emotion_score*0.15 + clarity_score*0.10 + context_safety_score*0.15 + thumbnail_readability_score*0.05 + shareability_score*0.05.
 - Tolak kandidat dengan context_safety_score < 7 karena risiko salah konteks terlalu tinggi.
-- Pilih kandidat dengan potensi retention paling kuat: cerita, konflik, punchline, nasihat, humor, rasa penasaran, atau kalimat yang bikin mikir.
+- Prioritaskan hook konkret: rahasia, ternyata, jangan, kenapa, ini yang jarang dibahas, pengalaman nyata, konflik ringan, cerita personal, dan statement tajam tapi aman.
+- Kurangi kandidat abstrak: nasihat umum tanpa cerita, ceramah terlalu teoritis, potongan tanpa konflik, pembukaan terlalu pelan, dan wide shot terlalu lama.
+- Pilih kandidat dengan potensi retention paling kuat: cerita personal, konflik ringan, punchline, nasihat konkret, humor, rasa penasaran, atau kalimat yang bikin mikir.
 - selected_angle harus menjelaskan sudut viral yang jelas, bukan kalimat umum.
 - publish_decision gunakan "publish" hanya jika viral_score_1_10 >= 7 atau hook sangat kuat; selain itu "borderline".
-- thumbnail_text, cover_hook, dan screen_hook wajib maksimal 5 kata, tegas, universal, dan tidak clickbait palsu.
+- thumbnail_text, cover_hook, dan screen_hook wajib maksimal 3-5 kata, huruf kapital, kata terkuat di awal, tegas, universal, dan tidak clickbait palsu.
+- Gunakan pola opening: RAHASIA ..., TERNYATA ..., JANGAN ..., KENAPA ..., INI BUKAN ..., KITA HARUS ....
+- reason_hook_selected wajib menjelaskan kenapa hook dipilih.
 - hashtags 5-8 dan relevan.
 - caption wajib singkat, lengkap, dan punya CTA ringan. Jangan berakhir dengan koma, kata sambung, atau ellipsis.
 """
@@ -1694,6 +1766,7 @@ Hashtag prioritas tema: {config.get('theme_hashtags') or '-'}
 
 Kriteria:
 - Hook kuat dalam 2 detik pertama.
+- Hook harus konkret dan cepat. Prioritaskan "rahasia", "ternyata", "jangan", "kenapa", "ini yang jarang dibahas", pengalaman nyata, konflik ringan, cerita personal, atau statement tajam tapi aman.
 - Bisa dipahami tanpa menonton video lengkap.
 - Memiliki satu gagasan utuh.
 - Mengandung cerita, konflik, punchline, nasihat, humor, atau kalimat yang bikin mikir.
@@ -1703,7 +1776,7 @@ Kriteria:
 - Tidak memelintir makna narasumber.
 - Utamakan keamanan konteks dan kekuatan hook.
 - Jangan mulai dari basa-basi seperti "jadi", "ee", "menurut saya", atau "pada kesempatan ini".
-- Tema utama: ceramah, renungan, podcast, cerita keluarga, motivasi, dan hikmah hidup.
+- Hindari nasihat umum tanpa cerita, ceramah terlalu teoritis, potongan tanpa konflik, pembukaan terlalu pelan, wide shot terlalu lama, dan hook abstrak.
 - Output harus JSON valid saja, tanpa markdown.
 {viral_rules}
 
@@ -1720,16 +1793,20 @@ Format output:
       "upload_title": "Title upload maksimal 70 karakter",
       "reason_selected": "Alasan clip ini menarik",
       "hook_score": 8,
+      "concrete_hook_score": 9,
       "retention_score": 8,
       "emotion_score": 8,
       "clarity_score": 8,
       "context_safety_score": 9,
+      "thumbnail_readability_score": 8,
+      "face_expression_score": 8,
       "shareability_score": 7,
       "final_score": 8.15,
       "viral_score_1_10": 8,
       "context_safe_score_1_10": 9,
       "main_emotion": "lucu/haru/adem/menampar/inspiratif/penasaran",
       "risks": "Risiko jika ada, atau kosong",
+      "reason_hook_selected": "Hook memakai kata TERNYATA karena membalik ekspektasi penonton.",
       "candidate_id": 1
     }}
   ],
@@ -1749,15 +1826,19 @@ Format output:
     "upload_title": "Title upload maksimal 70 karakter",
     "main_emotion": "haru/penasaran/tertampar/termotivasi",
     "hook_score": 8,
+    "concrete_hook_score": 9,
     "retention_score": 8,
     "emotion_score": 8,
     "clarity_score": 8,
     "context_safety_score": 9,
+    "thumbnail_readability_score": 8,
+    "face_expression_score": 8,
     "shareability_score": 7,
     "final_score": 8.15,
     "viral_score_1_10": 8,
     "context_safe_score_1_10": 9,
     "risks": "Risiko konteks/copyright jika ada, atau kosong",
+    "reason_hook_selected": "Hook dipilih karena konkret, pendek, dan sesuai isi clip.",
     "caption": "Caption posting singkat yang kalimatnya lengkap dan tidak terputus.",
     "selected_angle": "Sudut viral utama",
     "thumbnail_text": "TEKS COVER MAKS 8 KATA",
@@ -1899,6 +1980,14 @@ def validate_clips(clips, segments, config):
                 **component_scores,
                 "final_score": final_score,
                 "risks": first_text_value(clip, "risks", "risk", "risiko", default=""),
+                "reason_hook_selected": first_text_value(
+                    clip,
+                    "reason_hook_selected",
+                    "reasonHookSelected",
+                    "opening_hook_reason",
+                    "openingHookReason",
+                    default="Hook dipilih karena paling konkret dan terbaca cepat.",
+                ),
                 "analysis_candidates": clip.get("analysis_candidates") or clip.get("analysisCandidates") or [],
                 "caption": clip.get("caption") or "",
                 "thumbnail_text": screen_hook,
@@ -3984,6 +4073,7 @@ def normalize_music_text(value):
 def clip_music_context(config, clip):
     parts = [
         config.get("theme", ""),
+        config.get("content_type", ""),
         (clip or {}).get("title", ""),
         (clip or {}).get("hook", ""),
         (clip or {}).get("reason", ""),
@@ -4005,10 +4095,73 @@ def load_background_music_map(config):
         return None, None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return data, path
+        return normalize_background_music_map(data), path
     except Exception as exc:
         log_warn(f"Map backsound gagal dibaca: {exc}")
         return None, path
+
+
+def normalize_background_music_map(data):
+    if not isinstance(data, dict):
+        return {}
+    if isinstance(data.get("tracks"), list):
+        return data
+
+    tracks = []
+    default_id = "default-1"
+    for theme, spec in data.items():
+        if not isinstance(spec, dict):
+            continue
+        files = spec.get("files") or []
+        if isinstance(files, str):
+            files = [files]
+        volume = parse_float(spec.get("volume"), parse_float(spec.get("music_volume"), 0.06))
+        original_volume = parse_float(spec.get("original_volume"), 0.94)
+        for index, file_name in enumerate(files):
+            if not str(file_name or "").strip():
+                continue
+            track_id = f"{theme}-{index + 1}"
+            if theme == "default" and index == 0:
+                default_id = track_id
+            tracks.append({
+                "id": track_id,
+                "label": f"{theme} {index + 1}",
+                "file": str(file_name).strip(),
+                "volume": volume,
+                "original_volume": original_volume,
+                "themes": music_theme_aliases(theme),
+                "keywords": music_theme_keywords(theme),
+                "priority": 10 if theme != "default" else 0,
+            })
+    return {
+        "version": 2,
+        "default": default_id,
+        "tracks": tracks,
+    }
+
+
+def music_theme_aliases(theme):
+    aliases = {
+        "renungan": ["renungan", "kisah_islami", "islam", "ceramah", "hikmah"],
+        "inspiratif": ["inspiratif", "motivasi_renungan", "motivasi", "kisah", "keluarga"],
+        "mindset": ["mindset", "motivasi_renungan", "karier", "bisnis", "uang"],
+        "opini": ["opini", "misteri_trending", "sosial", "publik"],
+        "mixed_best": ["mixed_best", "misteri_trending", "pilihan"],
+        "default": ["default"],
+    }
+    return aliases.get(str(theme or "").lower(), [str(theme or "").lower()])
+
+
+def music_theme_keywords(theme):
+    keywords = {
+        "renungan": ["allah", "rezeki", "sabar", "ikhlas", "sedekah", "ujian", "hikmah", "ceramah", "kajian"],
+        "inspiratif": ["keluarga", "orang tua", "perjuangan", "bangkit", "kisah", "hidup", "pengalaman"],
+        "mindset": ["karier", "bisnis", "uang", "skill", "produktif", "zona nyaman", "kerja"],
+        "opini": ["opini", "sosial", "publik", "konteks", "kritik", "masyarakat"],
+        "mixed_best": ["renungan", "inspiratif", "motivasi", "opini", "hidup", "cerita"],
+        "default": [],
+    }
+    return keywords.get(str(theme or "").lower(), [])
 
 
 def default_music_track(music_map):
@@ -4043,7 +4196,10 @@ def select_music_track(config, clip):
         return {}, None
 
     text = clip_music_context(config, clip)
-    theme = normalize_music_text(config.get("theme", ""))
+    theme = normalize_music_text(" ".join([
+        str(config.get("theme", "")),
+        str(config.get("content_type", "")),
+    ]))
     tracks = music_map.get("tracks") or []
     selected = default_music_track(music_map)
     best_score = -1
@@ -4115,19 +4271,42 @@ def apply_background_music(video_path, config, job_id, index, clip=None):
 
     video_path = Path(video_path)
     mixed_path = ROOT / "temp" / f"{job_id}-clip-{index + 1:02d}-backsound.mp4"
-    track_volume = parse_float(music_selection.get("volume"), config.get("background_music_volume", 0.06))
+    track_volume = parse_float(
+        music_selection.get("volume"),
+        config.get("background_music_volume", config.get("background_music_default_volume", 0.06)),
+    )
     music_volume = max(0.0, min(1.0, float(track_volume)))
-    original_volume = max(0.0, min(2.0, float(config.get("background_music_original_volume", 1.0))))
+    track_original_volume = parse_float(music_selection.get("original_volume"), config.get("background_music_original_volume", 1.0))
+    original_volume = max(0.0, min(2.0, float(track_original_volume)))
     source_has_audio = has_audio_stream(video_path)
+    fade_in = max(0.0, min(5.0, float(config.get("background_music_fade_in_seconds", 0.5))))
+    fade_out = max(0.0, min(5.0, float(config.get("background_music_fade_out_seconds", 1.0))))
+    duration = float(probe_video_info(video_path).get("duration") or 0.0)
+    fade_parts = []
+    if fade_in > 0:
+        fade_parts.append(f"afade=t=in:st=0:d={fade_in:.3f}")
+    if fade_out > 0 and duration > fade_out + 0.5:
+        fade_parts.append(f"afade=t=out:st={max(0.0, duration - fade_out):.3f}:d={fade_out:.3f}")
+    fade_filter = "," + ",".join(fade_parts) if fade_parts else ""
 
     if source_has_audio:
-        filter_complex = (
-            f"[0:a]volume={original_volume},aresample=48000[a0];"
-            f"[1:a]volume={music_volume},aresample=48000[a1];"
-            "[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]"
-        )
+        ducking_enabled = bool(config.get("background_music_ducking_enabled", True))
+        if ducking_enabled:
+            threshold = max(0.001, min(1.0, 10 ** (float(config.get("background_music_ducking_target_db", -24)) / 20)))
+            filter_complex = (
+                f"[0:a]volume={original_volume},aresample=48000[a0];"
+                f"[1:a]volume={music_volume},aresample=48000{fade_filter}[music];"
+                f"[music][a0]sidechaincompress=threshold={threshold:.6f}:ratio=8:attack=20:release=350[ducked];"
+                "[a0][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            )
+        else:
+            filter_complex = (
+                f"[0:a]volume={original_volume},aresample=48000[a0];"
+                f"[1:a]volume={music_volume},aresample=48000{fade_filter}[a1];"
+                "[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            )
     else:
-        filter_complex = f"[1:a]volume={music_volume},aresample=48000[aout]"
+        filter_complex = f"[1:a]volume={music_volume},aresample=48000{fade_filter}[aout]"
 
     cmd = [
         "ffmpeg",
@@ -4172,6 +4351,10 @@ def apply_background_music(video_path, config, job_id, index, clip=None):
             "file": repo_relative_path(music_path),
             "mood": music_selection.get("mood") or "",
             "volume": music_volume,
+            "original_volume": original_volume,
+            "ducking_enabled": bool(config.get("background_music_ducking_enabled", True)),
+            "fade_in_seconds": fade_in,
+            "fade_out_seconds": fade_out,
         }
     except Exception as exc:
         log_warn(f"Mix backsound gagal, pakai audio original: {exc}")
@@ -4312,6 +4495,10 @@ def main():
                 "contextSafetyScore": clip.get("context_safety_score", 0),
                 "shareabilityScore": clip.get("shareability_score", 0),
                 "finalScore": clip.get("final_score", 0),
+                "concreteHookScore": clip.get("concrete_hook_score", 0),
+                "thumbnailReadabilityScore": clip.get("thumbnail_readability_score", 0),
+                "faceExpressionScore": clip.get("face_expression_score", 0),
+                "reasonHookSelected": clip.get("reason_hook_selected", ""),
                 "risks": clip.get("risks", ""),
                 "analysisCandidates": clip.get("analysis_candidates", []),
                 "caption": clip["caption"],

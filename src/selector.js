@@ -58,7 +58,15 @@ export async function selectNextVideo(options = {}) {
   const prompts = await readJson("prompts", []);
 
   const activeThemes = themes.filter((theme) => theme.status === "active");
-  const requestedTheme = options.theme && !["auto", "mixed_best"].includes(options.theme) ? options.theme : "";
+  const themeAlias = {
+    renungan: "kisah_islami",
+    inspiratif: "motivasi_renungan",
+    mindset: "motivasi_renungan",
+    opini: "misteri_trending",
+    mixed_best: "misteri_trending"
+  };
+  const optionTheme = themeAlias[options.theme] || options.theme;
+  const requestedTheme = optionTheme && optionTheme !== "auto" ? optionTheme : "";
   const preferredVideoIds = new Set((options.preferredVideoIds || []).filter(Boolean));
   const excludedVideoIds = new Set((options.excludeVideoIds || []).filter(Boolean));
 
@@ -105,6 +113,9 @@ export async function addVideo(input) {
     youtube_video_id: extractYoutubeVideoId(url),
     theme: input.theme || "podcast artis",
     content_type: input.content_type || input.theme || "",
+    slot_index: Number(input.slot_index || 0),
+    slot_time_wib: input.slot_time_wib || "",
+    slot_content_type: input.slot_content_type || input.content_type || input.theme || "",
     priority: Number(input.priority || 1),
     target_date: input.target_date || "",
     active: input.active !== false,
@@ -127,9 +138,11 @@ export async function addVideo(input) {
     source_title: input.source_title || "",
     channel_title: input.channel_title || "",
     published_at_source: input.published_at_source || "",
+    source_duration_seconds: Number(input.source_duration_seconds || 0),
     discovery_source: input.discovery_source || "",
     discovery_query: input.discovery_query || "",
     discovered_query: input.discovered_query || input.discovery_query || "",
+    selected_channel_handles: Array.isArray(input.selected_channel_handles) ? input.selected_channel_handles : [],
     classification_reason: input.classification_reason || "",
     confidence_score: Number(input.confidence_score || 1),
     publish_slot_wib: input.publish_slot_wib || "",
@@ -229,6 +242,9 @@ export function normalizeVideo(video) {
     youtube_video_id: video.youtube_video_id || extractYoutubeVideoId(url),
     theme: video.theme || "podcast artis",
     content_type: video.content_type || video.theme || "",
+    slot_index: Number(video.slot_index || 0),
+    slot_time_wib: video.slot_time_wib || "",
+    slot_content_type: video.slot_content_type || video.content_type || video.theme || "",
     priority: Number(video.priority || 1),
     quality_profile: video.quality_profile || "standard",
     ai_provider: "openai",
@@ -243,7 +259,9 @@ export function normalizeVideo(video) {
     use_watermark: boolInput(video.use_watermark, boolInput(process.env.VIDEO_WATERMARK_ENABLED, true)),
     use_music: boolInput(video.use_music, boolInput(process.env.BACKGROUND_MUSIC_ENABLED, true)),
     force_reprocess: video.force_reprocess === true,
+    source_duration_seconds: Number(video.source_duration_seconds || 0),
     active: video.active !== false,
-    status: video.status || "queued"
+    status: video.status || "queued",
+    selected_channel_handles: Array.isArray(video.selected_channel_handles) ? video.selected_channel_handles : []
   };
 }

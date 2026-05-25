@@ -42,6 +42,10 @@ export async function runClipper({ video, job, onLog = () => {} }) {
     SCENE_MODE: sceneMode,
     SMART_CROP_MODE: sceneMode,
     THEME: String(video.theme || job.theme || config.defaultTheme || ""),
+    CONTENT_TYPE: String(video.content_type || video.slot_content_type || video.theme || job.theme || ""),
+    SLOT_INDEX: String(video.slot_index || ""),
+    SLOT_TIME_WIB: String(video.slot_time_wib || ""),
+    SLOT_CONTENT_TYPE: String(video.slot_content_type || video.content_type || ""),
     BACKGROUND_MUSIC_ENABLED: boolInput(video.use_music ?? job.use_music, boolInput(process.env.BACKGROUND_MUSIC_ENABLED, true)) ? "1" : "0"
   };
 
@@ -97,7 +101,7 @@ function qualityPreset(value) {
     high: {
       downloadMaxHeight: 1080,
       downloadCrf: 24,
-      finalCrf: 23
+      finalCrf: 22
     },
     ultra: {
       downloadMaxHeight: 1080,
@@ -105,7 +109,22 @@ function qualityPreset(value) {
       finalCrf: 20
     }
   };
-  return profiles[preset] || profiles.standard;
+  const selected = profiles[preset] || profiles.standard;
+  if (fastProductionMode()) return selected;
+  return {
+    downloadMaxHeight: numericEnv("DOWNLOAD_MAX_HEIGHT", selected.downloadMaxHeight),
+    downloadCrf: numericEnv("DOWNLOAD_COMPRESS_CRF", selected.downloadCrf),
+    finalCrf: numericEnv("FINAL_RENDER_CRF", selected.finalCrf)
+  };
+}
+
+function fastProductionMode() {
+  return ["1", "true", "yes", "on"].includes(String(process.env.FAST_PRODUCTION_MODE || "").toLowerCase());
+}
+
+function numericEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 async function assertFile(filePath, message) {

@@ -78,6 +78,7 @@ const els = {
   consoleMeta: document.querySelector("#consoleMeta"),
   videoRows: document.querySelector("#videoRows"),
   videoCount: document.querySelector("#videoCount"),
+  dashboardFilter: document.querySelector("#dashboardFilter"),
   videosMore: document.querySelector("#videosMore"),
   resetQueueBtn: document.querySelector("#resetQueueBtn"),
   jobRows: document.querySelector("#jobRows"),
@@ -498,7 +499,7 @@ function renderConsole(run) {
 
 function renderVideos(videos) {
   cachedVideos = videos;
-  const visible = videos.filter(isQueuePanelVideo);
+  const visible = videos.filter(isQueuePanelVideo).filter(matchesDashboardFilter);
   const hidden = videos.length - visible.length;
   els.videoCount.textContent = hidden ? `${visible.length} aktif / ${videos.length}` : `${visible.length} item`;
   els.videoRows.innerHTML = [...visible]
@@ -507,33 +508,38 @@ function renderVideos(videos) {
     .map((video) => `
       <tr>
         <td data-label="Status">${pill(video.status || "queued")}</td>
+        <td data-label="Type">${escapeHtml(formatContentType(video.content_type || video.slot_content_type || video.theme || "-"))}</td>
+        <td data-label="Slot">${escapeHtml(slotLabel(video))}</td>
         <td data-label="Video">${escapeHtml(short(video.source_title || video.theme || video.id, 56))}</td>
-        <td data-label="Target">${escapeHtml(video.target_date || "-")}</td>
+        <td data-label="Score">${escapeHtml(scoreLabel(video))}</td>
         <td data-label="Source">${escapeHtml(video.discovery_source || "manual")}</td>
         <td data-label="URL"><a href="${escapeAttr(video.url || video.source_url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(short(video.url || video.source_url || "-", 46))}</a></td>
       </tr>
-    `).join("") || `<tr><td colspan="5" class="emptyRow">Belum ada link.</td></tr>`;
+    `).join("") || `<tr><td colspan="7" class="emptyRow">Belum ada link.</td></tr>`;
   toggleMoreButton(els.videosMore, visible.length, videoLimit);
   updateResetQueueButton(videos);
 }
 
 function renderJobs(jobs) {
   cachedJobs = jobs;
-  els.jobCount.textContent = `${jobs.length} item`;
-  els.jobRows.innerHTML = [...jobs]
+  const visible = jobs.filter(matchesDashboardFilter);
+  els.jobCount.textContent = `${visible.length} item`;
+  els.jobRows.innerHTML = [...visible]
     .reverse()
     .slice(0, jobLimit)
     .map((job) => `
       <tr>
         <td data-label="Status">${pill(job.status || "pending")}</td>
         <td data-label="Job">${escapeHtml(short(job.job_id || "", 28))}</td>
+        <td data-label="Type">${escapeHtml(formatContentType(job.content_type || job.theme || firstClipField(job, "content_type") || "-"))}</td>
+        <td data-label="Slot">${escapeHtml(slotLabel(job))}</td>
         <td data-label="Publish">${pill(job.publish_status || "-")}</td>
         <td data-label="Platform">${platformSummary(job)}</td>
         <td data-label="Updated">${escapeHtml(formatDateTime(job.updated_at || job.published_at || job.created_at))}</td>
         <td data-label="Error">${escapeHtml(short(job.error_message || job.instagram_error || job.facebook_error || job.youtube_error || job.tiktok_error || job.threads_error || "", 60))}</td>
       </tr>
-    `).join("") || `<tr><td colspan="6" class="emptyRow">Belum ada job.</td></tr>`;
-  toggleMoreButton(els.jobsMore, jobs.length, jobLimit);
+    `).join("") || `<tr><td colspan="8" class="emptyRow">Belum ada job.</td></tr>`;
+  toggleMoreButton(els.jobsMore, visible.length, jobLimit);
 }
 
 function platformSummary(job) {
@@ -557,6 +563,45 @@ function updateResetQueueButton(videos) {
 function isQueuePanelVideo(video) {
   const status = video.status || "queued";
   return !["expired", "published", "skipped_duplicate", "published_partial"].includes(status);
+}
+
+function matchesDashboardFilter(item) {
+  const filter = els.dashboardFilter?.value || "all";
+  if (filter === "all") return true;
+  const status = String(item.status || item.publish_status || "").toLowerCase();
+  const publishStatus = String(item.publish_status || "").toLowerCase();
+  const type = String(item.content_type || item.slot_content_type || item.theme || firstClipField(item, "content_type") || "").toLowerCase();
+  if (filter === "review") return status.includes("review") || publishStatus.includes("review");
+  if (filter === "error") return status.includes("error") || status.includes("failed") || Boolean(item.error_message);
+  if (["rendered_waiting_review", "scheduled", "published"].includes(filter)) {
+    return status === filter || publishStatus === filter || status.includes(filter) || publishStatus.includes(filter);
+  }
+  return type === filter;
+}
+
+function firstClipField(item, field) {
+  const clips = Array.isArray(item.clip_results) ? item.clip_results : [];
+  return clips.find((clip) => clip?.[field])?.[field] || "";
+}
+
+function formatContentType(value) {
+  return String(value || "-").replace(/_/g, " ");
+}
+
+function slotLabel(item) {
+  const index = item.slot_index || firstClipField(item, "slot_index") || "";
+  const time = item.slot_time_wib || item.publish_slot_wib || firstClipField(item, "publish_slot_wib") || "";
+  if (index && time) return `#${index} ${time}`;
+  return time || (index ? `#${index}` : "-");
+}
+
+function scoreLabel(item) {
+  const parts = [
+    item.final_score ? `F ${Number(item.final_score).toFixed(1)}` : "",
+    item.context_safety_score ? `C ${Number(item.context_safety_score).toFixed(1)}` : "",
+    item.confidence_score ? `K ${Number(item.confidence_score).toFixed(2)}` : ""
+  ].filter(Boolean);
+  return parts.join(" / ") || "-";
 }
 
 function setSubmittersDisabled(disabled) {
@@ -707,6 +752,11 @@ els.preflightBtn?.addEventListener("click", async () => {
 els.videosMore?.addEventListener("click", () => {
   videoLimit = videoLimit > ROW_LIMIT_DEFAULT ? ROW_LIMIT_DEFAULT : ROW_LIMIT_EXPANDED;
   renderVideos(cachedVideos);
+});
+
+els.dashboardFilter?.addEventListener("change", () => {
+  renderVideos(cachedVideos);
+  renderJobs(cachedJobs);
 });
 
 els.jobsMore?.addEventListener("click", () => {

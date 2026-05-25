@@ -313,6 +313,19 @@
               <h2>Video</h2>
             </div>
             <div class="headActions">
+              <select id="dashboardFilter" class="miniSelect" aria-label="Filter dashboard">
+                <option value="all">Semua</option>
+                <option value="motivasi_renungan">Motivasi Renungan</option>
+                <option value="sejarah_tokoh">Sejarah Tokoh</option>
+                <option value="kisah_islami">Kisah Islami</option>
+                <option value="fakta_sains">Fakta Sains</option>
+                <option value="misteri_trending">Misteri Trending</option>
+                <option value="review">Review</option>
+                <option value="rendered_waiting_review">Waiting Review</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="published">Published</option>
+                <option value="error">Error</option>
+              </select>
               <button id="resetQueueBtn" class="btn ghost small" type="button">Reset Queue Lama</button>
               <span id="videoCount" class="badge">0 item</span>
             </div>
@@ -322,8 +335,10 @@
               <thead>
                 <tr>
                   <th>Status</th>
+                  <th>Type</th>
+                  <th>Slot</th>
                   <th>Video</th>
-                  <th>Target</th>
+                  <th>Score</th>
                   <th>Source</th>
                   <th>URL</th>
                 </tr>
@@ -348,6 +363,8 @@
                 <tr>
                   <th>Status</th>
                   <th>Job</th>
+                  <th>Type</th>
+                  <th>Slot</th>
                   <th>Publish</th>
                   <th>Platform</th>
                   <th>Updated</th>

@@ -8,13 +8,17 @@ on:
         required: false
         default: full
       theme:
-        description: "Theme to process: auto, renungan, inspiratif, opini, mindset, mixed_best"
+        description: "Theme to process: auto, motivasi_renungan, sejarah_tokoh, kisah_islami, fakta_sains, misteri_trending"
         required: false
         default: auto
       target_count:
         description: "Target video count for today: 4 or 5"
         required: false
         default: "5"
+      slot:
+        description: "Slot to process: all, 1, 2, 3, 4, 5"
+        required: false
+        default: all
       force_publish:
         description: "Force publish even on manual run: false/true"
         required: false
@@ -138,18 +142,34 @@ jobs:
       DRY_RUN: "false"
       AUTO_PUBLISH: ${{ secrets.AUTO_PUBLISH || 'true' }}
       DEFAULT_THEME: auto
-      CONTENT_TYPES: ${{ secrets.CONTENT_TYPES || 'renungan,inspiratif,opini,mindset,mixed_best' }}
+      FAST_PRODUCTION_MODE: ${{ secrets.FAST_PRODUCTION_MODE || 'false' }}
+      CONTENT_TYPES: ${{ secrets.CONTENT_TYPES || 'motivasi_renungan,sejarah_tokoh,kisah_islami,fakta_sains,misteri_trending' }}
       DAILY_TARGET_MIN: ${{ secrets.DAILY_TARGET_MIN || '4' }}
       DAILY_TARGET_MAX: ${{ github.event.inputs.target_count || secrets.DAILY_TARGET_MAX || secrets.MAX_SCHEDULED_POSTS_PER_DAY || '5' }}
-      DAILY_THEME_MODE: ${{ secrets.DAILY_THEME_MODE || 'weekly' }}
-      MONDAY_THEME: ${{ secrets.MONDAY_THEME || 'renungan' }}
-      TUESDAY_THEME: ${{ secrets.TUESDAY_THEME || 'inspiratif' }}
-      WEDNESDAY_THEME: ${{ secrets.WEDNESDAY_THEME || 'opini' }}
-      THURSDAY_THEME: ${{ secrets.THURSDAY_THEME || 'renungan' }}
-      FRIDAY_THEME: ${{ secrets.FRIDAY_THEME || 'inspiratif' }}
-      SATURDAY_THEME: ${{ secrets.SATURDAY_THEME || 'mindset' }}
-      SUNDAY_THEME: ${{ secrets.SUNDAY_THEME || 'mixed_best' }}
+      DAILY_THEME_MODE: ${{ secrets.DAILY_THEME_MODE || 'mixed_daily' }}
+      DAILY_CONTENT_MIX: ${{ secrets.DAILY_CONTENT_MIX || 'motivasi_renungan:1,sejarah_tokoh:1,kisah_islami:1,fakta_sains:1,misteri_trending:1' }}
+      DAILY_CONTENT_MIX_4: ${{ secrets.DAILY_CONTENT_MIX_4 || 'motivasi_renungan:1,sejarah_tokoh:1,kisah_islami:1,fakta_sains:1' }}
+      DAILY_EXPERIMENT_SLOT: ${{ secrets.DAILY_EXPERIMENT_SLOT || 'misteri_trending' }}
+      DAILY_EXPERIMENT_ALLOW_OPINI: ${{ secrets.DAILY_EXPERIMENT_ALLOW_OPINI || 'false' }}
+      DAILY_EXPERIMENT_MAX_OPINI_PER_DAY: ${{ secrets.DAILY_EXPERIMENT_MAX_OPINI_PER_DAY || '1' }}
+      MONDAY_THEME: ${{ secrets.MONDAY_THEME || 'motivasi_renungan' }}
+      TUESDAY_THEME: ${{ secrets.TUESDAY_THEME || 'sejarah_tokoh' }}
+      WEDNESDAY_THEME: ${{ secrets.WEDNESDAY_THEME || 'kisah_islami' }}
+      THURSDAY_THEME: ${{ secrets.THURSDAY_THEME || 'fakta_sains' }}
+      FRIDAY_THEME: ${{ secrets.FRIDAY_THEME || 'motivasi_renungan' }}
+      SATURDAY_THEME: ${{ secrets.SATURDAY_THEME || 'misteri_trending' }}
+      SUNDAY_THEME: ${{ secrets.SUNDAY_THEME || 'kisah_islami' }}
       DAILY_PUBLISH_SLOTS_WIB: ${{ secrets.DAILY_PUBLISH_SLOTS_WIB || '05:30,09:30,12:15,16:30,19:30' }}
+      SLOT_1_TIME_WIB: ${{ secrets.SLOT_1_TIME_WIB || '05:30' }}
+      SLOT_1_CONTENT_TYPE: ${{ secrets.SLOT_1_CONTENT_TYPE || 'motivasi_renungan' }}
+      SLOT_2_TIME_WIB: ${{ secrets.SLOT_2_TIME_WIB || '09:30' }}
+      SLOT_2_CONTENT_TYPE: ${{ secrets.SLOT_2_CONTENT_TYPE || 'sejarah_tokoh' }}
+      SLOT_3_TIME_WIB: ${{ secrets.SLOT_3_TIME_WIB || '12:15' }}
+      SLOT_3_CONTENT_TYPE: ${{ secrets.SLOT_3_CONTENT_TYPE || 'kisah_islami' }}
+      SLOT_4_TIME_WIB: ${{ secrets.SLOT_4_TIME_WIB || '16:30' }}
+      SLOT_4_CONTENT_TYPE: ${{ secrets.SLOT_4_CONTENT_TYPE || 'fakta_sains' }}
+      SLOT_5_TIME_WIB: ${{ secrets.SLOT_5_TIME_WIB || '19:30' }}
+      SLOT_5_CONTENT_TYPE: ${{ secrets.SLOT_5_CONTENT_TYPE || 'misteri_trending' }}
 
       GRAPH_API_VERSION: v25.0
       API_CHECK_TIMEOUT_SECONDS: ${{ secrets.API_CHECK_TIMEOUT_SECONDS || '90' }}
@@ -240,13 +260,13 @@ jobs:
       TOKEN_REFRESH_BEFORE_DAYS: ${{ secrets.TOKEN_REFRESH_BEFORE_DAYS || '10' }}
       AUTO_DISCOVER_VIDEOS: ${{ secrets.AUTO_DISCOVER_VIDEOS || 'true' }}
       THEME_AWARE_DISCOVERY: ${{ secrets.THEME_AWARE_DISCOVERY || 'true' }}
-      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || vars.AUTO_DISCOVER_QUERY || 'renungan hidup islam|ceramah pendek islam|kisah inspiratif indonesia|podcast keluarga indonesia|motivasi hidup indonesia|nasihat orang tua|kisah perjuangan hidup|cerita keluarga inspiratif|opini tokoh indonesia|mindset sukses indonesia' }}
-      AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || vars.AUTO_DISCOVER_DAILY_QUERY || 'renungan hidup islam indonesia|ceramah pendek islam terbaru|kisah inspiratif indonesia|podcast keluarga indonesia|motivasi hidup indonesia' }}
-      RENUNGAN_DISCOVER_QUERY: ${{ secrets.RENUNGAN_DISCOVER_QUERY || vars.RENUNGAN_DISCOVER_QUERY || 'ceramah pendek islam|renungan hidup islam|nasihat kehidupan islam|ceramah tentang rezeki|ceramah tentang sabar|ceramah tentang sedekah|ceramah tentang ikhlas|ceramah tentang ujian hidup|kajian keluarga islam|kajian islam terbaru indonesia|ceramah tentang kehilangan|ceramah tentang keluarga' }}
-      INSPIRATIF_DISCOVER_QUERY: ${{ secrets.INSPIRATIF_DISCOVER_QUERY || vars.INSPIRATIF_DISCOVER_QUERY || 'kisah inspiratif indonesia|podcast keluarga indonesia|nasihat orang tua|kisah perjuangan hidup|cerita keluarga inspiratif|motivasi hidup indonesia|kisah orang biasa inspiratif|pengalaman hidup inspiratif|cerita sukses dari nol|kisah keluarga menyentuh|perjuangan orang tua|kisah hidup inspiratif' }}
-      OPINI_DISCOVER_QUERY: ${{ secrets.OPINI_DISCOVER_QUERY || vars.OPINI_DISCOVER_QUERY || 'opini tokoh indonesia|podcast politik indonesia|demokrasi indonesia|kritik sosial indonesia|isu sosial indonesia|politik ringan indonesia|obrolan tokoh indonesia|podcast indonesia terbaru|diskusi publik indonesia|analisis sosial indonesia|kritik masyarakat indonesia|opini publik indonesia' }}
-      MINDSET_DISCOVER_QUERY: ${{ secrets.MINDSET_DISCOVER_QUERY || vars.MINDSET_DISCOVER_QUERY || 'motivasi karier indonesia|mindset sukses indonesia|podcast bisnis indonesia|motivasi anak muda indonesia|zona nyaman|kerja keras sukses|skill masa depan indonesia|pengembangan diri indonesia|produktif indonesia|nasihat karier indonesia|mindset bisnis indonesia|cara berpikir sukses' }}
-      MIXED_BEST_DISCOVER_QUERY: ${{ secrets.MIXED_BEST_DISCOVER_QUERY || vars.MIXED_BEST_DISCOVER_QUERY || 'renungan hidup islam|kisah inspiratif indonesia|podcast keluarga indonesia|opini tokoh indonesia|motivasi hidup indonesia|mindset sukses indonesia|ceramah pendek islam|nasihat kehidupan|podcast indonesia inspiratif|cerita hidup inspiratif' }}
+      AUTO_DISCOVER_QUERY: ${{ secrets.AUTO_DISCOVER_QUERY || vars.AUTO_DISCOVER_QUERY || 'motivasi hidup indonesia|sejarah indonesia|kisah islami penuh hikmah|fakta unik indonesia|sains ringan indonesia|misteri sejarah indonesia|fenomena menarik dunia|pengetahuan populer indonesia' }}
+      AUTO_DISCOVER_DAILY_QUERY: ${{ secrets.AUTO_DISCOVER_DAILY_QUERY || vars.AUTO_DISCOVER_DAILY_QUERY || 'motivasi hidup indonesia|sejarah tokoh indonesia|kisah islami penuh hikmah|fakta unik indonesia|misteri sejarah indonesia' }}
+      MOTIVASI_RENUNGAN_DISCOVER_QUERY: ${{ secrets.MOTIVASI_RENUNGAN_DISCOVER_QUERY || vars.MOTIVASI_RENUNGAN_DISCOVER_QUERY || 'motivasi hidup indonesia|renungan hidup|nasihat kehidupan|kisah perjuangan hidup|pengembangan diri indonesia|nasihat orang tua|cerita inspiratif indonesia|motivasi kerja keras|hidup sederhana bermakna|pelajaran hidup' }}
+      SEJARAH_TOKOH_DISCOVER_QUERY: ${{ secrets.SEJARAH_TOKOH_DISCOVER_QUERY || vars.SEJARAH_TOKOH_DISCOVER_QUERY || 'sejarah indonesia|tokoh indonesia inspiratif|kisah nyata tokoh dunia|biografi tokoh indonesia|sejarah tokoh islam aman|kisah pahlawan indonesia|cerita sejarah singkat|fakta sejarah indonesia|kisah nyata inspiratif|tokoh dunia berpengaruh' }}
+      KISAH_ISLAMI_DISCOVER_QUERY: ${{ secrets.KISAH_ISLAMI_DISCOVER_QUERY || vars.KISAH_ISLAMI_DISCOVER_QUERY || 'kisah islami penuh hikmah|hikmah kehidupan islam|cerita islami singkat|nilai moral islami|kisah sahabat nabi penuh hikmah|ceramah pendek islam adem|nasihat agama islam|akhlak mulia islam|kisah teladan islam|renungan islami' }}
+      FAKTA_SAINS_DISCOVER_QUERY: ${{ secrets.FAKTA_SAINS_DISCOVER_QUERY || vars.FAKTA_SAINS_DISCOVER_QUERY || 'fakta unik indonesia|sains ringan indonesia|pengetahuan populer|fakta psikologi ringan|fakta tubuh manusia|teknologi sederhana|fenomena alam dijelaskan|edukasi sains indonesia|fakta sejarah populer|ilmu pengetahuan umum' }}
+      MISTERI_TRENDING_DISCOVER_QUERY: ${{ secrets.MISTERI_TRENDING_DISCOVER_QUERY || vars.MISTERI_TRENDING_DISCOVER_QUERY || 'misteri sejarah indonesia|fenomena menarik dunia|fakta unik misterius|teka teki sejarah|tempat bersejarah misterius|fenomena alam unik|trending edukatif indonesia|kisah nyata penuh tanda tanya|misteri arkeologi|fakta menarik trending aman' }}
       AUTO_DISCOVER_USE_API: ${{ secrets.AUTO_DISCOVER_USE_API || 'true' }}
       AUTO_DISCOVER_CHANNEL_FIRST: ${{ secrets.AUTO_DISCOVER_CHANNEL_FIRST || 'true' }}
       AUTO_DISCOVER_QUERY_FIRST: ${{ secrets.AUTO_DISCOVER_QUERY_FIRST || 'false' }}
@@ -281,17 +301,22 @@ jobs:
       AUTO_DISCOVER_REQUIRE_TRANSCRIPT_OR_AUDIO: ${{ secrets.AUTO_DISCOVER_REQUIRE_TRANSCRIPT_OR_AUDIO || 'true' }}
       AUTO_DISCOVER_CHANNEL_IDS: ${{ secrets.AUTO_DISCOVER_CHANNEL_IDS }}
       AUTO_DISCOVER_CHANNEL_HANDLES: ${{ secrets.AUTO_DISCOVER_CHANNEL_HANDLES }}
-      RENUNGAN_CHANNEL_HANDLES: ${{ secrets.RENUNGAN_CHANNEL_HANDLES || secrets.AUTO_DISCOVER_CHANNEL_HANDLES }}
-      INSPIRATIF_CHANNEL_HANDLES: ${{ secrets.INSPIRATIF_CHANNEL_HANDLES }}
-      OPINI_CHANNEL_HANDLES: ${{ secrets.OPINI_CHANNEL_HANDLES }}
-      MINDSET_CHANNEL_HANDLES: ${{ secrets.MINDSET_CHANNEL_HANDLES }}
-      MIXED_BEST_CHANNEL_HANDLES: ${{ secrets.MIXED_BEST_CHANNEL_HANDLES }}
+      MOTIVASI_RENUNGAN_CHANNEL_HANDLES: ${{ secrets.MOTIVASI_RENUNGAN_CHANNEL_HANDLES || secrets.AUTO_DISCOVER_CHANNEL_HANDLES }}
+      SEJARAH_TOKOH_CHANNEL_HANDLES: ${{ secrets.SEJARAH_TOKOH_CHANNEL_HANDLES }}
+      KISAH_ISLAMI_CHANNEL_HANDLES: ${{ secrets.KISAH_ISLAMI_CHANNEL_HANDLES }}
+      FAKTA_SAINS_CHANNEL_HANDLES: ${{ secrets.FAKTA_SAINS_CHANNEL_HANDLES }}
+      MISTERI_TRENDING_CHANNEL_HANDLES: ${{ secrets.MISTERI_TRENDING_CHANNEL_HANDLES }}
       AUTO_DISCOVER_FRESH_UPLOAD_DAYS: ${{ secrets.AUTO_DISCOVER_FRESH_UPLOAD_DAYS || '1' }}
       AUTO_DISCOVER_CHANNEL_MAX_RESULTS: ${{ secrets.AUTO_DISCOVER_CHANNEL_MAX_RESULTS || '3' }}
       QUEUE_FAILOVER_ATTEMPTS: ${{ secrets.QUEUE_FAILOVER_ATTEMPTS || '3' }}
       AUTO_CLASSIFY_CONTENT_TYPE: ${{ secrets.AUTO_CLASSIFY_CONTENT_TYPE || 'true' }}
       LOW_CONFIDENCE_TO_REVIEW: ${{ secrets.LOW_CONFIDENCE_TO_REVIEW || 'true' }}
       MIN_CLASSIFICATION_CONFIDENCE: ${{ secrets.MIN_CLASSIFICATION_CONFIDENCE || '0.60' }}
+      SOURCE_REUSE_COOLDOWN_DAYS: ${{ secrets.SOURCE_REUSE_COOLDOWN_DAYS || '7' }}
+      PUBLISHED_SOURCE_LOOKBACK_DAYS: ${{ secrets.PUBLISHED_SOURCE_LOOKBACK_DAYS || '30' }}
+      DISCOVER_QUEUE_LOOKBACK_DAYS: ${{ secrets.DISCOVER_QUEUE_LOOKBACK_DAYS || '7' }}
+      TITLE_SIMILARITY_LOOKBACK_DAYS: ${{ secrets.TITLE_SIMILARITY_LOOKBACK_DAYS || '14' }}
+      ALLOW_MULTIPLE_CLIPS_PER_SOURCE: ${{ secrets.ALLOW_MULTIPLE_CLIPS_PER_SOURCE || 'false' }}
 
       YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY || secrets.YOUTUBE_DATA_API_KEY || secrets.GOOGLE_API_KEY }}
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
@@ -322,14 +347,23 @@ jobs:
       VIDEO_LOWER_THIRD_BRAND: "${{ secrets.VIDEO_LOWER_THIRD_BRAND || '@razqabermain | Sumber: YouTube' }}"
       VIDEO_FRAME_ASSET: ${{ secrets.VIDEO_FRAME_ASSET || 'assets/branding/frame-1080x1920.png' }}
       VIDEO_WATERMARK_ASSET: ${{ secrets.VIDEO_WATERMARK_ASSET || 'assets/branding/logo.png' }}
-      VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '27' }}
+      VIDEO_EFFECT_CRF: ${{ secrets.VIDEO_EFFECT_CRF || secrets.FINAL_RENDER_CRF || '22' }}
       VIDEO_EFFECT_PRESET: ${{ secrets.VIDEO_EFFECT_PRESET || 'veryfast' }}
       BACKGROUND_MUSIC_ENABLED: ${{ github.event.inputs.background_music_enabled || secrets.BACKGROUND_MUSIC_ENABLED || '1' }}
       BACKGROUND_MUSIC_FILE: ${{ github.event.inputs.background_music_file || secrets.BACKGROUND_MUSIC_FILE || 'auto' }}
       BACKGROUND_MUSIC_MAP_FILE: ${{ github.event.inputs.background_music_map_file || secrets.BACKGROUND_MUSIC_MAP_FILE || 'assets/music/music-map.json' }}
+      BACKGROUND_MUSIC_DEFAULT_VOLUME: ${{ secrets.BACKGROUND_MUSIC_DEFAULT_VOLUME || '0.06' }}
       BACKGROUND_MUSIC_VOLUME: ${{ github.event.inputs.background_music_volume || secrets.BACKGROUND_MUSIC_VOLUME || '0.08' }}
       BACKGROUND_MUSIC_ORIGINAL_VOLUME: ${{ secrets.BACKGROUND_MUSIC_ORIGINAL_VOLUME || '0.92' }}
-      THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || 'Ceramah | Kajian | Shorts' }}
+      BACKGROUND_MUSIC_DUCKING_ENABLED: ${{ secrets.BACKGROUND_MUSIC_DUCKING_ENABLED || 'true' }}
+      BACKGROUND_MUSIC_DUCKING_TARGET_DB: ${{ secrets.BACKGROUND_MUSIC_DUCKING_TARGET_DB || '-24' }}
+      BACKGROUND_MUSIC_FADE_IN_SECONDS: ${{ secrets.BACKGROUND_MUSIC_FADE_IN_SECONDS || '0.5' }}
+      BACKGROUND_MUSIC_FADE_OUT_SECONDS: ${{ secrets.BACKGROUND_MUSIC_FADE_OUT_SECONDS || '1.0' }}
+      THUMBNAIL_PILL_TEXT: ${{ secrets.THUMBNAIL_PILL_TEXT || '' }}
+      THUMBNAIL_TOP_OFFSET: ${{ secrets.THUMBNAIL_TOP_OFFSET || '110' }}
+      THUMBNAIL_BG_OPACITY: ${{ secrets.THUMBNAIL_BG_OPACITY || '0.42' }}
+      THUMBNAIL_FONT_SIZE_MAX: ${{ secrets.THUMBNAIL_FONT_SIZE_MAX || '92' }}
+      THUMBNAIL_FONT_SIZE_MIN: ${{ secrets.THUMBNAIL_FONT_SIZE_MIN || '44' }}
       OPENING_TITLE_ENABLED: ${{ secrets.OPENING_TITLE_ENABLED || 'true' }}
       OPENING_TITLE_SECONDS: ${{ secrets.OPENING_TITLE_SECONDS || '0.9' }}
       OPENING_TRANSITION_ENABLED: ${{ secrets.OPENING_TRANSITION_ENABLED || 'true' }}
@@ -355,6 +389,78 @@ jobs:
       OPENING_BRAND_FONT_SIZE: ${{ secrets.OPENING_BRAND_FONT_SIZE || '30' }}
       OPENING_TRANSITION_TYPE: ${{ secrets.OPENING_TRANSITION_TYPE || 'zoom_blur' }}
       OPENING_TRANSITION_SOUND_ENABLED: ${{ secrets.OPENING_TRANSITION_SOUND_ENABLED || 'false' }}
+      BUMPER_ENABLED: ${{ secrets.BUMPER_ENABLED || 'true' }}
+      BUMPER_ADAPTIVE_ENABLED: ${{ secrets.BUMPER_ADAPTIVE_ENABLED || 'true' }}
+      BUMPER_FALLBACK_ENABLED: ${{ secrets.BUMPER_FALLBACK_ENABLED || 'true' }}
+      BUMPER_SECONDS: ${{ secrets.BUMPER_SECONDS || '1.1' }}
+      BUMPER_MAX_SECONDS: ${{ secrets.BUMPER_MAX_SECONDS || '1.5' }}
+      BUMPER_POSITION: ${{ secrets.BUMPER_POSITION || 'after_opening_before_main' }}
+      BUMPER_STYLE: ${{ secrets.BUMPER_STYLE || 'adaptive_theme_stamp' }}
+      BUMPER_SERIES_LABEL: ${{ secrets.BUMPER_SERIES_LABEL || 'MENIT HIKMAH' }}
+      BUMPER_TAGLINE_MODE: ${{ secrets.BUMPER_TAGLINE_MODE || 'ai_generated' }}
+      BUMPER_TAGLINE_MAX_WORDS: ${{ secrets.BUMPER_TAGLINE_MAX_WORDS || '6' }}
+      BUMPER_DEFAULT_TAGLINE: ${{ secrets.BUMPER_DEFAULT_TAGLINE || '1 menit yang bikin mikir' }}
+      BUMPER_BG_DARKEN: ${{ secrets.BUMPER_BG_DARKEN || '0.65' }}
+      BUMPER_BLUR_STRENGTH: ${{ secrets.BUMPER_BLUR_STRENGTH || '36' }}
+      BUMPER_SHOW_LOGO: ${{ secrets.BUMPER_SHOW_LOGO || 'true' }}
+      BUMPER_LOGO_PATH: ${{ secrets.BUMPER_LOGO_PATH || 'assets/brand/logo.png' }}
+      BUMPER_LOGO_SIZE: ${{ secrets.BUMPER_LOGO_SIZE || '170' }}
+      BUMPER_SHOW_ICON: ${{ secrets.BUMPER_SHOW_ICON || 'true' }}
+      BUMPER_ICON_MODE: ${{ secrets.BUMPER_ICON_MODE || 'auto' }}
+      BUMPER_ICON_SIZE: ${{ secrets.BUMPER_ICON_SIZE || '42' }}
+      BUMPER_ACCENT_LINE_ENABLED: ${{ secrets.BUMPER_ACCENT_LINE_ENABLED || 'true' }}
+      BUMPER_ACCENT_LINE_WIDTH: ${{ secrets.BUMPER_ACCENT_LINE_WIDTH || '5' }}
+      BUMPER_ACCENT_LINE_COLOR: "${{ secrets.BUMPER_ACCENT_LINE_COLOR || '#F5C542' }}"
+      BUMPER_MOTION_MODE: ${{ secrets.BUMPER_MOTION_MODE || 'auto' }}
+      BUMPER_SOUND_ENABLED: ${{ secrets.BUMPER_SOUND_ENABLED || 'false' }}
+      FRAME_STYLE: ${{ secrets.FRAME_STYLE || 'auto' }}
+      FRAME_PRESET_DEFAULT: ${{ secrets.FRAME_PRESET_DEFAULT || 'premium_blur' }}
+      FRAME_COLOR_MODE: ${{ secrets.FRAME_COLOR_MODE || 'adaptive_neon' }}
+      FRAME_SHAPE_MODE: ${{ secrets.FRAME_SHAPE_MODE || 'cut_corner' }}
+      FRAME_USE_FULL_BORDER: ${{ secrets.FRAME_USE_FULL_BORDER || 'false' }}
+      FRAME_USE_PARTIAL_GLOW: ${{ secrets.FRAME_USE_PARTIAL_GLOW || 'true' }}
+      FRAME_GLOW_ENABLED: ${{ secrets.FRAME_GLOW_ENABLED || 'true' }}
+      FRAME_GLOW_BLUR: ${{ secrets.FRAME_GLOW_BLUR || '18' }}
+      FRAME_GLOW_OPACITY: ${{ secrets.FRAME_GLOW_OPACITY || '0.55' }}
+      FRAME_CORNER_STYLE: ${{ secrets.FRAME_CORNER_STYLE || 'cut' }}
+      FRAME_CUT_CORNER_SIZE: ${{ secrets.FRAME_CUT_CORNER_SIZE || '34' }}
+      FRAME_BORDER_WIDTH: ${{ secrets.FRAME_BORDER_WIDTH || '3' }}
+      FRAME_ACCENT_BAR_ENABLED: ${{ secrets.FRAME_ACCENT_BAR_ENABLED || 'true' }}
+      FRAME_ACCENT_BAR_POSITION: ${{ secrets.FRAME_ACCENT_BAR_POSITION || 'left' }}
+      FRAME_ACCENT_BAR_WIDTH: ${{ secrets.FRAME_ACCENT_BAR_WIDTH || '8' }}
+      FRAME_ACCENT_LABEL_ENABLED: ${{ secrets.FRAME_ACCENT_LABEL_ENABLED || 'true' }}
+      MOTIVASI_RENUNGAN_ACCENT_COLOR: "${{ secrets.MOTIVASI_RENUNGAN_ACCENT_COLOR || '#B6FF00' }}"
+      MOTIVASI_RENUNGAN_SECONDARY_COLOR: "${{ secrets.MOTIVASI_RENUNGAN_SECONDARY_COLOR || '#00E5FF' }}"
+      SEJARAH_TOKOH_ACCENT_COLOR: "${{ secrets.SEJARAH_TOKOH_ACCENT_COLOR || '#00E5FF' }}"
+      SEJARAH_TOKOH_SECONDARY_COLOR: "${{ secrets.SEJARAH_TOKOH_SECONDARY_COLOR || '#7C3AED' }}"
+      KISAH_ISLAMI_ACCENT_COLOR: "${{ secrets.KISAH_ISLAMI_ACCENT_COLOR || '#00E5FF' }}"
+      KISAH_ISLAMI_SECONDARY_COLOR: "${{ secrets.KISAH_ISLAMI_SECONDARY_COLOR || '#7C3AED' }}"
+      FAKTA_SAINS_ACCENT_COLOR: "${{ secrets.FAKTA_SAINS_ACCENT_COLOR || '#B6FF00' }}"
+      FAKTA_SAINS_SECONDARY_COLOR: "${{ secrets.FAKTA_SAINS_SECONDARY_COLOR || '#00E5FF' }}"
+      MISTERI_TRENDING_ACCENT_COLOR: "${{ secrets.MISTERI_TRENDING_ACCENT_COLOR || '#FF2BD6' }}"
+      MISTERI_TRENDING_SECONDARY_COLOR: "${{ secrets.MISTERI_TRENDING_SECONDARY_COLOR || '#00E5FF' }}"
+      FRAME_BACKGROUND_MODE: ${{ secrets.FRAME_BACKGROUND_MODE || 'blur_video' }}
+      FRAME_BACKGROUND_DARKEN: ${{ secrets.FRAME_BACKGROUND_DARKEN || '0.36' }}
+      FRAME_BACKGROUND_BLUR: ${{ secrets.FRAME_BACKGROUND_BLUR || '30' }}
+      FRAME_BACKGROUND_SCALE: ${{ secrets.FRAME_BACKGROUND_SCALE || '1.18' }}
+      FRAME_FOREGROUND_ENABLED: ${{ secrets.FRAME_FOREGROUND_ENABLED || 'true' }}
+      FRAME_FOREGROUND_MODE: ${{ secrets.FRAME_FOREGROUND_MODE || 'smart_crop' }}
+      FRAME_FOREGROUND_WIDTH_RATIO: ${{ secrets.FRAME_FOREGROUND_WIDTH_RATIO || '0.92' }}
+      FRAME_FOREGROUND_HEIGHT_RATIO: ${{ secrets.FRAME_FOREGROUND_HEIGHT_RATIO || '0.60' }}
+      FRAME_FOREGROUND_RADIUS: ${{ secrets.FRAME_FOREGROUND_RADIUS || '28' }}
+      FRAME_FOREGROUND_BORDER_WIDTH: ${{ secrets.FRAME_FOREGROUND_BORDER_WIDTH || '3' }}
+      FRAME_FOREGROUND_BORDER_COLOR: "${{ secrets.FRAME_FOREGROUND_BORDER_COLOR || '#F5C542' }}"
+      FRAME_ACCENT_LINE_ENABLED: ${{ secrets.FRAME_ACCENT_LINE_ENABLED || 'true' }}
+      FRAME_ACCENT_LINE_COLOR: "${{ secrets.FRAME_ACCENT_LINE_COLOR || '#F5C542' }}"
+      FRAME_LABEL_ENABLED: ${{ secrets.FRAME_LABEL_ENABLED || 'true' }}
+      FRAME_BRAND_ENABLED: ${{ secrets.FRAME_BRAND_ENABLED || 'true' }}
+      FRAME_SOURCE_ENABLED: ${{ secrets.FRAME_SOURCE_ENABLED || 'true' }}
+      MOTION_ENABLED: ${{ secrets.MOTION_ENABLED || 'true' }}
+      MOTION_OPENING_ZOOM_START: ${{ secrets.MOTION_OPENING_ZOOM_START || '1.00' }}
+      MOTION_OPENING_ZOOM_END: ${{ secrets.MOTION_OPENING_ZOOM_END || '1.04' }}
+      MOTION_MAIN_SUBTLE_ZOOM: ${{ secrets.MOTION_MAIN_SUBTLE_ZOOM || 'true' }}
+      MOTION_MAIN_ZOOM_RANGE: ${{ secrets.MOTION_MAIN_ZOOM_RANGE || '1.00,1.035' }}
+      MOTION_CUT_INTERVAL_SECONDS: ${{ secrets.MOTION_CUT_INTERVAL_SECONDS || '6' }}
       RENDER_COVER_FRAME_ENABLED: ${{ secrets.RENDER_COVER_FRAME_ENABLED || secrets.COVER_FRAME_ENABLED || 'true' }}
       RENDER_COVER_FRAME_SECONDS: ${{ secrets.RENDER_COVER_FRAME_SECONDS || secrets.COVER_FRAME_SECONDS || '0.8' }}
       COVER_FRAME_ENABLED: ${{ secrets.COVER_FRAME_ENABLED || 'true' }}
@@ -367,6 +473,11 @@ jobs:
       SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT || secrets.SUBTITLE_FONT_FAMILY || 'Poppins-Bold' }}
       SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Poppins-Bold,Poppins,Selawik Semibold,Selawik,DejaVu Sans' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
+      SUBTITLE_LINE_HEIGHT: ${{ secrets.SUBTITLE_LINE_HEIGHT || '1.12' }}
+      SUBTITLE_OUTLINE_WIDTH: ${{ secrets.SUBTITLE_OUTLINE_WIDTH || '5' }}
+      SUBTITLE_SHADOW_ENABLED: ${{ secrets.SUBTITLE_SHADOW_ENABLED || 'true' }}
+      SUBTITLE_SHADOW_BLUR: ${{ secrets.SUBTITLE_SHADOW_BLUR || '10' }}
+      SUBTITLE_HIGHLIGHT_MAX_WORDS: ${{ secrets.SUBTITLE_HIGHLIGHT_MAX_WORDS || '3' }}
       SCENE_MODE: ${{ github.event.inputs.scene_mode || secrets.SCENE_MODE || 'podcast' }}
       SMART_CROP_MODE: ${{ github.event.inputs.scene_mode || secrets.SMART_CROP_MODE || 'podcast' }}
       CLIP_COUNT: ${{ github.event.inputs.clip_count || secrets.CLIP_COUNT || '3' }}
@@ -390,8 +501,8 @@ jobs:
       THEME_OUTLINE_COLOR: "${{ secrets.THEME_OUTLINE_COLOR || '#000000' }}"
       FULLSCREEN_BLUR_STRENGTH: ${{ secrets.FULLSCREEN_BLUR_STRENGTH || secrets.THEME_BLUR_STRENGTH || '28' }}
       FACE_CROP_ENABLED: ${{ secrets.FACE_CROP_ENABLED || 'true' }}
-      FACE_CROP_ZOOM_MIN: ${{ secrets.FACE_CROP_ZOOM_MIN || '1.15' }}
-      FACE_CROP_ZOOM_MAX: ${{ secrets.FACE_CROP_ZOOM_MAX || '1.40' }}
+      FACE_CROP_ZOOM_MIN: ${{ secrets.FACE_CROP_ZOOM_MIN || '1.25' }}
+      FACE_CROP_ZOOM_MAX: ${{ secrets.FACE_CROP_ZOOM_MAX || '1.55' }}
       PODCAST_ACTIVE_SPEAKER_CROP: ${{ secrets.PODCAST_ACTIVE_SPEAKER_CROP || 'true' }}
       AVOID_WIDE_SHOT: ${{ secrets.AVOID_WIDE_SHOT || 'true' }}
       EDITORIAL_CLOSING_ENABLED: ${{ secrets.EDITORIAL_CLOSING_ENABLED || 'true' }}
@@ -1076,6 +1187,7 @@ jobs:
           MODE: ${{ github.event.inputs.mode || 'full' }}
           THEME: ${{ github.event.inputs.theme || 'auto' }}
           TARGET_COUNT: ${{ github.event.inputs.target_count || secrets.DAILY_TARGET_MAX || secrets.MAX_SCHEDULED_POSTS_PER_DAY || '5' }}
+          SLOT: ${{ github.event.inputs.slot || 'all' }}
           FORCE_PUBLISH_INPUT: ${{ github.event.inputs.force_publish || 'false' }}
           URL: ${{ github.event.inputs.url || '' }}
           RANGE: ${{ github.event.inputs.range || '' }}
@@ -1084,8 +1196,17 @@ jobs:
           if [ "$EVENT_NAME" = "schedule" ] && [ "$EVENT_SCHEDULE" = "0 22 * * *" ]; then
             MODE="discover"
           fi
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            case "$EVENT_SCHEDULE" in
+              "30 22 * * *") SLOT="1" ;;
+              "30 2 * * *") SLOT="2" ;;
+              "15 5 * * *") SLOT="3" ;;
+              "30 9 * * *") SLOT="4" ;;
+              "30 12 * * *") SLOT="5" ;;
+            esac
+          fi
 
-          args=(--theme "$THEME" --mode "$MODE" --target-count "$TARGET_COUNT")
+          args=(--theme "$THEME" --mode "$MODE" --target-count "$TARGET_COUNT" --slot "$SLOT")
 
           # Pakai --scheduled hanya saat trigger dari cron schedule.
           # Manual run tidak memakai --scheduled agar tidak kena guard already_published_today.
@@ -1117,7 +1238,11 @@ jobs:
           fi
 
           args+=(--quality "$VIDEO_QUALITY_PROFILE")
-          args+=(--clip-count "$TARGET_COUNT")
+          if [ "$SLOT" = "all" ]; then
+            args+=(--clip-count "$TARGET_COUNT")
+          else
+            args+=(--clip-count "1")
+          fi
           args+=(--ai-provider "$AI_PROVIDER")
           args+=(--use-frame "$VIDEO_FRAME_ENABLED")
           args+=(--use-filter "$VIDEO_FILTER_ENABLED")
@@ -1144,4 +1269,7 @@ jobs:
             data/generated/videos/**
             data/generated/thumbnails/**
             data/generated/metadata/**
+            generated/videos/**
+            generated/thumbnails/**
+            generated/metadata/**
             data/queues/**

@@ -125,6 +125,65 @@ export async function generateFrameQuoteText({ job, output, promptTemplate, aiPr
   return isStrongFrameQuote(generated) ? generated : fallback;
 }
 
+export async function generateBumperSpec({ job, output, promptTemplate, aiProvider = "" }) {
+  const contentType = normalizeContentType(output?.contentType || output?.content_type || job?.theme || promptTemplate?.content_type);
+  const openingHook = normalizePlainText(output?.openingHook || output?.coverHook || output?.screenHook || output?.thumbnailText || output?.title);
+  const fallback = fallbackBumperSpec(contentType, openingHook);
+
+  if (!boolValue(process.env.BUMPER_ADAPTIVE_ENABLED, true) || process.env.BUMPER_TAGLINE_MODE === "static") {
+    return fallback;
+  }
+
+  const prompt = [
+    "Kamu adalah editor Shorts/Reels Indonesia.",
+    "Buat tagline bumper singkat untuk seri MENIT HIKMAH berdasarkan isi clip ini.",
+    "",
+    "Input:",
+    `- content_type: ${contentType}`,
+    `- opening_hook: ${openingHook || "-"}`,
+    `- summary: ${normalizePlainText(output?.summary || output?.caption).slice(0, 700) || "-"}`,
+    `- transcript segment: ${normalizePlainText(output?.clipTranscript).slice(0, 1200) || "-"}`,
+    `- emotion: ${output?.mainEmotion || output?.emotion || "-"}`,
+    `- topic_category: ${output?.topicCategory || output?.selectedAngle || promptTemplate?.name || "-"}`,
+    `- reason_selected: ${normalizePlainText(output?.reason || output?.reason_selected).slice(0, 700) || "-"}`,
+    "",
+    "Aturan:",
+    "- Maksimal 6 kata.",
+    "- Bahasa Indonesia natural.",
+    "- Jangan mengulang opening_hook secara persis.",
+    "- Jangan clickbait menipu.",
+    "- Jangan terlalu formal.",
+    "- Harus sesuai isi clip.",
+    "- Harus bisa terbaca dalam 1 detik.",
+    "- Nada harus mengikuti isi clip:",
+    "  renungan = adem/reflektif",
+    "  inspiratif = hangat/relatable",
+    "  mindset = praktis/menampar elegan",
+    "  opini = tajam tapi aman",
+    "  humor_insight = lucu tapi tetap bermakna",
+    "  mixed_best = netral dan bikin mikir",
+    "",
+    "Output JSON:",
+    "{",
+    '  "bumper_tagline": "",',
+    '  "bumper_mood": "",',
+    '  "bumper_icon": "",',
+    '  "bumper_accent_color": "",',
+    '  "bumper_motion": "",',
+    '  "reason": "",',
+    '  "risk_notes": ""',
+    "}"
+  ].join("\n");
+
+  try {
+    const text = await generateAiText(prompt, { maxOutputTokens: 260, temperature: 0.45, provider: aiProvider });
+    const parsed = parseJsonObject(text);
+    return validateBumperSpec({ ...fallback, ...parsed }, contentType, openingHook);
+  } catch {
+    return fallback;
+  }
+}
+
 function hasStrategyCaption(output) {
   return Boolean(
     output?.caption
@@ -460,6 +519,98 @@ const BASE_HASHTAGS = [
 
 const HASHTAG_LIMIT = 8;
 
+const CONTENT_TYPE_ALIASES = {
+  renungan: "kisah_islami",
+  inspiratif: "motivasi_renungan",
+  mindset: "motivasi_renungan",
+  opini: "misteri_trending",
+  mixed_best: "misteri_trending"
+};
+
+const FALLBACK_BUMPER_TAGLINES = {
+  motivasi_renungan: "1 menit yang bikin mikir",
+  sejarah_tokoh: "kisah yang masih berbicara",
+  kisah_islami: "1 menit untuk mengingat",
+  fakta_sains: "fakta kecil, bikin mikir",
+  misteri_trending: "potongan yang bikin mikir",
+  humor_insight: "lucu, tapi ada isinya",
+  renungan: "1 menit untuk mengingat",
+  inspiratif: "cerita yang dekat dengan kita",
+  mindset: "singkat, padat, kepikiran",
+  opini: "lihat dulu konteksnya",
+  mixed_best: "potongan yang bikin mikir",
+  default: "1 menit yang bikin mikir"
+};
+
+const BUMPER_MOOD_BY_TYPE = {
+  motivasi_renungan: "reflective",
+  sejarah_tokoh: "serious",
+  kisah_islami: "calm",
+  fakta_sains: "energetic",
+  misteri_trending: "sharp",
+  humor_insight: "humorous",
+  renungan: "calm",
+  inspiratif: "warm",
+  mindset: "energetic",
+  opini: "sharp",
+  mixed_best: "reflective"
+};
+
+const BUMPER_ICON_BY_TYPE = {
+  motivasi_renungan: "lightbulb",
+  sejarah_tokoh: "book",
+  kisah_islami: "heart",
+  fakta_sains: "spark",
+  misteri_trending: "question",
+  humor_insight: "smile",
+  renungan: "lightbulb",
+  inspiratif: "heart",
+  mindset: "target",
+  opini: "quote",
+  mixed_best: "spark"
+};
+
+const BUMPER_ACCENT_BY_MOOD = {
+  calm: "#F5C542",
+  warm: "#E7C77A",
+  sharp: "#F5C542",
+  energetic: "#F5C542",
+  humorous: "#FFD166",
+  reflective: "#F5C542",
+  serious: "#D8B84A",
+  emotional: "#E7C77A"
+};
+
+const BUMPER_MOTION_BY_MOOD = {
+  calm: "soft_zoom",
+  reflective: "soft_zoom",
+  warm: "gentle_slide",
+  emotional: "gentle_slide",
+  sharp: "quick_push",
+  serious: "quick_push",
+  energetic: "quick_glitch_zoom",
+  humorous: "quick_pop"
+};
+
+const ALLOWED_BUMPER_MOODS = new Set([
+  "calm",
+  "warm",
+  "sharp",
+  "energetic",
+  "humorous",
+  "reflective",
+  "serious",
+  "emotional"
+]);
+
+const ALLOWED_BUMPER_MOTIONS = new Set([
+  "soft_zoom",
+  "gentle_slide",
+  "quick_push",
+  "quick_glitch_zoom",
+  "quick_pop"
+]);
+
 const INCOMPLETE_CAPTION_END_RE = /(?:\.{3}|…|[,;:]|\s[-–]|\b(?:dan|atau|karena|yang|untuk|dengan|ke|di|dari|agar|supaya|kalau|tapi|jadi|sehingga|lalu|terus|bahwa|seperti|saat|ketika|biar))$/i;
 
 const STOPWORDS = new Set([
@@ -563,6 +714,135 @@ function normalizeThumbnailText(value, fallback = "RAHASIA DI BALIK CERITA INI B
     .trim()
     .toUpperCase();
   return cleaned.split(/\s+/).slice(0, titleMaxWords()).join(" ") || fallback;
+}
+
+function fallbackBumperSpec(contentType, openingHook = "") {
+  const normalized = normalizeContentType(contentType);
+  const mood = defaultBumperMood(normalized);
+  return validateBumperSpec({
+    bumper_enabled: boolValue(process.env.BUMPER_ENABLED, true),
+    bumper_adaptive_enabled: boolValue(process.env.BUMPER_ADAPTIVE_ENABLED, true),
+    bumper_duration: clampNumber(process.env.BUMPER_SECONDS, 1.1, 0.8, 1.5),
+    bumper_series_label: process.env.BUMPER_SERIES_LABEL || "MENIT HIKMAH",
+    bumper_tagline: envTagline(normalized) || FALLBACK_BUMPER_TAGLINES[normalized] || FALLBACK_BUMPER_TAGLINES.default,
+    bumper_mood: mood,
+    bumper_icon: defaultBumperIcon(normalized),
+    bumper_accent_color: defaultBumperAccent(mood),
+    bumper_motion: defaultBumperMotion(mood),
+    bumper_style: process.env.BUMPER_STYLE || "adaptive_theme_stamp",
+    bumper_reason: "Fallback lokal berdasarkan content_type dan opening hook.",
+    bumper_risk_notes: "",
+    reason: "Fallback lokal berdasarkan content_type dan opening hook.",
+    risk_notes: ""
+  }, normalized, openingHook);
+}
+
+function validateBumperSpec(value, contentType, openingHook = "") {
+  const mood = ALLOWED_BUMPER_MOODS.has(String(value?.bumper_mood || "").toLowerCase())
+    ? String(value.bumper_mood).toLowerCase()
+    : defaultBumperMood(contentType);
+  const fallbackTagline = envTagline(contentType) || FALLBACK_BUMPER_TAGLINES[contentType] || FALLBACK_BUMPER_TAGLINES.default;
+  let tagline = normalizeTagline(value?.bumper_tagline || value?.tagline || fallbackTagline);
+  if (!tagline || sameText(tagline, openingHook)) tagline = normalizeTagline(fallbackTagline);
+  if (!tagline || sameText(tagline, openingHook)) tagline = FALLBACK_BUMPER_TAGLINES.default;
+  const accent = normalizeHexColor(value?.bumper_accent_color) || defaultBumperAccent(mood);
+  const motion = normalizeBumperMotion(value?.bumper_motion || defaultBumperMotion(mood));
+  return {
+    bumper_enabled: boolValue(process.env.BUMPER_ENABLED, true),
+    bumper_adaptive_enabled: boolValue(process.env.BUMPER_ADAPTIVE_ENABLED, true),
+    bumper_duration: clampNumber(process.env.BUMPER_SECONDS, 1.1, 0.8, clampNumber(process.env.BUMPER_MAX_SECONDS, 1.5, 0.8, 1.5)),
+    bumper_series_label: normalizePlainText(process.env.BUMPER_SERIES_LABEL || value?.bumper_series_label || "MENIT HIKMAH").toUpperCase() || "MENIT HIKMAH",
+    bumper_tagline: tagline,
+    bumper_mood: mood,
+    bumper_icon: normalizeBumperIcon(value?.bumper_icon) || defaultBumperIcon(contentType),
+    bumper_accent_color: accent,
+    bumper_motion: motion,
+    bumper_style: process.env.BUMPER_STYLE || value?.bumper_style || "adaptive_theme_stamp",
+    bumper_reason: normalizePlainText(value?.reason || value?.bumper_reason || "Bumper disesuaikan dengan isi clip."),
+    bumper_risk_notes: normalizePlainText(value?.risk_notes || value?.bumper_risk_notes || "")
+  };
+}
+
+function parseJsonObject(value) {
+  const text = String(value || "").trim();
+  if (!text) return {};
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) return {};
+  return JSON.parse(match[0]);
+}
+
+function normalizeContentType(value) {
+  const key = String(value || "").toLowerCase().trim();
+  return CONTENT_TYPE_ALIASES[key] || key || "mixed_best";
+}
+
+function envTagline(contentType) {
+  const key = String(contentType || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  return normalizePlainText(process.env[`${key}_BUMPER_TAGLINE`] || "");
+}
+
+function defaultBumperMood(contentType) {
+  return BUMPER_MOOD_BY_TYPE[contentType] || "reflective";
+}
+
+function defaultBumperIcon(contentType) {
+  return BUMPER_ICON_BY_TYPE[contentType] || "spark";
+}
+
+function defaultBumperAccent(mood) {
+  return BUMPER_ACCENT_BY_MOOD[mood] || "#F5C542";
+}
+
+function defaultBumperMotion(mood) {
+  return BUMPER_MOTION_BY_MOOD[mood] || "soft_zoom";
+}
+
+function normalizeBumperMotion(value) {
+  const motion = String(value || "").toLowerCase().trim();
+  return ALLOWED_BUMPER_MOTIONS.has(motion) ? motion : "";
+}
+
+function normalizeBumperIcon(value) {
+  const icon = String(value || "").toLowerCase().replace(/[^a-z0-9_ -]/g, "").trim();
+  return icon.split(/\s+/)[0] || "";
+}
+
+function normalizeTagline(value) {
+  const words = normalizePlainText(value)
+    .replace(/[.!?;:]+$/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, clampNumber(process.env.BUMPER_TAGLINE_MAX_WORDS, 6, 2, 8));
+  return words.join(" ");
+}
+
+function normalizePlainText(value) {
+  return String(value || "")
+    .replace(/[`"'*_#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sameText(left, right) {
+  const normalize = (value) => normalizePlainText(value).toLowerCase();
+  return Boolean(normalize(left) && normalize(left) === normalize(right));
+}
+
+function normalizeHexColor(value) {
+  const color = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : "";
+}
+
+function clampNumber(value, fallback, min, max) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, num));
+}
+
+function boolValue(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
 }
 
 function isStrongThumbnailText(value) {

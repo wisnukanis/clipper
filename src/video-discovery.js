@@ -22,22 +22,23 @@ const DEFAULT_QUERIES = [
 ];
 
 const FALLBACK_QUERIES = [
-  "ceramah islam terbaru hari ini",
-  "kajian sunnah terbaru indonesia",
-  "ceramah pendek ustadz indonesia",
-  "tausiyah singkat terbaru",
-  "renungan islam menyentuh hati",
-  "motivasi islami kehidupan",
-  "nasihat rumah tangga islam",
-  "kisah hijrah terbaru",
-  "podcast muslim inspiratif",
-  "hikmah hidup islam"
+  "motivasi hidup indonesia",
+  "kisah nyata inspiratif indonesia",
+  "sejarah indonesia singkat",
+  "tokoh dunia inspiratif",
+  "kisah islami penuh hikmah",
+  "fakta unik indonesia",
+  "sains ringan indonesia",
+  "pengetahuan populer indonesia",
+  "misteri sejarah indonesia",
+  "fenomena menarik dunia"
 ];
 
 const DEFAULT_CHANNEL_HANDLES = [];
 
-const PODCAST_TOPIC_RE = /ceramah|kajian|tausiyah|dakwah|ustad|ustadz|ustaz|islam|islami|muslim|sunnah|quran|alquran|hadis|hadits|renungan|hikmah|nasihat|motivasi|hijrah|taubat|sholat|doa|keluarga|rumah\s*tangga|podcast\s*muslim|yufid|rodja|adi\s*hidayat|khalid\s*basalamah|tafaqquh|teras\s*dakwah/i;
+const PODCAST_TOPIC_RE = /ceramah|kajian|tausiyah|dakwah|ustad|ustadz|ustaz|islam|islami|muslim|sunnah|quran|alquran|hadis|hadits|renungan|hikmah|nasihat|motivasi|hijrah|taubat|sholat|doa|keluarga|rumah\s*tangga|kisah|sejarah|tokoh|biografi|pahlawan|fakta|sains|ilmu\s*pengetahuan|edukasi|fenomena|misteri\s*sejarah|arkeologi|pengetahuan\s*populer|psikologi|teknologi|alam|inspiratif/i;
 const NON_PODCAST_NOISE_RE = /official\s*music\s*video|lirik|lyrics|trailer|teaser|sinetron|drama|full\s*movie|film\s*pendek|gameplay|live\s*stream\s*game|highlight\s*bola/i;
+const UNSAFE_TOPIC_RE = /politik\s*praktis|pemilu|pilpres|caleg|partai\s*politik|kampanye|capres|cawapres|dpr\b|sara|rasis|penistaan|adu\s*domba|provokasi\s*agama|horor\s*ekstrem|gore|sadis|pembunuhan\s*brutal|kekerasan\s*eksplisit|dewasa|seksual|porn|vulgar|gosip|perselingkuhan|skandal\s*artis|klaim\s*agama\s*sensitif/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 const DISCOVERY_CACHE_FILE = "discovery-cache.json";
 const AUTO_DISCOVERY_SELECTABLE_STATUSES = new Set(["queued", "failed", "retry"]);
@@ -243,6 +244,7 @@ function isTrustedPodcastChannelSource(item) {
 
 function isPodcastCandidate(item) {
   const text = candidateText(item);
+  if (UNSAFE_TOPIC_RE.test(text)) return false;
   if (NON_PODCAST_NOISE_RE.test(text) && !PODCAST_TOPIC_RE.test(text)) return false;
   return PODCAST_TOPIC_RE.test(text) || isTrustedPodcastChannelSource(item);
 }
@@ -271,6 +273,7 @@ function topicMultiplier(text) {
   const value = String(text || "").toLowerCase();
   if (/ceramah|kajian|tausiyah|dakwah|ustad|ustadz|ustaz|adi\s*hidayat|khalid\s*basalamah|yufid|rodja/.test(value)) return 1.42;
   if (/renungan|hikmah|nasihat|motivasi|hijrah|taubat|syukur|sabar|ikhlas/.test(value)) return 1.34;
+  if (/sejarah|tokoh|biografi|pahlawan|kisah\s*nyata|fakta|sains|pengetahuan|edukasi|fenomena|misteri\s*sejarah|arkeologi/.test(value)) return 1.28;
   if (/keluarga|rumah\s*tangga|anak|orang\s*tua|rezeki|kehidupan/.test(value)) return 1.2;
   if (/podcast\s*muslim|podcast\s*islami|kisah\s*inspiratif/.test(value)) return 1.14;
   return 1;
@@ -953,9 +956,10 @@ function fallbackPasses(baseQueries, baseOptions) {
   const freshUploadDays = numberEnv("AUTO_DISCOVER_FRESH_UPLOAD_DAYS", 1, 1, 30);
   const freshChannelMaxResults = numberEnv("AUTO_DISCOVER_CHANNEL_MAX_RESULTS", 3, 1, 25);
   const trendingEnabled = boolEnv("AUTO_DISCOVER_TRENDING_ENABLED", true);
+  const channelFirst = boolEnv("AUTO_DISCOVER_CHANNEL_FIRST", true);
 
   return [
-    {
+    ...(channelFirst ? [{
       mode: "fresh_channels",
       channelOnly: true,
       useApi: true,
@@ -967,7 +971,7 @@ function fallbackPasses(baseQueries, baseOptions) {
         minViews: 0,
         minViewsPerHour: 0
       }
-    },
+    }] : []),
     ...(useDailyApi && trendingEnabled ? [{
       mode: "today_trending",
       trending: true,
@@ -1072,8 +1076,8 @@ export async function discoverAndQueueVideos(options = {}) {
   const channelHandles = Array.isArray(options.channelHandles) && options.channelHandles.length
     ? uniqueList(options.channelHandles)
     : [];
-  const maxResults = numberEnv("AUTO_DISCOVER_MAX_RESULTS", 4, 1, 25);
-  const requestedAddCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 1, 1, 10);
+  const maxResults = numberEnv("AUTO_DISCOVER_MAX_RESULTS", 12, 1, 25);
+  const requestedAddCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 5, 1, 10);
   const addCount = ignoreDailyQueueLimit
     ? requestedAddCount
     : Math.min(requestedAddCount, remainingDailyQueueSlots);
@@ -1096,8 +1100,11 @@ export async function discoverAndQueueVideos(options = {}) {
     regionCode,
     relevanceLanguage
   };
-  const theme = options.theme && options.theme !== "auto" ? options.theme : "renungan";
+  const theme = options.theme && options.theme !== "auto" ? options.theme : "motivasi_renungan";
   const contentType = options.contentType || theme;
+  const slotIndex = Number(options.slotIndex || 0) || 0;
+  const slotTimeWib = String(options.slotTimeWib || "").trim();
+  const slotContentType = String(options.slotContentType || contentType).trim();
 
   const videos = queueMaintenance.videos;
   const history = await readJson("history", []);
@@ -1137,11 +1144,14 @@ export async function discoverAndQueueVideos(options = {}) {
       url,
       theme,
       content_type: contentType,
+      slot_index: slotIndex,
+      slot_time_wib: slotTimeWib,
+      slot_content_type: slotContentType,
       target_date: targetDate,
       priority: 10 + index,
       status: "queued",
       quality_profile: process.env.VIDEO_QUALITY_PROFILE || "standard",
-      clip_count: Number(process.env.CLIP_COUNT || 1),
+      clip_count: Number(process.env.CLIP_COUNT || options.clipCount || 1),
       subtitle_font: process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold",
       subtitle_font_size: Number(process.env.SUBTITLE_FONT_SIZE || 46),
       subtitle_margin_v: Number(process.env.SUBTITLE_MARGIN_V || 550),
@@ -1161,9 +1171,11 @@ export async function discoverAndQueueVideos(options = {}) {
       source_title: item.title || "",
       channel_title: item.channel || "",
       published_at_source: item.publishedAt || "",
+      source_duration_seconds: Number(item.duration || 0),
       discovery_source: item.discovery_source || "",
       discovery_query: item.discovery_query || "",
       discovered_query: item.discovery_query || "",
+      selected_channel_handles: channelHandles,
       classification_reason: `Auto discovery ${contentType}`,
       confidence_score: 1,
       publish_slot_wib: options.publishSlots?.[index] || "",
@@ -1194,6 +1206,9 @@ export async function discoverAndQueueVideos(options = {}) {
     skipped: false,
     added,
     content_type: contentType,
+    slot_index: slotIndex,
+    slot_time_wib: slotTimeWib,
+    slot_content_type: slotContentType,
     query: queries.join("|"),
     selected_channel_handles: channelHandles,
     found_count: totalRawCandidates,
@@ -1212,7 +1227,7 @@ const isCli = process.argv[1]
 
 if (isCli) {
   discoverAndQueueVideos({
-    theme: process.env.THEME || "renungan islam",
+    theme: process.env.THEME || "motivasi_renungan",
     targetDate: todayDate()
   })
     .then((result) => {
