@@ -91,6 +91,13 @@ def parse_float(value, default):
         return default
 
 
+def bool_env(name, default=False):
+    value = os.environ.get(name)
+    if value is None or str(value).strip() == "":
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def parse_keys(value):
     return [key.strip() for key in str(value or "").split(",") if key.strip()]
 
