@@ -1335,7 +1335,10 @@ function buildMetadata({
   const titleBest = output.bestTitle || output.title || thumbnail.text || "";
   const contextSafetyScore = output.contextSafetyScore || output.contextSafeScore || 0;
   const concreteHookScore = output.concreteHookScore || 0;
-  const thumbnailReadabilityScore = output.thumbnailReadabilityScore || 0;
+  const thumbnailReadabilityScore = Math.max(
+    Number(output.thumbnailReadabilityScore || 0),
+    estimateThumbnailReadability(output.openingHook || output.coverHook || output.screenHook || thumbnail.text || titleBest)
+  );
   const faceExpressionScore = output.faceExpressionScore || 0;
   const finalScore = output.finalScore || 0;
   const thumbnailIntro = output.thumbnailIntro || { applied: false };
@@ -1524,6 +1527,21 @@ function publishValidationBlockReason(metadata = {}) {
   if (!metadata.caption) return "caption kosong.";
   if (!Array.isArray(metadata.hashtags) || metadata.hashtags.length < 5) return "hashtag kurang dari 5.";
   return "";
+}
+
+function estimateThumbnailReadability(value = "") {
+  const words = String(value || "")
+    .replace(/[`"'*_#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return 5;
+  let score = 8;
+  if (words.length > 5) score -= Math.min(3, (words.length - 5) * 0.7);
+  if (words.some((word) => word.length > 14)) score -= 1;
+  if (/\b(rahasia|ternyata|jangan|kenapa|ini|bukan)\b/i.test(words.join(" "))) score += 0.8;
+  return Math.max(0, Math.min(10, Math.round(score * 10) / 10));
 }
 
 function firstCaptionSentence(value = "") {
