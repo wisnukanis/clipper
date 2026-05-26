@@ -786,18 +786,18 @@ async function discoverTrendingWithYoutubeApi({ knownIds, options }) {
     return null;
   }
 
-  const categoryIds = listEnv("AUTO_DISCOVER_TRENDING_CATEGORY_IDS", ["24", "22"])
+  const categoryIds = listEnv("AUTO_DISCOVER_TRENDING_CATEGORY_IDS", ["22", "all"])
     .map((item) => String(item || "").trim())
     .map((item) => item.toLowerCase() === "all" ? "" : item)
     .filter((item, index, list) => list.indexOf(item) === index);
-  const categories = categoryIds.length ? categoryIds : [""];
+  const categories = uniqueList([...(categoryIds.length ? categoryIds : []), ""]);
   let lastError = null;
 
   for (const credential of credentials) {
     const candidates = new Map();
-    try {
-      for (const categoryId of categories) {
-        const query = `trending:${options.regionCode}${categoryId ? `:${categoryId}` : ""}`;
+    for (const categoryId of categories) {
+      const query = `trending:${options.regionCode}${categoryId ? `:${categoryId}` : ":all"}`;
+      try {
         const data = await fetchYoutube("videos", {
           part: "snippet,statistics,contentDetails,status",
           chart: "mostPopular",
@@ -811,16 +811,18 @@ async function discoverTrendingWithYoutubeApi({ knownIds, options }) {
           const candidate = youtubeVideoResourceToCandidate(item, query);
           if (candidate) candidates.set(item.id, candidate);
         }
+      } catch (error) {
+        lastError = error;
+        if (error.quotaExceeded || isYoutubeQuotaError(error)) {
+          youtubeApiQuotaExhausted = true;
+          throw error;
+        }
+        const label = categoryId || "all";
+        console.warn(`YouTube trending category dilewati (${label}): ${error.message}`);
       }
-      return [...candidates.values()];
-    } catch (error) {
-      lastError = error;
-      if (error.quotaExceeded || isYoutubeQuotaError(error)) {
-        youtubeApiQuotaExhausted = true;
-        throw error;
-      }
-      console.warn(`YouTube trending discovery gagal, coba credential berikutnya: ${error.message}`);
     }
+    if (candidates.size) return [...candidates.values()];
+    console.warn("YouTube trending discovery tidak menemukan kandidat dengan credential ini; coba credential berikutnya.");
   }
 
   throw lastError || new Error("YouTube trending discovery gagal.");
