@@ -376,7 +376,7 @@ jobs:
       OPENING_TITLE_POSITION: ${{ secrets.OPENING_TITLE_POSITION || 'top' }}
       OPENING_TITLE_MAX_WORDS: ${{ secrets.OPENING_TITLE_MAX_WORDS || '5' }}
       OPENING_TITLE_MAX_LINES: ${{ secrets.OPENING_TITLE_MAX_LINES || '2' }}
-      OPENING_TITLE_FONT: ${{ secrets.OPENING_TITLE_FONT || 'Anton' }}
+      OPENING_TITLE_FONT: ${{ secrets.OPENING_TITLE_FONT || 'Selawik Bold' }}
       OPENING_TITLE_FONT_SIZE: ${{ secrets.OPENING_TITLE_FONT_SIZE || '92' }}
       OPENING_TITLE_COLOR: "${{ secrets.OPENING_TITLE_COLOR || '#FFFFFF' }}"
       OPENING_TITLE_HIGHLIGHT_COLOR: "${{ secrets.OPENING_TITLE_HIGHLIGHT_COLOR || '#F5C542' }}"
@@ -410,7 +410,7 @@ jobs:
       BUMPER_ICON_SIZE: ${{ secrets.BUMPER_ICON_SIZE || '42' }}
       BUMPER_ACCENT_LINE_ENABLED: ${{ secrets.BUMPER_ACCENT_LINE_ENABLED || 'true' }}
       BUMPER_ACCENT_LINE_WIDTH: ${{ secrets.BUMPER_ACCENT_LINE_WIDTH || '5' }}
-      BUMPER_ACCENT_LINE_COLOR: "${{ secrets.BUMPER_ACCENT_LINE_COLOR || '#F5C542' }}"
+      BUMPER_ACCENT_LINE_COLOR: "${{ secrets.BUMPER_ACCENT_LINE_COLOR || '#00E5FF' }}"
       BUMPER_MOTION_MODE: ${{ secrets.BUMPER_MOTION_MODE || 'auto' }}
       BUMPER_SOUND_ENABLED: ${{ secrets.BUMPER_SOUND_ENABLED || 'false' }}
       FRAME_STYLE: ${{ secrets.FRAME_STYLE || 'auto' }}
@@ -420,14 +420,14 @@ jobs:
       FRAME_USE_FULL_BORDER: ${{ secrets.FRAME_USE_FULL_BORDER || 'false' }}
       FRAME_USE_PARTIAL_GLOW: ${{ secrets.FRAME_USE_PARTIAL_GLOW || 'true' }}
       FRAME_GLOW_ENABLED: ${{ secrets.FRAME_GLOW_ENABLED || 'true' }}
-      FRAME_GLOW_BLUR: ${{ secrets.FRAME_GLOW_BLUR || '18' }}
-      FRAME_GLOW_OPACITY: ${{ secrets.FRAME_GLOW_OPACITY || '0.55' }}
+      FRAME_GLOW_BLUR: ${{ secrets.FRAME_GLOW_BLUR || '24' }}
+      FRAME_GLOW_OPACITY: ${{ secrets.FRAME_GLOW_OPACITY || '0.72' }}
       FRAME_CORNER_STYLE: ${{ secrets.FRAME_CORNER_STYLE || 'cut' }}
-      FRAME_CUT_CORNER_SIZE: ${{ secrets.FRAME_CUT_CORNER_SIZE || '34' }}
+      FRAME_CUT_CORNER_SIZE: ${{ secrets.FRAME_CUT_CORNER_SIZE || '48' }}
       FRAME_BORDER_WIDTH: ${{ secrets.FRAME_BORDER_WIDTH || '3' }}
       FRAME_ACCENT_BAR_ENABLED: ${{ secrets.FRAME_ACCENT_BAR_ENABLED || 'true' }}
       FRAME_ACCENT_BAR_POSITION: ${{ secrets.FRAME_ACCENT_BAR_POSITION || 'left' }}
-      FRAME_ACCENT_BAR_WIDTH: ${{ secrets.FRAME_ACCENT_BAR_WIDTH || '8' }}
+      FRAME_ACCENT_BAR_WIDTH: ${{ secrets.FRAME_ACCENT_BAR_WIDTH || '10' }}
       FRAME_ACCENT_LABEL_ENABLED: ${{ secrets.FRAME_ACCENT_LABEL_ENABLED || 'true' }}
       MOTIVASI_RENUNGAN_ACCENT_COLOR: "${{ secrets.MOTIVASI_RENUNGAN_ACCENT_COLOR || '#B6FF00' }}"
       MOTIVASI_RENUNGAN_SECONDARY_COLOR: "${{ secrets.MOTIVASI_RENUNGAN_SECONDARY_COLOR || '#00E5FF' }}"
@@ -451,7 +451,7 @@ jobs:
       FRAME_FOREGROUND_BORDER_WIDTH: ${{ secrets.FRAME_FOREGROUND_BORDER_WIDTH || '3' }}
       FRAME_FOREGROUND_BORDER_COLOR: "${{ secrets.FRAME_FOREGROUND_BORDER_COLOR || '#F5C542' }}"
       FRAME_ACCENT_LINE_ENABLED: ${{ secrets.FRAME_ACCENT_LINE_ENABLED || 'true' }}
-      FRAME_ACCENT_LINE_COLOR: "${{ secrets.FRAME_ACCENT_LINE_COLOR || '#F5C542' }}"
+      FRAME_ACCENT_LINE_COLOR: "${{ secrets.FRAME_ACCENT_LINE_COLOR || '#00E5FF' }}"
       FRAME_LABEL_ENABLED: ${{ secrets.FRAME_LABEL_ENABLED || 'true' }}
       FRAME_BRAND_ENABLED: ${{ secrets.FRAME_BRAND_ENABLED || 'true' }}
       FRAME_SOURCE_ENABLED: ${{ secrets.FRAME_SOURCE_ENABLED || 'true' }}
@@ -469,9 +469,11 @@ jobs:
       THUMBNAIL_INTRO_SECONDS: ${{ secrets.THUMBNAIL_INTRO_SECONDS || secrets.COVER_FRAME_SECONDS || '0.8' }}
       TITLE_POSITION: ${{ secrets.TITLE_POSITION || 'top' }}
       TITLE_MAX_WORDS: ${{ secrets.TITLE_MAX_WORDS || '5' }}
-      TITLE_FONT: ${{ secrets.TITLE_FONT || 'Anton' }}
-      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT || secrets.SUBTITLE_FONT_FAMILY || 'Poppins-Bold' }}
-      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Poppins-Bold,Poppins,Selawik Semibold,Selawik,DejaVu Sans' }}
+      TITLE_FONT: ${{ secrets.TITLE_FONT || 'Selawik Bold' }}
+      THUMBNAIL_FONT_FILE: ${{ secrets.THUMBNAIL_FONT_FILE || '/home/runner/.local/share/fonts/selawik/Selawik-Bold.ttf' }}
+      BUMPER_FONT_FILE: ${{ secrets.BUMPER_FONT_FILE || '/home/runner/.local/share/fonts/selawik/Selawik-Bold.ttf' }}
+      SUBTITLE_FONT_FAMILY: ${{ github.event.inputs.subtitle_font || secrets.SUBTITLE_FONT || secrets.SUBTITLE_FONT_FAMILY || 'Selawik Semibold' }}
+      SUBTITLE_FALLBACK_FONTS: ${{ secrets.SUBTITLE_FALLBACK_FONTS || 'Selawik Semibold,Selawik,Arial,DejaVu Sans' }}
       SUBTITLE_FONT_SIZE: ${{ github.event.inputs.subtitle_font_size || secrets.SUBTITLE_FONT_SIZE || '46' }}
       SUBTITLE_LINE_HEIGHT: ${{ secrets.SUBTITLE_LINE_HEIGHT || '1.12' }}
       SUBTITLE_OUTLINE_WIDTH: ${{ secrets.SUBTITLE_OUTLINE_WIDTH || '5' }}
@@ -1110,6 +1112,16 @@ jobs:
           echo "VIDEO_FILTER_ENABLED=$VIDEO_FILTER_ENABLED"
           echo "VIDEO_WATERMARK_ENABLED=$VIDEO_WATERMARK_ENABLED"
           echo "VIDEO_LOWER_THIRD_ENABLED=$VIDEO_LOWER_THIRD_ENABLED"
+          echo "FRAME_STYLE=$FRAME_STYLE"
+          echo "FRAME_COLOR_MODE=$FRAME_COLOR_MODE"
+          echo "FRAME_SHAPE_MODE=$FRAME_SHAPE_MODE"
+          echo "FRAME_USE_FULL_BORDER=$FRAME_USE_FULL_BORDER"
+          echo "FRAME_USE_PARTIAL_GLOW=$FRAME_USE_PARTIAL_GLOW"
+          echo "OPENING_TRANSITION_TYPE=$OPENING_TRANSITION_TYPE"
+          echo "BUMPER_ENABLED=$BUMPER_ENABLED"
+          echo "TITLE_FONT=$TITLE_FONT"
+          echo "THUMBNAIL_FONT_FILE=${THUMBNAIL_FONT_FILE:-not_set}"
+          echo "BUMPER_FONT_FILE=${BUMPER_FONT_FILE:-not_set}"
           echo "SUBTITLE_FONT_FAMILY=$SUBTITLE_FONT_FAMILY"
           echo "SUBTITLE_FONT_SIZE=$SUBTITLE_FONT_SIZE"
           echo "SUBTITLE_MARGIN_V=$SUBTITLE_MARGIN_V"

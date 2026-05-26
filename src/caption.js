@@ -746,7 +746,7 @@ function fallbackBumperSpec(contentType, openingHook = "") {
     bumper_tagline: envTagline(normalized) || FALLBACK_BUMPER_TAGLINES[normalized] || FALLBACK_BUMPER_TAGLINES.default,
     bumper_mood: mood,
     bumper_icon: defaultBumperIcon(normalized),
-    bumper_accent_color: defaultBumperAccent(mood),
+    bumper_accent_color: defaultBumperAccent(mood, normalized),
     bumper_motion: defaultBumperMotion(mood),
     bumper_style: process.env.BUMPER_STYLE || "adaptive_theme_stamp",
     bumper_reason: "Fallback lokal berdasarkan content_type dan opening hook.",
@@ -764,7 +764,7 @@ function validateBumperSpec(value, contentType, openingHook = "") {
   let tagline = normalizeTagline(value?.bumper_tagline || value?.tagline || fallbackTagline);
   if (!tagline || sameText(tagline, openingHook)) tagline = normalizeTagline(fallbackTagline);
   if (!tagline || sameText(tagline, openingHook)) tagline = FALLBACK_BUMPER_TAGLINES.default;
-  const accent = normalizeHexColor(value?.bumper_accent_color) || defaultBumperAccent(mood);
+  const accent = normalizeHexColor(value?.bumper_accent_color) || defaultBumperAccent(mood, contentType);
   const motion = normalizeBumperMotion(value?.bumper_motion || defaultBumperMotion(mood));
   return {
     bumper_enabled: boolValue(process.env.BUMPER_ENABLED, true),
@@ -808,7 +808,18 @@ function defaultBumperIcon(contentType) {
   return BUMPER_ICON_BY_TYPE[contentType] || "spark";
 }
 
-function defaultBumperAccent(mood) {
+function defaultBumperAccent(mood, contentType = "") {
+  if (String(process.env.FRAME_COLOR_MODE || "").toLowerCase() === "adaptive_neon") {
+    const key = String(contentType || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+    const legacy = {
+      renungan: "KISAH_ISLAMI",
+      inspiratif: "MOTIVASI_RENUNGAN",
+      mindset: "MOTIVASI_RENUNGAN",
+      opini: "MISTERI_TRENDING",
+      mixed_best: "MISTERI_TRENDING"
+    }[String(contentType || "").toLowerCase()] || key;
+    return normalizeHexColor(process.env[`${key}_ACCENT_COLOR`] || process.env[`${legacy}_ACCENT_COLOR`] || "") || "#00E5FF";
+  }
   return BUMPER_ACCENT_BY_MOOD[mood] || "#F5C542";
 }
 

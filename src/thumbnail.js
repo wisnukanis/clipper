@@ -235,6 +235,7 @@ async function renderBumperClip({ bumperPath, thumbnailPath, seconds, bumper = {
   const seriesLabel = normalizeSeriesLabel(bumper?.bumper_series_label || process.env.BUMPER_SERIES_LABEL || "MENIT HIKMAH");
   const tagline = normalizeBumperTagline(bumper?.bumper_tagline || process.env.BUMPER_DEFAULT_TAGLINE || "1 menit yang bikin mikir");
   const accent = hexToDrawColor(bumper?.bumper_accent_color || process.env.BUMPER_ACCENT_LINE_COLOR || "#F5C542");
+  const secondary = hexToDrawColor(process.env.FRAME_SECONDARY_COLOR || process.env.KISAH_ISLAMI_SECONDARY_COLOR || process.env.MIXED_BEST_SECONDARY_COLOR || "#B6FF00");
   const darken = clampOpacity(process.env.BUMPER_BG_DARKEN, 0.65);
   const blur = Math.round(clampSeconds(process.env.BUMPER_BLUR_STRENGTH, 36, 8, 60));
   const labelSize = Math.round(clampSeconds(process.env.BUMPER_SERIES_LABEL_FONT_SIZE, 76, 44, 110));
@@ -245,17 +246,20 @@ async function renderBumperClip({ bumperPath, thumbnailPath, seconds, bumper = {
   const lines = seriesLabel.split(/\s+/).length >= 2 ? ["MENIT", "HIKMAH"] : [seriesLabel];
   const textFilters = [
     ...lines.map((line, index) => (
-      `drawtext=${fontOption}:text='${escapeDrawtext(line)}':fontcolor=white:fontsize=${labelSize}:bordercolor=black@0.85:borderw=4:x=(w-text_w)/2:y=${680 + (index * (labelSize + 10))}`
+      `drawtext=${fontOption}:text='${escapeDrawtext(line)}':fontcolor=${index === 0 ? "white" : accent}:fontsize=${labelSize}:bordercolor=black@0.85:borderw=4:x=(w-text_w)/2:y=${680 + (index * (labelSize + 10))}`
     )),
     `drawbox=x=(w-520)/2:y=${910 + (lines.length - 1) * 24}:w=520:h=${lineWidth}:color=${accent}@0.95:t=fill`,
+    `drawbox=x=(w-360)/2:y=${928 + (lines.length - 1) * 24}:w=360:h=3:color=${secondary}@0.82:t=fill`,
     `drawtext=${fontOption}:text='${escapeDrawtext(tagline)}':fontcolor=white@0.92:fontsize=${taglineSize}:bordercolor=black@0.72:borderw=2:x=(w-text_w)/2:y=${955 + (lines.length - 1) * 24}`
   ];
+  const fadeOutStart = Math.max(0, Number(seconds || 1.1) - 0.16).toFixed(3);
   const filters = [
     "scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos",
     "crop=1080:1920",
     `boxblur=${blur}:1`,
     `eq=brightness=-${darken}:contrast=1.08:saturation=1.1`,
     zoom,
+    `fade=t=in:st=0:d=0.10,fade=t=out:st=${fadeOutStart}:d=0.16`,
     "format=yuv420p",
     ...textFilters
   ].filter(Boolean).join(",");
@@ -492,9 +496,6 @@ function estimateTextBlockHeight(lineCount, fontSize) {
 }
 
 async function resolveFontOption() {
-  if (process.env.TITLE_FONT) {
-    return `font='${escapeDrawtext(process.env.TITLE_FONT)}'`;
-  }
   const home = process.env.HOME || "";
   const candidates = [
     process.env.THUMBNAIL_FONT_FILE,
@@ -518,6 +519,9 @@ async function resolveFontOption() {
     }
   }
 
+  if (process.env.TITLE_FONT) {
+    return `font='${escapeDrawtext(process.env.TITLE_FONT)}'`;
+  }
   return "font='Selawik Bold'";
 }
 

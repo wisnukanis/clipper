@@ -235,10 +235,10 @@ function buildFilterGraph({ useFrame, useFilter, useWatermark, useLowerThird, pr
     if (frame.usePartialGlow) {
       const accent = drawColor(frame.accentColor);
       const secondary = drawColor(frame.secondaryColor);
-      const corner = Math.round(numberEnv("FRAME_CUT_CORNER_SIZE", 34, 18, 72));
-      const long = Math.min(260, Math.round(frame.fgW * 0.32));
+      const corner = Math.round(numberEnv("FRAME_CUT_CORNER_SIZE", 48, 18, 86));
+      const long = Math.min(390, Math.round(frame.fgW * 0.44));
       const bw = Math.max(2, frame.borderWidth || 3);
-      const alpha = frame.glowEnabled ? frame.glowOpacity : 0.35;
+      const alpha = frame.glowEnabled ? Math.max(frame.glowOpacity, 0.68) : 0.35;
       filters.push(
         `[${current}]drawbox=x=${frame.x - 2}:y=${frame.y - 2}:w=${long}:h=${bw + 2}:color=${accent}@${alpha}:t=fill[glow1]`,
         `[glow1]drawbox=x=${frame.x - 2}:y=${frame.y - 2}:w=${bw + 2}:h=${long}:color=${accent}@${alpha}:t=fill[glow2]`,
@@ -260,11 +260,11 @@ function buildFilterGraph({ useFrame, useFilter, useWatermark, useLowerThird, pr
       current = "barred";
     }
     if (frame.labelEnabled) {
-      filters.push(`[${current}]drawtext=font='Arial':text='${escapeDrawtext(frame.label)}':fontcolor=${drawColor(frame.accentColor)}:fontsize=28:bordercolor=black@0.78:borderw=2:x=${frame.x}:y=${Math.max(88, frame.y - 48)}[labeled]`);
+      filters.push(`[${current}]drawtext=font='Arial':text='${escapeDrawtext(frame.label)}':fontcolor=${drawColor(frame.accentColor)}:fontsize=34:bordercolor=black@0.82:borderw=2:x=${frame.x}:y=${Math.max(88, frame.y - 56)}[labeled]`);
       current = "labeled";
     }
     if (frame.accentEnabled) {
-      filters.push(`[${current}]drawbox=x=${frame.x}:y=${Math.max(80, frame.y - 28)}:w=${Math.round(frame.fgW * 0.42)}:h=${frame.accentWidth}:color=${drawColor(frame.accentColor)}@0.95:t=fill[accented]`);
+      filters.push(`[${current}]drawbox=x=${frame.x}:y=${Math.max(80, frame.y - 28)}:w=${Math.round(frame.fgW * 0.58)}:h=${frame.accentWidth}:color=${drawColor(frame.accentColor)}@0.95:t=fill[accented]`);
       current = "accented";
     }
   } else if (useFrame) {

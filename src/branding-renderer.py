@@ -11,6 +11,8 @@ CANVAS_W = 1080
 CANVAS_H = 1920
 GOLD = (255, 190, 18)
 DEEP_GOLD = (238, 130, 0)
+NEON_CYAN = (0, 229, 255)
+NEON_LIME = (182, 255, 0)
 WHITE = (248, 248, 244)
 BLACK = (3, 3, 3)
 
@@ -37,6 +39,36 @@ def clean_quote(value):
     text = text.strip(" \"'.,")
     words = text.split()
     return " ".join(words[:11]).upper() or "GUE BARU SADAR SETELAH KEHILANGAN"
+
+
+def hex_to_rgb(value, fallback):
+    text = str(value or "").strip()
+    if re.match(r"^#[0-9a-fA-F]{6}$", text):
+        return tuple(int(text[i:i + 2], 16) for i in (1, 3, 5))
+    return fallback
+
+
+def adaptive_visuals_enabled():
+    return str(os.environ.get("FRAME_COLOR_MODE", "")).strip().lower() == "adaptive_neon"
+
+
+def adaptive_accent():
+    return hex_to_rgb(
+        os.environ.get("FRAME_ACCENT_LINE_COLOR")
+        or os.environ.get("KISAH_ISLAMI_ACCENT_COLOR")
+        or os.environ.get("RENUNGAN_ACCENT_COLOR")
+        or "#00E5FF",
+        NEON_CYAN,
+    )
+
+
+def adaptive_secondary():
+    return hex_to_rgb(
+        os.environ.get("KISAH_ISLAMI_SECONDARY_COLOR")
+        or os.environ.get("RENUNGAN_SECONDARY_COLOR")
+        or "#B6FF00",
+        NEON_LIME,
+    )
 
 
 def font_candidates():
@@ -169,27 +201,37 @@ def add_glow(base, rect, radius, color=GOLD, strength=150):
     base.alpha_composite(glow)
 
 
-def draw_panel(draw, rect, radius, fill_alpha=232):
-    draw.rounded_rectangle(rect, radius=radius, fill=(*BLACK, fill_alpha), outline=(*GOLD, 245), width=4)
+def draw_panel(draw, rect, radius, fill_alpha=232, accent=GOLD):
+    draw.rounded_rectangle(rect, radius=radius, fill=(*BLACK, fill_alpha), outline=(*accent, 245), width=4)
     inset = 16
     inner = (rect[0] + inset, rect[1] + inset, rect[2] - inset, rect[3] - inset)
-    draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(*GOLD, 130), width=2)
+    draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(*accent, 130), width=2)
 
 
-def draw_transparent_panel(draw, rect, radius, fill_alpha=142):
-    draw.rounded_rectangle(rect, radius=radius, fill=(*BLACK, fill_alpha), outline=(*GOLD, 225), width=4)
+def draw_transparent_panel(draw, rect, radius, fill_alpha=142, accent=GOLD, secondary=DEEP_GOLD):
+    draw.rounded_rectangle(rect, radius=radius, fill=(*BLACK, fill_alpha), outline=(*accent, 225), width=4)
     inset = 16
     inner = (rect[0] + inset, rect[1] + inset, rect[2] - inset, rect[3] - inset)
-    draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(255, 255, 255, 90), width=2)
+    draw.rounded_rectangle(inner, radius=max(8, radius - inset), outline=(*secondary, 105), width=2)
 
 
-def draw_highlight(base, rect):
+def draw_highlight(base, rect, accent=GOLD, secondary=DEEP_GOLD):
     shine = Image.new("RGBA", base.size, (0, 0, 0, 0))
     sd = ImageDraw.Draw(shine)
     cx = (rect[0] + rect[2]) // 2
-    sd.rounded_rectangle((cx - 180, rect[1] - 5, cx + 180, rect[1] + 6), radius=6, fill=(255, 220, 120, 150))
-    sd.rounded_rectangle((cx - 190, rect[3] - 5, cx + 190, rect[3] + 6), radius=6, fill=(255, 184, 31, 110))
+    sd.rounded_rectangle((cx - 230, rect[1] - 5, cx + 230, rect[1] + 7), radius=6, fill=(*accent, 165))
+    sd.rounded_rectangle((cx - 250, rect[3] - 6, cx + 250, rect[3] + 7), radius=6, fill=(*secondary, 135))
     base.alpha_composite(shine.filter(ImageFilter.GaussianBlur(5)))
+
+
+def draw_neon_corners(draw, rect, accent, secondary):
+    x1, y1, x2, y2 = rect
+    size = 70
+    width = 7
+    draw.line((x1 - 3, y1, x1 + size, y1), fill=(*accent, 245), width=width)
+    draw.line((x1, y1 - 3, x1, y1 + size), fill=(*accent, 245), width=width)
+    draw.line((x2 - size, y2, x2 + 3, y2), fill=(*secondary, 230), width=width)
+    draw.line((x2, y2 - size, x2, y2 + 3), fill=(*secondary, 230), width=width)
 
 
 def add_vignette(image):
@@ -225,23 +267,28 @@ def save_jpeg_under_limit(image, output):
 
 def render_thumbnail(args):
     title = clean_title(args.title)
+    adaptive = adaptive_visuals_enabled()
+    accent = adaptive_accent() if adaptive else GOLD
+    secondary = adaptive_secondary() if adaptive else DEEP_GOLD
     base = Image.open(args.input).convert("RGB").resize((CANVAS_W, CANVAS_H), Image.Resampling.LANCZOS)
-    base = ImageEnhance.Contrast(base).enhance(1.08)
-    base = ImageEnhance.Color(base).enhance(1.10)
+    base = ImageEnhance.Contrast(base).enhance(1.12 if adaptive else 1.08)
+    base = ImageEnhance.Color(base).enhance(1.16 if adaptive else 1.10)
     canvas = base.convert("RGBA")
     add_vignette(canvas)
     draw = ImageDraw.Draw(canvas)
 
-    rect = (130, 880, 950, 1174)
-    add_glow(canvas, rect, 42, GOLD, 135)
-    draw_transparent_panel(draw, rect, 42, 142)
-    draw_highlight(canvas, rect)
+    rect = (105, 126, 975, 438) if adaptive else (130, 880, 950, 1174)
+    add_glow(canvas, rect, 42, accent, 170 if adaptive else 135)
+    draw_transparent_panel(draw, rect, 34 if adaptive else 42, 168 if adaptive else 142, accent, secondary)
+    draw_highlight(canvas, rect, accent, secondary)
+    if adaptive:
+        draw_neon_corners(draw, rect, accent, secondary)
 
     max_text_width = (rect[2] - rect[0]) - 118
     lines, font, size, line_gap, heights, total_h = fit_title_layout(draw, title, rect, max_text_width)
     y = rect[1] + (rect[3] - rect[1] - total_h) // 2 - 4
     for index, line in enumerate(lines):
-        color = WHITE if index == 0 else GOLD
+        color = WHITE if index == 0 else accent
         width, height = text_size(draw, line, font, 4)
         draw.text(
             (max(rect[0] + 54, min((CANVAS_W - width) / 2, rect[2] - 54 - width)), y),
@@ -256,8 +303,9 @@ def render_thumbnail(args):
     pill = clean_text(args.pill or os.environ.get("THUMBNAIL_PILL_TEXT"), "Podcast | Highlight | Viral")
     pill_font = load_font(29)
     pill_w, pill_h = text_size(draw, pill, pill_font, 1)
-    pill_rect = (150, 1202, min(930, 150 + pill_w + 42), 1256)
-    draw.rounded_rectangle(pill_rect, radius=13, outline=(255, 255, 255, 120), width=2)
+    pill_y = rect[3] + 28
+    pill_rect = (126 if adaptive else 150, pill_y, min(954 if adaptive else 930, (126 if adaptive else 150) + pill_w + 42), pill_y + 54)
+    draw.rounded_rectangle(pill_rect, radius=13, fill=(*BLACK, 120), outline=(*secondary, 170), width=2)
     draw.text((pill_rect[0] + 21, pill_rect[1] + 10), pill, font=pill_font, fill=(245, 245, 245), stroke_width=2, stroke_fill=(0, 0, 0, 210))
 
     save_jpeg_under_limit(canvas, args.output)
@@ -266,13 +314,18 @@ def render_thumbnail(args):
 def render_lower_third(args):
     quote = clean_quote(args.quote)
     brand = normalize_brand(args.brand or os.environ.get("VIDEO_LOWER_THIRD_BRAND"))
+    adaptive = adaptive_visuals_enabled()
+    accent = adaptive_accent() if adaptive else GOLD
+    secondary = adaptive_secondary() if adaptive else DEEP_GOLD
     canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
     rect = (116, 1564, 964, 1742)
-    add_glow(canvas, rect, 26, GOLD, 120)
-    draw.rounded_rectangle(rect, radius=26, fill=(0, 0, 0, 150), outline=(*GOLD, 180), width=2)
-    draw.rounded_rectangle((rect[0] + 14, rect[1] + 14, rect[2] - 14, rect[3] - 14), radius=18, outline=(255, 255, 255, 45), width=1)
+    add_glow(canvas, rect, 26, accent, 145 if adaptive else 120)
+    draw.rounded_rectangle(rect, radius=24, fill=(0, 0, 0, 150), outline=(*accent, 190), width=2)
+    draw.rounded_rectangle((rect[0] + 14, rect[1] + 14, rect[2] - 14, rect[3] - 14), radius=16, outline=(*secondary, 70), width=1)
+    if adaptive:
+        draw_neon_corners(draw, rect, accent, secondary)
 
     max_width = rect[2] - rect[0] - 90
     quote_size = 43
@@ -291,8 +344,8 @@ def render_lower_third(args):
 
     brand_font = load_font(27)
     brand_w, _ = text_size(draw, brand, brand_font, 1)
-    draw.text(((CANVAS_W - brand_w) / 2, rect[3] - 45), brand, font=brand_font, fill=(215, 183, 122, 220), stroke_width=1, stroke_fill=(0, 0, 0, 190))
-    draw.rounded_rectangle((180, rect[3] - 9, 900, rect[3] - 3), radius=4, fill=(255, 190, 18, 160))
+    draw.text(((CANVAS_W - brand_w) / 2, rect[3] - 45), brand, font=brand_font, fill=(*secondary, 220), stroke_width=1, stroke_fill=(0, 0, 0, 190))
+    draw.rounded_rectangle((180, rect[3] - 9, 900, rect[3] - 3), radius=4, fill=(*accent, 175))
     canvas.save(args.output, "PNG")
 
 
