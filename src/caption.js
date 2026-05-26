@@ -49,6 +49,9 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
   const context = await readClipContext(clipperRoot, output);
   const dynamicHashtags = buildDynamicHashtags({ job, output, promptTemplate, context });
   const fallback = fallbackCaption(output, promptTemplate, dynamicHashtags);
+  if (!shouldUsePostProcessAi("CAPTION_REWRITE")) {
+    return ensureCaptionHashtags(fallback, output, promptTemplate, dynamicHashtags, fallback);
+  }
   const prompt = [
     "Buat caption Instagram Reels berbahasa Indonesia.",
     "Aturan:",
@@ -80,6 +83,9 @@ export async function generateCaption({ job, output, promptTemplate, clipperRoot
 export async function generateThumbnailText({ job, output, promptTemplate, aiProvider = "" }) {
   const existing = output.thumbnailText ? normalizeThumbnailText(output.thumbnailText, "") : "";
   const fallback = fallbackThumbnailText(output);
+  if (!shouldUsePostProcessAi("THUMBNAIL_REWRITE")) {
+    return fallback;
+  }
   const prompt = [
     "Buat teks thumbnail Reels dalam Bahasa Indonesia.",
     `Aturan: maksimal ${titleMaxWords()} kata, huruf besar, kuat, universal, mudah dibaca, tidak clickbait menyesatkan.`,
@@ -105,6 +111,9 @@ export async function generateThumbnailText({ job, output, promptTemplate, aiPro
 
 export async function generateFrameQuoteText({ job, output, promptTemplate, aiProvider = "" }) {
   const fallback = fallbackFrameQuote(output);
+  if (!shouldUsePostProcessAi("FRAME_QUOTE")) {
+    return fallback;
+  }
   const prompt = [
     "Buat quote pendek untuk lower-third video Reels dalam Bahasa Indonesia.",
     "Aturan: 5 sampai 11 kata, terasa seperti kalimat paling kuat dari clip, natural, rapi, dan mudah dibaca.",
@@ -130,7 +139,9 @@ export async function generateBumperSpec({ job, output, promptTemplate, aiProvid
   const openingHook = normalizePlainText(output?.openingHook || output?.coverHook || output?.screenHook || output?.thumbnailText || output?.title);
   const fallback = fallbackBumperSpec(contentType, openingHook);
 
-  if (!boolValue(process.env.BUMPER_ADAPTIVE_ENABLED, true) || process.env.BUMPER_TAGLINE_MODE === "static") {
+  if (!boolValue(process.env.BUMPER_ADAPTIVE_ENABLED, true)
+    || process.env.BUMPER_TAGLINE_MODE === "static"
+    || !shouldUsePostProcessAi("BUMPER_TAGLINE")) {
     return fallback;
   }
 
@@ -182,6 +193,14 @@ export async function generateBumperSpec({ job, output, promptTemplate, aiProvid
   } catch {
     return fallback;
   }
+}
+
+function shouldUsePostProcessAi(feature) {
+  const direct = process.env[`AI_${feature}_ENABLED`];
+  if (direct !== undefined && direct !== "") return boolValue(direct, false);
+  if (boolValue(process.env.AI_POSTPROCESS_TEXT_ENABLED, true) === false) return false;
+  if (boolValue(process.env.AI_COST_SAVER_ENABLED, false)) return false;
+  return true;
 }
 
 function hasStrategyCaption(output) {
