@@ -1204,6 +1204,7 @@ jobs:
             --fragment-retries "$YTDLP_FRAGMENT_RETRIES" \
             --retry-sleep "$YTDLP_RETRY_SLEEP" \
             --socket-timeout "$YTDLP_SOCKET_TIMEOUT" \
+            --ignore-no-formats-error \
             --skip-download \
             --print title \
             "$TEST_URL" 2>&1)"
@@ -1223,6 +1224,10 @@ jobs:
           fi
 
           if [ "$YTDLP_STATUS" -ne 0 ]; then
+            if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'Requested format is not available|Only images are available'; then
+              echo "::warning::yt-dlp cookie test could not validate downloadable formats for TEST_URL, but no login/cookie failure was detected. Continuing to production."
+              exit 0
+            fi
             exit "$YTDLP_STATUS"
           fi
 
