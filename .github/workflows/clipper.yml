@@ -557,6 +557,21 @@ jobs:
         with:
           node-version: 20
 
+      - name: Ensure Node runtime for yt-dlp
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v node >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y nodejs
+          fi
+          NODE_BIN="$(command -v node)"
+          NODE_DIR="$(dirname "$NODE_BIN")"
+          echo "Node runtime: $NODE_BIN"
+          node --version
+          echo "$NODE_DIR" >> "$GITHUB_PATH"
+          echo "YTDLP_JS_RUNTIMES=node" >> "$GITHUB_ENV"
+
       - name: Fail fast required secrets
         shell: bash
         run: |
@@ -1307,3 +1322,4 @@ jobs:
             generated/thumbnails/**
             generated/metadata/**
             data/queues/**
+
