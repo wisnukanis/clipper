@@ -102,16 +102,13 @@ on:
   schedule:
     # GitHub schedule uses UTC.
     # Prepare/render sebelum slot pertama: 05:00 WIB = 22:00 UTC hari sebelumnya.
-    # 05:30 WIB = 22:30 UTC hari sebelumnya.
+    # Jadwal publish 3x/hari agar kategori bisa bergantian tanpa terlalu rapat.
     # 09:30 WIB = 02:30 UTC.
     # 12:15 WIB = 05:15 UTC.
-    # 16:30 WIB = 09:30 UTC.
     # 19:30 WIB = 12:30 UTC.
     - cron: "0 22 * * *"
-    - cron: "30 22 * * *"
     - cron: "30 2 * * *"
     - cron: "15 5 * * *"
-    - cron: "30 9 * * *"
     - cron: "30 12 * * *"
 
 concurrency:
@@ -143,13 +140,13 @@ jobs:
       AUTO_PUBLISH: ${{ secrets.AUTO_PUBLISH || 'true' }}
       DEFAULT_THEME: auto
       FAST_PRODUCTION_MODE: ${{ secrets.FAST_PRODUCTION_MODE || 'false' }}
-      CONTENT_TYPES: ${{ secrets.CONTENT_TYPES || 'motivasi_renungan,sejarah_tokoh,kisah_islami,fakta_sains,misteri_trending' }}
-      DAILY_TARGET_MIN: ${{ secrets.DAILY_TARGET_MIN || '4' }}
-      DAILY_TARGET_MAX: ${{ github.event.inputs.target_count || secrets.DAILY_TARGET_MAX || secrets.MAX_SCHEDULED_POSTS_PER_DAY || '5' }}
+      CONTENT_TYPES: ${{ secrets.CONTENT_TYPES || 'podcast_lucu_hikmah,inspiratif_hikmah' }}
+      DAILY_TARGET_MIN: ${{ secrets.DAILY_TARGET_MIN || '2' }}
+      DAILY_TARGET_MAX: ${{ github.event.inputs.target_count || secrets.DAILY_TARGET_MAX || secrets.MAX_SCHEDULED_POSTS_PER_DAY || '3' }}
       DAILY_THEME_MODE: ${{ secrets.DAILY_THEME_MODE || 'mixed_daily' }}
-      DAILY_CONTENT_MIX: ${{ secrets.DAILY_CONTENT_MIX || 'motivasi_renungan:1,sejarah_tokoh:1,kisah_islami:1,fakta_sains:1,misteri_trending:1' }}
-      DAILY_CONTENT_MIX_4: ${{ secrets.DAILY_CONTENT_MIX_4 || 'motivasi_renungan:1,sejarah_tokoh:1,kisah_islami:1,fakta_sains:1' }}
-      DAILY_EXPERIMENT_SLOT: ${{ secrets.DAILY_EXPERIMENT_SLOT || 'misteri_trending' }}
+      DAILY_CONTENT_MIX: ${{ secrets.DAILY_CONTENT_MIX || 'podcast_lucu_hikmah:2,inspiratif_hikmah:1' }}
+      DAILY_CONTENT_MIX_4: ${{ secrets.DAILY_CONTENT_MIX_4 || 'podcast_lucu_hikmah:2,inspiratif_hikmah:1' }}
+      DAILY_EXPERIMENT_SLOT: ${{ secrets.DAILY_EXPERIMENT_SLOT || 'podcast_lucu_hikmah' }}
       DAILY_EXPERIMENT_ALLOW_OPINI: ${{ secrets.DAILY_EXPERIMENT_ALLOW_OPINI || 'false' }}
       DAILY_EXPERIMENT_MAX_OPINI_PER_DAY: ${{ secrets.DAILY_EXPERIMENT_MAX_OPINI_PER_DAY || '1' }}
       MONDAY_THEME: ${{ secrets.MONDAY_THEME || 'motivasi_renungan' }}
@@ -159,17 +156,17 @@ jobs:
       FRIDAY_THEME: ${{ secrets.FRIDAY_THEME || 'motivasi_renungan' }}
       SATURDAY_THEME: ${{ secrets.SATURDAY_THEME || 'misteri_trending' }}
       SUNDAY_THEME: ${{ secrets.SUNDAY_THEME || 'kisah_islami' }}
-      DAILY_PUBLISH_SLOTS_WIB: ${{ secrets.DAILY_PUBLISH_SLOTS_WIB || '05:30,09:30,12:15,16:30,19:30' }}
-      SLOT_1_TIME_WIB: ${{ secrets.SLOT_1_TIME_WIB || '05:30' }}
-      SLOT_1_CONTENT_TYPE: ${{ secrets.SLOT_1_CONTENT_TYPE || 'motivasi_renungan' }}
-      SLOT_2_TIME_WIB: ${{ secrets.SLOT_2_TIME_WIB || '09:30' }}
-      SLOT_2_CONTENT_TYPE: ${{ secrets.SLOT_2_CONTENT_TYPE || 'sejarah_tokoh' }}
-      SLOT_3_TIME_WIB: ${{ secrets.SLOT_3_TIME_WIB || '12:15' }}
-      SLOT_3_CONTENT_TYPE: ${{ secrets.SLOT_3_CONTENT_TYPE || 'kisah_islami' }}
+      DAILY_PUBLISH_SLOTS_WIB: ${{ secrets.DAILY_PUBLISH_SLOTS_WIB || '09:30,12:15,19:30' }}
+      SLOT_1_TIME_WIB: ${{ secrets.SLOT_1_TIME_WIB || '09:30' }}
+      SLOT_1_CONTENT_TYPE: ${{ secrets.SLOT_1_CONTENT_TYPE || 'podcast_lucu_hikmah' }}
+      SLOT_2_TIME_WIB: ${{ secrets.SLOT_2_TIME_WIB || '12:15' }}
+      SLOT_2_CONTENT_TYPE: ${{ secrets.SLOT_2_CONTENT_TYPE || 'inspiratif_hikmah' }}
+      SLOT_3_TIME_WIB: ${{ secrets.SLOT_3_TIME_WIB || '19:30' }}
+      SLOT_3_CONTENT_TYPE: ${{ secrets.SLOT_3_CONTENT_TYPE || 'podcast_lucu_hikmah' }}
       SLOT_4_TIME_WIB: ${{ secrets.SLOT_4_TIME_WIB || '16:30' }}
-      SLOT_4_CONTENT_TYPE: ${{ secrets.SLOT_4_CONTENT_TYPE || 'fakta_sains' }}
+      SLOT_4_CONTENT_TYPE: ${{ secrets.SLOT_4_CONTENT_TYPE || 'inspiratif_hikmah' }}
       SLOT_5_TIME_WIB: ${{ secrets.SLOT_5_TIME_WIB || '19:30' }}
-      SLOT_5_CONTENT_TYPE: ${{ secrets.SLOT_5_CONTENT_TYPE || 'misteri_trending' }}
+      SLOT_5_CONTENT_TYPE: ${{ secrets.SLOT_5_CONTENT_TYPE || 'podcast_lucu_hikmah' }}
 
       GRAPH_API_VERSION: v25.0
       API_CHECK_TIMEOUT_SECONDS: ${{ secrets.API_CHECK_TIMEOUT_SECONDS || '90' }}
@@ -241,7 +238,7 @@ jobs:
       OPENAI_TRANSCRIBE_MODEL: ${{ secrets.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe' }}
       AI_REQUEST_TIMEOUT_SECONDS: ${{ secrets.AI_REQUEST_TIMEOUT_SECONDS || '25' }}
       TRANSCRIBE_PROVIDER: ${{ secrets.TRANSCRIBE_PROVIDER || 'deepgram' }}
-      MAX_SCHEDULED_POSTS_PER_DAY: ${{ github.event.inputs.target_count || secrets.MAX_SCHEDULED_POSTS_PER_DAY || secrets.DAILY_TARGET_MAX || '5' }}
+      MAX_SCHEDULED_POSTS_PER_DAY: ${{ github.event.inputs.target_count || secrets.MAX_SCHEDULED_POSTS_PER_DAY || secrets.DAILY_TARGET_MAX || '3' }}
       DEEPGRAM_ENABLED: ${{ github.event.inputs.deepgram_enabled || '1' }}
       DEEPGRAM_API_KEYS: ${{ secrets.DEEPGRAM_API_KEYS }}
       DEEPGRAM_MODEL: ${{ secrets.DEEPGRAM_MODEL || 'nova-3' }}
@@ -1252,11 +1249,9 @@ jobs:
           fi
           if [ "$EVENT_NAME" = "schedule" ]; then
             case "$EVENT_SCHEDULE" in
-              "30 22 * * *") SLOT="1" ;;
-              "30 2 * * *") SLOT="2" ;;
-              "15 5 * * *") SLOT="3" ;;
-              "30 9 * * *") SLOT="4" ;;
-              "30 12 * * *") SLOT="5" ;;
+              "30 2 * * *") SLOT="1" ;;
+              "15 5 * * *") SLOT="2" ;;
+              "30 12 * * *") SLOT="3" ;;
             esac
           fi
 
