@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,36 +12,31 @@ import { extractYoutubeVideoId } from "./youtube.js";
 import { getYoutubeAccessToken } from "./youtube-publisher.js";
 
 const DEFAULT_QUERIES = [
-  "renungan hidup islam",
-  "ceramah pendek islam",
-  "kisah inspiratif indonesia",
-  "podcast keluarga indonesia",
-  "motivasi hidup indonesia",
-  "nasihat orang tua",
-  "kisah perjuangan hidup",
-  "cerita keluarga inspiratif"
+  "cerita inspiratif indonesia",
+  "hikmah kehidupan",
+  "podcast lucu indonesia ada hikmahnya",
+  "cerita lucu podcast indonesia",
+  "pengalaman hidup inspiratif",
+  "obrolan lucu tapi bermakna"
 ];
 
 const FALLBACK_QUERIES = [
-  "motivasi hidup indonesia",
   "kisah nyata inspiratif indonesia",
-  "sejarah indonesia singkat",
-  "tokoh dunia inspiratif",
-  "kisah islami penuh hikmah",
-  "fakta unik indonesia",
-  "sains ringan indonesia",
-  "pengetahuan populer indonesia",
-  "misteri sejarah indonesia",
-  "fenomena menarik dunia"
+  "nasihat kehidupan indonesia",
+  "cerita keluarga menyentuh",
+  "podcast indonesia cerita hidup lucu",
+  "ketawa tapi dalem podcast",
+  "cerita kocak ada pelajaran"
 ];
 
 const DEFAULT_CHANNEL_HANDLES = [];
 
-const PODCAST_TOPIC_RE = /ceramah|kajian|tausiyah|dakwah|ustad|ustadz|ustaz|islam|islami|muslim|sunnah|quran|alquran|hadis|hadits|renungan|hikmah|nasihat|motivasi|hijrah|taubat|sholat|doa|keluarga|rumah\s*tangga|kisah|sejarah|tokoh|biografi|pahlawan|fakta|sains|ilmu\s*pengetahuan|edukasi|fenomena|misteri\s*sejarah|arkeologi|pengetahuan\s*populer|psikologi|teknologi|alam|inspiratif/i;
+const PODCAST_TOPIC_RE = /cerita|lucu|ngakak|ketawa|pengalaman|hidup|keluarga|orang\s*tua|kerja|usaha|rezeki|perjuangan|gagal|sukses|pelajaran|hikmah|nasihat|motivasi|renungan|haru|relate|podcast|talkshow|obrolan|inspiratif|sabar|ikhlas|syukur/i;
 const NON_PODCAST_NOISE_RE = /official\s*music\s*video|lirik|lyrics|trailer|teaser|sinetron|drama|full\s*movie|film\s*pendek|gameplay|live\s*stream\s*game|highlight\s*bola/i;
-const UNSAFE_TOPIC_RE = /politik\s*praktis|pemilu|pilpres|caleg|partai\s*politik|kampanye|capres|cawapres|dpr\b|sara|rasis|penistaan|adu\s*domba|provokasi\s*agama|horor\s*ekstrem|gore|sadis|pembunuhan\s*brutal|kekerasan\s*eksplisit|dewasa|seksual|porn|vulgar|gosip|perselingkuhan|skandal\s*artis|klaim\s*agama\s*sensitif/i;
+const UNSAFE_TOPIC_RE = /politik\s*praktis|pemilu|pilpres|caleg|partai\s*politik|kampanye|capres|cawapres|dpr\b|sara|rasis|penistaan|adu\s*domba|provokasi\s*agama|horor\s*ekstrem|gore|sadis|pembunuhan\s*brutal|kekerasan\s*eksplisit|dewasa|seksual|porn|vulgar|gosip|perselingkuhan|skandal\s*artis|klaim\s*agama\s*sensitif|kriminal|judi|miras|rokok/i;
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 const DISCOVERY_CACHE_FILE = "discovery-cache.json";
+const CONTENT_SOURCES_FILE = "config/content_sources.json";
 const AUTO_DISCOVERY_SELECTABLE_STATUSES = new Set(["queued", "failed", "retry"]);
 const AUTO_DISCOVERY_CLOSED_STATUSES = new Set(["expired"]);
 let youtubeApiQuotaExhausted = false;
@@ -249,6 +245,93 @@ function isPodcastCandidate(item) {
   return PODCAST_TOPIC_RE.test(text) || isTrustedPodcastChannelSource(item);
 }
 
+function keywordHits(text, keywords = []) {
+  const normalized = String(text || "").toLowerCase();
+  return keywords.filter((word) => normalized.includes(String(word || "").toLowerCase())).length;
+}
+
+function focusScore(item, options = {}) {
+  const text = candidateText(item);
+  let score = 0;
+  const firstWords = String(item.title || "").slice(0, 120);
+  if (/(rahasia|ternyata|jangan|kenapa|kok|dikira|awal|ending|diam|ketawa|nancep|dalem)/i.test(firstWords)) score += 2;
+  if (/(lucu|ketawa|ngakak|haru|relate|pengalaman|keluarga|perjuangan|rezeki|hikmah|pelajaran|twist|punchline)/i.test(text)) score += 2;
+  if (/(hikmah|pelajaran|ternyata|ending|nasihat|makna|bener juga|kok iya)/i.test(text)) score += 2;
+  if (numberValue(item.duration) >= 25 && numberValue(item.duration) <= 10800) score += 1;
+  if (PODCAST_TOPIC_RE.test(text)) score += 1;
+  if (!UNSAFE_TOPIC_RE.test(text) && keywordHits(text, options.blockedKeywords) === 0) score += 1;
+  if (keywordHits(text, options.allowedKeywords) > 0) score += 1;
+  return Math.min(10, score);
+}
+
+async function readJsonFile(relativePath, fallback) {
+  try {
+    const raw = await fs.readFile(path.join(config.rootDir, relativePath), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+async function contentSourcesFor(contentType) {
+  const sources = await readJsonFile(CONTENT_SOURCES_FILE, {});
+  const list = Array.isArray(sources?.[contentType]) ? sources[contentType] : [];
+  return list
+    .filter((item) => item && item.type === "youtube_channel" && item.url)
+    .sort((a, b) => Number(a.priority || 99) - Number(b.priority || 99));
+}
+
+async function fallbackQueriesFor(contentType) {
+  const sources = await readJsonFile(CONTENT_SOURCES_FILE, {});
+  return Array.isArray(sources?.fallback_queries?.[contentType])
+    ? sources.fallback_queries[contentType]
+    : [];
+}
+
+function sourceAllowedKeywords(sources) {
+  return uniqueList(sources.flatMap((item) => Array.isArray(item.allowed_keywords) ? item.allowed_keywords : []));
+}
+
+function sourceBlockedKeywords(sources) {
+  return uniqueList(sources.flatMap((item) => Array.isArray(item.blocked_keywords) ? item.blocked_keywords : []));
+}
+
+function sourceLookupKeys(source) {
+  return uniqueList([
+    source?.url,
+    source?.channel,
+    source?.handle,
+    source?.name
+  ]);
+}
+
+function sourceMetadata(source = {}) {
+  return {
+    source_channel: source.channel || "",
+    source_content_type: source.content_type || source.category || "",
+    source_content_tone: source.content_tone || "",
+    source_expect_humor: source.expect_humor === true,
+    source_theme_prompt: source.theme_prompt || "",
+    source_min_views: Number(source.min_views || 0)
+  };
+}
+
+function sourceMetadataByHandle(sources = []) {
+  const map = new Map();
+  for (const source of sources) {
+    const metadata = sourceMetadata(source);
+    for (const key of sourceLookupKeys(source)) {
+      map.set(String(key).trim(), metadata);
+    }
+  }
+  return map;
+}
+
+function sourceSpecificMinViews(item, options) {
+  const sourceMinViews = Number(item.source_min_views || 0);
+  return sourceMinViews > 0 ? sourceMinViews : options.minViews;
+}
+
 function passesDuration(item, options) {
   const duration = numberValue(item.duration);
   if (boolEnv("AUTO_DISCOVER_EXCLUDE_SHORTS", true) && duration && duration <= 60) return false;
@@ -306,10 +389,10 @@ function isViralCandidate(item, options) {
 
   const stats = viralStats(item);
   const isFastGrowing = stats.viewsPerHour >= options.minViewsPerHour;
-  const hasEnoughViews = stats.views >= options.minViews;
+  const hasEnoughViews = stats.views >= sourceSpecificMinViews(item, options);
   if (!isFastGrowing && !hasEnoughViews) return false;
 
-  return isPodcastCandidate(item);
+  return isPodcastCandidate(item) && focusScore(item, options) >= numberEnv("DISCOVERY_MIN_CANDIDATE_SCORE", 7, 0, 10);
 }
 
 function isTopicCandidate(item, options) {
@@ -319,7 +402,7 @@ function isTopicCandidate(item, options) {
 
   if (!passesDuration(item, options)) return false;
 
-  return isPodcastCandidate(item);
+  return isPodcastCandidate(item) && focusScore(item, options) >= numberEnv("DISCOVERY_MIN_CANDIDATE_SCORE", 7, 0, 10);
 }
 
 function isFreshChannelCandidate(item, options) {
@@ -333,7 +416,7 @@ function isFreshChannelCandidate(item, options) {
     || ageHours(candidatePublishedAt(item)) <= options.publishedAfterDays * 24 + 6;
   if (!isFresh) return false;
 
-  return isPodcastCandidate(item);
+  return isPodcastCandidate(item) && focusScore(item, options) >= numberEnv("DISCOVERY_MIN_CANDIDATE_SCORE", 7, 0, 10);
 }
 
 function isTrendingPodcastCandidate(item, options) {
@@ -342,7 +425,7 @@ function isTrendingPodcastCandidate(item, options) {
   if (!passesSourceType(item)) return false;
   if (!passesDuration(item, options)) return false;
   if (ageHours(candidatePublishedAt(item)) > options.trendingMaxAgeHours) return false;
-  return isPodcastCandidate(item);
+  return isPodcastCandidate(item) && focusScore(item, options) >= numberEnv("DISCOVERY_MIN_CANDIDATE_SCORE", 7, 0, 10);
 }
 
 function parseJsonLines(stdout) {
@@ -360,7 +443,7 @@ function parseJsonLines(stdout) {
 }
 
 function ytDlpCommonArgs() {
-  const args = [];
+  const args = ["--ignore-config"];
   const cookiesFile = String(process.env.YTDLP_COOKIES_FILE || "").trim();
   if (cookiesFile) {
     const cookiePath = path.isAbsolute(cookiesFile)
@@ -372,6 +455,9 @@ function ytDlpCommonArgs() {
   if (process.env.YTDLP_REFERER) args.push("--referer", process.env.YTDLP_REFERER);
   if (process.env.YTDLP_JS_RUNTIMES) args.push("--js-runtimes", process.env.YTDLP_JS_RUNTIMES);
   if (process.env.YTDLP_REMOTE_COMPONENTS) args.push("--remote-components", process.env.YTDLP_REMOTE_COMPONENTS);
+  if (boolEnv("YTDLP_SKIP_AUTHCHECK", true)) {
+    args.push("--extractor-args", "youtubetab:skip=authcheck");
+  }
   return args;
 }
 
@@ -454,6 +540,7 @@ function runYtDlpValidate(url) {
   const args = [
     "--skip-download",
     "--no-warnings",
+    "--ignore-no-formats-error",
     "--print",
     "id",
     ...ytDlpCommonArgs(),
@@ -828,6 +915,62 @@ async function discoverTrendingWithYoutubeApi({ knownIds, options }) {
   throw lastError || new Error("YouTube trending discovery gagal.");
 }
 
+function rssFeedUrl(source) {
+  const value = String(source || "").trim();
+  if (!value) return "";
+  if (/feeds\/videos\.xml/i.test(value)) return value;
+  const channelMatch = value.match(/youtube\.com\/channel\/(UC[A-Za-z0-9_-]{20,})/i) || value.match(/^(UC[A-Za-z0-9_-]{20,})$/);
+  if (channelMatch) return `https://www.youtube.com/feeds/videos.xml?channel_id=${channelMatch[1]}`;
+  return "";
+}
+
+async function discoverWithRss({ sources, knownIds }) {
+  if (!boolEnv("USE_RSS_DISCOVERY", true)) return [];
+  const candidates = new Map();
+  for (const source of sources) {
+    const feedUrl = rssFeedUrl(source);
+    if (!feedUrl) continue;
+    try {
+      const response = await fetch(feedUrl);
+      const xml = await response.text();
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)];
+      for (const entry of entries) {
+        const body = entry[1] || "";
+        const id = (body.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) || [])[1];
+        if (!id || knownIds.has(id) || candidates.has(id)) continue;
+        const title = decodeXml((body.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "");
+        const channel = decodeXml((body.match(/<name>([\s\S]*?)<\/name>/) || [])[1] || "");
+        const publishedAt = (body.match(/<published>([^<]+)<\/published>/) || [])[1] || "";
+        candidates.set(id, {
+          id,
+          url: videoUrl(id),
+          webpage_url: videoUrl(id),
+          title,
+          channel,
+          publishedAt,
+          duration: 0,
+          view_count: 0,
+          discovery_source: "rss_channel",
+          discovery_query: `rss:${feedUrl}`
+        });
+      }
+    } catch (error) {
+      console.warn(`RSS discovery gagal (${feedUrl}): ${error.message}`);
+    }
+  }
+  return [...candidates.values()];
+}
+
+function decodeXml(value = "") {
+  return String(value)
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 async function discoverWithYtDlp({ queries, knownIds, options }) {
   const candidates = new Map();
   for (const query of queries) {
@@ -851,17 +994,20 @@ async function discoverWithYtDlp({ queries, knownIds, options }) {
   return [...candidates.values()];
 }
 
-async function discoverChannelsWithYtDlp({ knownIds, options, channelHandlesOverride = [] }) {
+async function discoverChannelsWithYtDlp({ knownIds, options, channelHandlesOverride = [], channelSources = [] }) {
   const channelHandles = channelHandlesOverride.length ? channelHandlesOverride : listEnv("AUTO_DISCOVER_CHANNEL_HANDLES", DEFAULT_CHANNEL_HANDLES);
+  const sourceMap = sourceMetadataByHandle(channelSources);
   const candidates = new Map();
   for (const handle of channelHandles) {
     try {
       const results = await runYtDlpChannel(handle, options.maxResults);
+      const metadata = sourceMap.get(String(handle).trim()) || {};
       for (const item of results) {
         const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
         if (!id || knownIds.has(id) || candidates.has(id)) continue;
         candidates.set(id, {
           ...item,
+          ...metadata,
           id,
           url: item.webpage_url || item.url || videoUrl(id),
           channel: item.channel || item.uploader || item.playlist_channel || item.playlist_uploader || handle,
@@ -876,7 +1022,7 @@ async function discoverChannelsWithYtDlp({ knownIds, options, channelHandlesOver
   return [...candidates.values()];
 }
 
-async function loadRawCandidates({ queries, knownIds, options, targetDate, channelOnly = false, useApi = true, dailyApiSearch = false, trending = false, channelHandles = [] }) {
+async function loadRawCandidates({ queries, knownIds, options, targetDate, channelOnly = false, useApi = true, dailyApiSearch = false, trending = false, channelHandles = [], channelSources = [] }) {
   let rawCandidates = null;
   if (trending) {
     try {
@@ -904,12 +1050,29 @@ async function loadRawCandidates({ queries, knownIds, options, targetDate, chann
   }
 
   if (!rawCandidates) {
-    rawCandidates = channelOnly
-      ? await discoverChannelsWithYtDlp({ knownIds, options, channelHandlesOverride: channelHandles })
-      : await discoverWithYtDlp({ queries, knownIds, options });
+    if (channelOnly) {
+      const rssCandidates = await discoverWithRss({ sources: channelHandles, knownIds });
+      const ytDlpCandidates = await discoverChannelsWithYtDlp({ knownIds, options, channelHandlesOverride: channelHandles, channelSources });
+      rawCandidates = [...rssCandidates, ...ytDlpCandidates];
+    } else {
+      rawCandidates = await discoverWithYtDlp({ queries, knownIds, options });
+    }
   }
 
   return rawCandidates || [];
+}
+
+async function checkOEmbedValidate(url) {
+  try {
+    const videoId = extractYoutubeVideoId(url);
+    if (!videoId) return false;
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const res = await fetch(oembedUrl);
+    return res.ok;
+  } catch (error) {
+    console.warn(`AUTO DISCOVERY: OEmbed validation error: ${error.message}`);
+    return false;
+  }
 }
 
 async function validateCandidateAvailability(item) {
@@ -919,6 +1082,12 @@ async function validateCandidateAvailability(item) {
     await runYtDlpValidate(url);
     return true;
   } catch (error) {
+    console.warn(`AUTO DISCOVERY: yt-dlp validate gagal untuk ${url}: ${error.message}. Mencoba fallback oEmbed...`);
+    const isOEmbedValid = await checkOEmbedValidate(url);
+    if (isOEmbedValid) {
+      console.log(`AUTO DISCOVERY: Fallback oEmbed menyatakan video ${url} valid.`);
+      return true;
+    }
     console.warn(`AUTO DISCOVERY kandidat dilewati karena link tidak valid (${url}): ${error.message}`);
     return false;
   }
@@ -929,42 +1098,108 @@ async function selectDiscoveredCandidates(rawCandidates, options, addCount, mode
     ? isFreshChannelCandidate
     : mode === "today_trending" ? isTrendingPodcastCandidate
     : ["best_available", "daily_api_search"].includes(mode) ? isTopicCandidate : isViralCandidate;
-  const ranked = rawCandidates
-    .filter((item) => filter(item, options))
+  const rejected = [];
+  const filteredAndSorted = rawCandidates
+    .filter((item) => {
+      const passed = filter(item, options);
+      if (!passed) {
+        const score = focusScore(item, options);
+        rejected.push({
+          source_video_id: item.id || extractYoutubeVideoId(item.url || item.webpage_url) || "",
+          source_url: item.webpage_url || item.url || "",
+          source_title: item.title || "",
+          source_channel: item.channel || item.uploader || "",
+          score,
+          reasons: rejectionReasons(item, options, score),
+          discovery_source: item.discovery_source || "",
+          discovery_query: item.discovery_query || "",
+          rejected_at: new Date().toISOString()
+        });
+      }
+      return passed;
+    })
     .map((item) => ({
       ...item,
       discovery_score: scoreCandidate(item),
       discovery_stats: viralStats(item),
       discovery_fallback_mode: mode
     }))
-    .sort((a, b) => b.discovery_score - a.discovery_score)
-    .slice(0, Math.max(addCount * 4, addCount));
+    .sort((a, b) => b.discovery_score - a.discovery_score);
 
+  const ranked = filteredAndSorted.slice(0, Math.max(addCount * 4, addCount));
   const selected = [];
+  const validatedMap = new Map();
   for (const item of ranked) {
-    if (!await validateCandidateAvailability(item)) continue;
-    selected.push(item);
+    const channel = item.channel || item.uploader || "";
+    let isValid = await validateCandidateAvailability(item);
+    validatedMap.set(item.id, isValid);
+
+    if (isValid) {
+      selected.push(item);
+    } else if (channel) {
+      console.log(`AUTO DISCOVERY: Video ${item.id} tidak valid. Mencari alternatif di channel: ${channel}`);
+      const alternatives = filteredAndSorted.filter(
+        (alt) =>
+          (alt.channel === channel || alt.uploader === channel) &&
+          alt.id !== item.id &&
+          !selected.some((sel) => sel.id === alt.id)
+      );
+      for (const alt of alternatives) {
+        let altValid = validatedMap.get(alt.id);
+        if (altValid === undefined) {
+          altValid = await validateCandidateAvailability(alt);
+          validatedMap.set(alt.id, altValid);
+        }
+        if (altValid) {
+          console.log(`AUTO DISCOVERY: Menemukan alternatif valid di channel ${channel}: ${alt.title} (${alt.id})`);
+          selected.push(alt);
+          break;
+        }
+      }
+    }
     if (selected.length >= addCount) break;
   }
+  if (rejected.length) await appendRejectedCandidates(rejected);
   return selected;
+}
+
+function rejectionReasons(item, options, score) {
+  const text = candidateText(item);
+  const reasons = [];
+  if (score < numberEnv("DISCOVERY_MIN_CANDIDATE_SCORE", 7, 0, 10)) reasons.push(`score ${score}/10 di bawah minimum`);
+  if (UNSAFE_TOPIC_RE.test(text) || keywordHits(text, options.blockedKeywords) > 0) reasons.push("mengandung blocked keywords/topik sensitif");
+  if (!PODCAST_TOPIC_RE.test(text) && !isTrustedPodcastChannelSource(item)) reasons.push("topik tidak cukup sesuai fokus channel");
+  if (!passesDuration(item, options)) reasons.push("durasi sumber tidak sesuai filter");
+  return reasons.length ? reasons : ["tidak lolos filter discovery"];
+}
+
+async function appendRejectedCandidates(items) {
+  const file = path.join(config.dataDir, "rejected_candidates.json");
+  const existing = await readJsonFile("data/rejected_candidates.json", []);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, `${JSON.stringify([...existing, ...items].slice(-1000), null, 2)}\n`, "utf8");
 }
 
 function fallbackPasses(baseQueries, baseOptions) {
   const fallbackQueries = uniqueList([...baseQueries, ...FALLBACK_QUERIES]);
-  const useDailyApi = boolEnv("AUTO_DISCOVER_USE_API", false);
+  const useYoutubeApiDiscovery = boolEnv("USE_YOUTUBE_API_DISCOVERY", boolEnv("AUTO_DISCOVER_USE_API", false));
+  const useYoutubeApiSearch = boolEnv("USE_YOUTUBE_API_SEARCH", useYoutubeApiDiscovery);
+  const useYoutubeApiTrending = boolEnv("USE_YOUTUBE_API_TRENDING", false);
+  const useYtDlpDiscovery = boolEnv("USE_YTDLP_DISCOVERY", true);
+  const useDailyApi = useYoutubeApiSearch && boolEnv("AUTO_DISCOVER_USE_API", false);
   const dailyApiMaxResults = numberEnv("AUTO_DISCOVER_DAILY_SEARCH_RESULTS", 7, 1, 50);
   const trendingMaxResults = numberEnv("AUTO_DISCOVER_TRENDING_MAX_RESULTS", 25, 1, 50);
   const fallbackMaxResults = numberEnv("AUTO_DISCOVER_FALLBACK_MAX_RESULTS", 12, baseOptions.maxResults, 50);
   const freshUploadDays = numberEnv("AUTO_DISCOVER_FRESH_UPLOAD_DAYS", 1, 1, 30);
   const freshChannelMaxResults = numberEnv("AUTO_DISCOVER_CHANNEL_MAX_RESULTS", 3, 1, 25);
-  const trendingEnabled = boolEnv("AUTO_DISCOVER_TRENDING_ENABLED", true);
+  const trendingEnabled = useYoutubeApiTrending && boolEnv("AUTO_DISCOVER_TRENDING_ENABLED", false);
   const channelFirst = boolEnv("AUTO_DISCOVER_CHANNEL_FIRST", true);
 
   return [
     ...(channelFirst ? [{
       mode: "fresh_channels",
       channelOnly: true,
-      useApi: true,
+      useApi: useYoutubeApiDiscovery,
       queries: [],
       options: {
         ...baseOptions,
@@ -1001,12 +1236,14 @@ function fallbackPasses(baseQueries, baseOptions) {
       mode: "strict",
       useApi: false,
       queries: baseQueries,
+      disabled: !useYtDlpDiscovery,
       options: baseOptions
     },
     {
       mode: "wide_search",
       useApi: false,
       queries: fallbackQueries,
+      disabled: !useYtDlpDiscovery,
       options: {
         ...baseOptions,
         maxResults: fallbackMaxResults,
@@ -1019,6 +1256,7 @@ function fallbackPasses(baseQueries, baseOptions) {
       mode: "relaxed_viral",
       useApi: false,
       queries: fallbackQueries,
+      disabled: !useYtDlpDiscovery,
       options: {
         ...baseOptions,
         maxResults: fallbackMaxResults,
@@ -1032,6 +1270,7 @@ function fallbackPasses(baseQueries, baseOptions) {
       mode: "best_available",
       useApi: false,
       queries: fallbackQueries,
+      disabled: !useYtDlpDiscovery,
       options: {
         ...baseOptions,
         maxResults: fallbackMaxResults,
@@ -1041,7 +1280,7 @@ function fallbackPasses(baseQueries, baseOptions) {
         minViewsPerHour: 0
       }
     }
-  ];
+  ].filter((pass) => !pass.disabled);
 }
 
 export async function discoverAndQueueVideos(options = {}) {
@@ -1072,12 +1311,20 @@ export async function discoverAndQueueVideos(options = {}) {
     };
   }
 
+  const theme = options.theme && options.theme !== "auto" ? options.theme : "inspiratif_hikmah";
+  const contentType = options.contentType || theme;
+  const configuredSources = await contentSourcesFor(contentType);
+  const sourceUrls = configuredSources.map((item) => item.url).filter(Boolean);
+  const allowedKeywords = sourceAllowedKeywords(configuredSources);
+  const blockedKeywords = sourceBlockedKeywords(configuredSources);
+
+  const configuredFallbackQueries = await fallbackQueriesFor(contentType);
   const queries = Array.isArray(options.queries) && options.queries.length
     ? uniqueList(options.queries)
-    : listEnv("AUTO_DISCOVER_QUERY", DEFAULT_QUERIES);
+    : uniqueList([...configuredFallbackQueries, ...listEnv("AUTO_DISCOVER_QUERY", DEFAULT_QUERIES)]);
   const channelHandles = Array.isArray(options.channelHandles) && options.channelHandles.length
     ? uniqueList(options.channelHandles)
-    : [];
+    : uniqueList(sourceUrls);
   const maxResults = numberEnv("AUTO_DISCOVER_MAX_RESULTS", 12, 1, 25);
   const requestedAddCount = numberEnv("AUTO_DISCOVER_ADD_COUNT", 5, 1, 10);
   const addCount = ignoreDailyQueueLimit
@@ -1100,10 +1347,10 @@ export async function discoverAndQueueVideos(options = {}) {
     publishedAfterDays,
     trendingMaxAgeHours,
     regionCode,
-    relevanceLanguage
+    relevanceLanguage,
+    allowedKeywords,
+    blockedKeywords
   };
-  const theme = options.theme && options.theme !== "auto" ? options.theme : "motivasi_renungan";
-  const contentType = options.contentType || theme;
   const slotIndex = Number(options.slotIndex || 0) || 0;
   const slotTimeWib = String(options.slotTimeWib || "").trim();
   const slotContentType = String(options.slotContentType || contentType).trim();
@@ -1115,7 +1362,27 @@ export async function discoverAndQueueVideos(options = {}) {
   let selected = [];
   let selectedPass = "";
   let totalRawCandidates = 0;
-  for (const pass of fallbackPasses(queries, discoveryOptions)) {
+  const discoveryCache = await readDiscoveryCache();
+  const todayCache = discoveryCache[targetDate] || {};
+  const cacheKey = `focused_${contentType}_${slotIndex || "all"}`;
+  const cachedFocused = todayCache[cacheKey];
+  const cacheTtlHours = numberEnv("DISCOVERY_CACHE_TTL_HOURS", 24, 1, 168);
+  const cacheAgeHours = cachedFocused?.created_at ? ageHours(cachedFocused.created_at) : Number.POSITIVE_INFINITY;
+  if (Array.isArray(cachedFocused?.candidates) && cacheAgeHours <= cacheTtlHours) {
+    selected = cachedFocused.candidates
+      .filter((item) => {
+        const id = item.id || extractYoutubeVideoId(item.url || item.webpage_url);
+        return id && !knownIds.has(id);
+      })
+      .slice(0, addCount);
+    selectedPass = "cache";
+    totalRawCandidates = cachedFocused.found_count || selected.length;
+    if (selected.length) {
+      console.log(`[DISCOVERY] using cache ${cacheKey}: ${selected.length} kandidat.`);
+    }
+  }
+
+  for (const pass of selected.length ? [] : fallbackPasses(queries, discoveryOptions)) {
     console.log(`AUTO DISCOVERY pass=${pass.mode}, queries=${pass.queries.length}, maxResults=${pass.options.maxResults}, days=${pass.options.publishedAfterDays}`);
     const rawCandidates = await loadRawCandidates({
       queries: pass.queries,
@@ -1126,13 +1393,23 @@ export async function discoverAndQueueVideos(options = {}) {
       useApi: pass.useApi !== false,
       dailyApiSearch: Boolean(pass.dailyApiSearch),
       trending: Boolean(pass.trending),
-      channelHandles
+      channelHandles,
+      channelSources: configuredSources
     });
     totalRawCandidates += rawCandidates.length;
     selected = await selectDiscoveredCandidates(rawCandidates, pass.options, addCount, pass.mode);
     if (selected.length) {
       selectedPass = pass.mode;
       console.log(`AUTO DISCOVERY pass=${pass.mode} memilih ${selected.length} kandidat.`);
+      await patchDiscoveryCache(targetDate, {
+        [cacheKey]: {
+          created_at: new Date().toISOString(),
+          content_type: contentType,
+          slot_index: slotIndex,
+          found_count: totalRawCandidates,
+          candidates: selected
+        }
+      });
       break;
     }
     console.log(`AUTO DISCOVERY pass=${pass.mode} kosong; lanjut fallback.`);
@@ -1142,6 +1419,7 @@ export async function discoverAndQueueVideos(options = {}) {
   for (const [index, item] of selected.entries()) {
     const url = item.webpage_url || item.url || videoUrl(item.id);
     const stats = item.discovery_stats || viralStats(item);
+    const candidateScore = focusScore(item, discoveryOptions);
     const video = await addVideo({
       url,
       theme,
@@ -1166,6 +1444,7 @@ export async function discoverAndQueueVideos(options = {}) {
         `source=${item.discovery_source || "unknown"}`,
         `fallback=${item.discovery_fallback_mode || selectedPass || "strict"}`,
         `score=${item.discovery_score}`,
+        `candidate_score=${candidateScore}`,
         item.channel ? `channel=${item.channel}` : "",
         stats.views ? `views=${stats.views}` : "",
         stats.viewsPerHour ? `views_per_hour=${Math.round(stats.viewsPerHour)}` : ""
@@ -1174,6 +1453,11 @@ export async function discoverAndQueueVideos(options = {}) {
       channel_title: item.channel || "",
       published_at_source: item.publishedAt || "",
       source_duration_seconds: Number(item.duration || 0),
+      source_min_views: Number(item.source_min_views || 0),
+      source_theme_prompt: item.source_theme_prompt || "",
+      source_content_type: item.source_content_type || "",
+      source_content_tone: item.source_content_tone || "",
+      source_expect_humor: item.source_expect_humor === true,
       discovery_source: item.discovery_source || "",
       discovery_query: item.discovery_query || "",
       discovered_query: item.discovery_query || "",
@@ -1184,6 +1468,7 @@ export async function discoverAndQueueVideos(options = {}) {
       publish_date_wib: targetDate,
       discovery_fallback_mode: item.discovery_fallback_mode || selectedPass || "strict",
       discovery_score: item.discovery_score || 0,
+      candidate_score: candidateScore,
       discovery_views: stats.views || 0,
       discovery_likes: stats.likes || 0,
       discovery_comments: stats.comments || 0,
@@ -1229,7 +1514,7 @@ const isCli = process.argv[1]
 
 if (isCli) {
   discoverAndQueueVideos({
-    theme: process.env.THEME || "motivasi_renungan",
+    theme: process.env.THEME || "inspiratif_hikmah",
     targetDate: todayDate()
   })
     .then((result) => {

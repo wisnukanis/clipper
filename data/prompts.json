@@ -1,47 +1,11 @@
 [
   {
-    "id": "caption_motivasi_renungan",
-    "theme": "motivasi_renungan",
-    "hook_style": "hangat, reflektif, universal, maksimal 5 kata",
+    "id": "caption_podcast_artis",
+    "theme": "podcast artis",
+    "hook_style": "emotional curiosity",
     "language": "id",
-    "cta": "Simpan kalau pesan ini kamu butuhkan hari ini.",
-    "hashtag_template": "#MotivasiHidup #RenunganHidup #PelajaranHidup #Inspirasi #ShortsIndonesia",
-    "thumbnail_style": "3 sampai 5 kata, menyentuh dan mudah dipahami"
-  },
-  {
-    "id": "caption_sejarah_tokoh",
-    "theme": "sejarah_tokoh",
-    "hook_style": "informatif, kuat, berbasis kisah nyata, maksimal 5 kata",
-    "language": "id",
-    "cta": "Kisah ini masih relevan sampai sekarang.",
-    "hashtag_template": "#Sejarah #TokohInspiratif #KisahNyata #Pengetahuan #ShortsIndonesia",
-    "thumbnail_style": "3 sampai 5 kata, fokus ke tokoh atau pelajaran sejarah"
-  },
-  {
-    "id": "caption_kisah_islami",
-    "theme": "kisah_islami",
-    "hook_style": "adem, bermakna, tidak provokatif, maksimal 5 kata",
-    "language": "id",
-    "cta": "Ambil hikmahnya, bagikan kebaikannya.",
-    "hashtag_template": "#KisahIslami #Hikmah #NilaiMoral #RenunganIslami #ShortsIndonesia",
-    "thumbnail_style": "3 sampai 5 kata, hikmah jelas dan tidak sensasional"
-  },
-  {
-    "id": "caption_fakta_sains",
-    "theme": "fakta_sains",
-    "hook_style": "penasaran, edukatif, ringan, maksimal 5 kata",
-    "language": "id",
-    "cta": "Fakta kecil, tapi bikin cara lihat kita berubah.",
-    "hashtag_template": "#FaktaUnik #SainsRingan #Pengetahuan #Edukasi #ShortsIndonesia",
-    "thumbnail_style": "3 sampai 5 kata, fakta atau pertanyaan singkat"
-  },
-  {
-    "id": "caption_misteri_trending",
-    "theme": "misteri_trending",
-    "hook_style": "bikin penasaran, aman, tidak horor ekstrem, maksimal 5 kata",
-    "language": "id",
-    "cta": "Menurut kamu, penjelasan paling masuk akal yang mana?",
-    "hashtag_template": "#MisteriSejarah #FenomenaMenarik #FaktaMenarik #TrendingAman #ShortsIndonesia",
-    "thumbnail_style": "3 sampai 5 kata, penasaran tapi tidak menakut-nakuti"
+    "cta": "Menurut kamu, bagian paling relate yang mana?",
+    "hashtag_template": "#PodcastIndonesia #PodcastArtis #ReelsIndonesia",
+    "thumbnail_style": "3 sampai 7 kata, kuat, mudah dibaca di HP"
   }
 ]

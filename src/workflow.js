@@ -22,6 +22,13 @@ import { assertPreflightOk, printPreflightReport, runPreflight } from "./preflig
 import { discoverAndQueueVideos } from "./video-discovery.js";
 import { applyVideoEffects } from "./video-effects.js";
 import { appendQueueItem, applyDailyPlanToEnv, applySlotPlanToEnv, ensureQueueFiles, resolveDailyPlan } from "./daily-theme.js";
+import {
+  canUploadYoutubeToday,
+  incrementYoutubeUploadCounter,
+  markUsedSource,
+  savePendingUpload,
+  uploadPendingQueue
+} from "./pending-uploads.js";
 
 export async function runWorkflow(options = {}) {
   await ensureProjectDirs();
@@ -34,6 +41,8 @@ export async function runWorkflow(options = {}) {
     clipCount: Number(options.clipCount || dailyPlan.targetMax || process.env.CLIP_COUNT || 3),
     dailyPlan
   };
+  const requestedSlot = String(options.slot || process.env.CLIPPER_SLOT || "all").toLowerCase();
+  const mode = String(options.mode || "full").toLowerCase();
 
   const publishRequired = Boolean(options.publish && canPublish());
   const preflight = await runPreflight({
@@ -65,6 +74,31 @@ export async function runWorkflow(options = {}) {
     console.warn(`State remote dilewati: ${error.message}`);
   });
 
+  if (mode === "upload-pending") {
+    const pending = await uploadPendingQueue({
+      dryRun: options.dryRun === true || process.argv.includes("--dry-run"),
+      limit: Number(process.env.YOUTUBE_DAILY_UPLOAD_LIMIT || 3) || 3
+    });
+    return dailyReport({
+      status: "pending_upload_processed",
+      dailyPlan,
+      discoveryResult: null,
+      clips: [],
+      pending_uploads: pending
+    });
+  }
+
+  if (options.publish && canPublish() && process.env.PROCESS_PENDING_UPLOADS_FIRST !== "false") {
+    const pendingFirst = await uploadPendingQueue({
+      dryRun: false,
+      limit: Number(process.env.YOUTUBE_DAILY_UPLOAD_LIMIT || 3) || 3
+    }).catch((error) => ({ error: error.message }));
+    if (pendingFirst?.uploaded_count || pendingFirst?.error) {
+      await appendLog("pending_uploads_first", pendingFirst);
+      console.log(`[UPLOAD] pending queue diproses: uploaded=${pendingFirst.uploaded_count || 0}, pending=${pendingFirst.pending_count || 0}`);
+    }
+  }
+
   let scheduledDailyLimit = 0;
   let scheduledPostedToday = 0;
 
@@ -86,8 +120,6 @@ export async function runWorkflow(options = {}) {
     }
   }
 
-  const requestedSlot = String(options.slot || process.env.CLIPPER_SLOT || "all").toLowerCase();
-  const mode = String(options.mode || "full").toLowerCase();
   const shouldUseMixedDailyLoop = !options.url
     && dailyPlan.mode === "mixed_daily"
     && (!options.scheduled || ["discover", "render"].includes(mode) || requestedSlot !== "all");
@@ -155,15 +187,16 @@ export async function runWorkflow(options = {}) {
         selection = await selectQueuedWorkflowVideo({ options, excludedVideoIds });
       }
 
-      if (!selection && dailyPlan.contentType !== "misteri_trending") {
-        const fallbackPlan = resolveDailyPlan({ ...options, theme: "misteri_trending" });
+      if (!selection) {
+        const fallbackTheme = dailyPlan.contentType === "podcast_lucu_hikmah" ? "inspiratif_hikmah" : "podcast_lucu_hikmah";
+        const fallbackPlan = resolveDailyPlan({ ...options, theme: fallbackTheme });
         applyDailyPlanToEnv(fallbackPlan);
-        discoveryResult = await discoverQueuedVideos({ ...options, dailyPlan: fallbackPlan, theme: "misteri_trending" });
+        discoveryResult = await discoverQueuedVideos({ ...options, dailyPlan: fallbackPlan, theme: fallbackTheme });
         discoveredVideoIds = (discoveryResult?.added || [])
           .map((video) => video.id)
           .filter(Boolean);
         selection = await selectQueuedWorkflowVideo({
-          options: { ...options, theme: "misteri_trending", dailyPlan: fallbackPlan },
+          options: { ...options, theme: fallbackTheme, dailyPlan: fallbackPlan },
           excludedVideoIds,
           preferredVideoIds: discoveredVideoIds
         });
@@ -354,9 +387,10 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
       preferredVideoIds: (discoveryResult?.added || []).map((video) => video.id).filter(Boolean)
     });
 
-    if (!selection && slotPlan.content_type !== "misteri_trending") {
+    if (!selection) {
+      const fallbackContentType = slotPlan.content_type === "podcast_lucu_hikmah" ? "inspiratif_hikmah" : "podcast_lucu_hikmah";
       selection = await selectQueuedWorkflowVideo({
-        options: { ...options, theme: "misteri_trending", dailyPlan: { ...slotDailyPlan, contentType: "misteri_trending" } },
+        options: { ...options, theme: fallbackContentType, dailyPlan: { ...slotDailyPlan, contentType: fallbackContentType } },
         excludedVideoIds
       });
     }
@@ -721,7 +755,7 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
   const dailyPlan = options.dailyPlan || resolveDailyPlan({ theme: video.content_type || video.theme || theme?.name });
   const publishSlotWib = options.publishSlotWib || dailyPlan.publishSlotWib || "";
   const publishDateWib = options.publishDateWib || dailyPlan.dateWib || todayDate();
-  const aiProvider = "openai";
+  const aiProvider = options.aiProvider || config.ai.provider || "auto";
   const thumbnailText = await generateThumbnailText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
   const frameQuoteText = await generateFrameQuoteText({ job: storageJob, output, promptTemplate: prompt, aiProvider });
   const openingHook = buildOpeningHook({ output, thumbnailText });
@@ -902,15 +936,18 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
   if (options.publish && canPublish()) {
     const platformResults = await publishPlatforms({
       job,
+      video,
       output,
       caption,
       upload,
-      thumbnail
+      thumbnail,
+      metadata
     });
     const youtubePrimary = config.youtube.enabled;
     const primaryPublished = youtubePrimary ? Boolean(platformResults.youtube) : platformResults.hasAnySuccess;
     const youtubeQuotaExceeded = Boolean(platformResults.quotaExceeded?.youtube);
-    const deferredByQuota = youtubeQuotaExceeded && !primaryPublished;
+    const youtubeDeferred = Boolean(platformResults.deferred?.youtube);
+    const deferredByQuota = (youtubeQuotaExceeded || youtubeDeferred) && !primaryPublished;
     const publishStatus = primaryPublished
       ? platformResults.hasErrors ? "published_with_warnings" : "published"
       : deferredByQuota ? "queued" : "publish_failed";
@@ -966,6 +1003,9 @@ async function processClipOutput({ job, video, theme, prompt, output, clipperRes
       status: primaryPublished ? "published" : publishStatus,
       metadata
     });
+    if (primaryPublished) {
+      await markUsedSource({ video, output, platformResults, metadata }).catch(() => {});
+    }
 
     return {
       ok: true,
@@ -1019,7 +1059,7 @@ async function appendRenderedQueueItem({
   status,
   metadata
 }) {
-  const contentType = dailyPlan.contentType || video.content_type || video.theme || "misteri_trending";
+  const contentType = dailyPlan.contentType || video.content_type || video.theme || "inspiratif_hikmah";
   const confidenceScore = Number(metadata?.confidence_score ?? video.confidence_score ?? 1);
   const minConfidence = Number(process.env.MIN_CLASSIFICATION_CONFIDENCE || 0.6);
   const queueName = confidenceScore < minConfidence && process.env.LOW_CONFIDENCE_TO_REVIEW !== "false" ? "review" : contentType;
@@ -1193,7 +1233,7 @@ async function updateJob(jobId, patch) {
   return patchItem("jobs", jobId, patch);
 }
 
-async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
+async function publishPlatforms({ job, video, output, caption, upload, thumbnail, metadata }) {
   const publishCaption = ensureCaptionSourceCredit(caption, {
     sourceUrl: job.source_url,
     sourceTitle: job.source_title || output.title
@@ -1206,6 +1246,7 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
     threads: null,
     errors: {},
     quotaExceeded: {},
+    deferred: {},
     hasAnySuccess: false,
     hasErrors: false
   };
@@ -1214,15 +1255,39 @@ async function publishPlatforms({ job, output, caption, upload, thumbnail }) {
     platformResults.youtube = await publishPlatform("youtube", platformResults, job.job_id, async () => {
       await updateJob(job.job_id, { youtube_status: "processing", youtube_error: "" });
       const youtubeMetadata = buildYoutubeMetadata({ job, output, caption: publishCaption });
+      if (!await canUploadYoutubeToday()) {
+        await savePendingUpload({
+          videoPath: output.finalAbsPath,
+          thumbnailPath: thumbnail?.path || "",
+          metadata: { ...metadata, ...youtubeMetadata },
+          reason: "PENDING_DAILY_LIMIT"
+        });
+        const error = new Error("YOUTUBE_DAILY_UPLOAD_LIMIT tercapai; video masuk pending queue.");
+        error.pendingUpload = true;
+        error.pendingReason = "PENDING_DAILY_LIMIT";
+        throw error;
+      }
       return publishToYoutube({
         videoPath: output.finalAbsPath,
         thumbnailPath: thumbnail?.path || "",
         ...youtubeMetadata
       });
     });
+    if (platformResults.youtube) {
+      await incrementYoutubeUploadCounter().catch(() => {});
+    }
     if (platformResults.quotaExceeded.youtube) {
+      const youtubeMetadata = buildYoutubeMetadata({ job, output, caption: publishCaption });
+      await savePendingUpload({
+        videoPath: output.finalAbsPath,
+        thumbnailPath: thumbnail?.path || "",
+        metadata: { ...metadata, ...youtubeMetadata },
+        reason: "QUOTA_EXCEEDED",
+        error: platformResults.errors.youtube || ""
+      }).catch(() => {});
       return platformResults;
     }
+    if (platformResults.deferred.youtube) return platformResults;
   }
 
   if (config.facebook.enabled) {
@@ -1294,6 +1359,9 @@ async function publishPlatform(name, platformResults, jobId, callback) {
   } catch (error) {
     platformResults.hasErrors = true;
     platformResults.errors[name] = error.message;
+    if (name === "youtube" && error.pendingUpload) {
+      platformResults.deferred.youtube = true;
+    }
     if (name === "youtube" && isYoutubeQuotaError(error)) {
       platformResults.quotaExceeded.youtube = true;
     }
@@ -1325,7 +1393,7 @@ function buildMetadata({
   publishDateWib = "",
   publishStatus = "rendered_waiting_review"
 }) {
-  const contentType = dailyPlan?.contentType || video.content_type || job.theme || theme?.name || "misteri_trending";
+  const contentType = dailyPlan?.contentType || video.content_type || job.theme || theme?.name || "inspiratif_hikmah";
   const activeSlot = dailyPlan?.activeSlot || {};
   const classification = classifyContentType({ dailyPlan, video, output, contentType });
   const hashtags = metadataHashtags(output, caption, theme, dailyPlan);
@@ -1513,6 +1581,9 @@ function prioritizeHookPattern(value) {
 }
 
 function publishValidationBlockReason(metadata = {}) {
+  if (config.ai.requiredForPublish && metadata.publish_decision === "local_fallback") {
+    return "AI_REQUIRED_FOR_PUBLISH=1; AI analyzer gagal sehingga hasil fallback lokal masuk review, bukan auto-publish.";
+  }
   if (Number(metadata.context_safety_score || 0) < 7) {
     return "context_safety_score < 7; tidak aman untuk auto-publish.";
   }
@@ -1551,7 +1622,10 @@ function firstCaptionSentence(value = "") {
 }
 
 function metadataHashtags(output = {}, caption = "", theme = {}, dailyPlan = null) {
-  const defaults = ["#Ceramah", "#Renungan", "#MotivasiIslami", "#HikmahHidup", "#Shorts"];
+  const contentType = dailyPlan?.contentType || theme?.name || "";
+  const defaults = contentType === "podcast_lucu_hikmah"
+    ? ["#Shorts", "#PodcastIndonesia", "#CeritaLucu", "#CeritaHidup", "#InspirasiHidup"]
+    : ["#Shorts", "#CeritaInspiratif", "#Hikmah", "#Renungan", "#MotivasiHidup"];
   const raw = [
     ...(Array.isArray(output.hashtags) ? output.hashtags : []),
     ...(Array.isArray(dailyPlan?.hashtags) ? dailyPlan.hashtags : []),
@@ -1597,11 +1671,8 @@ function classifyContentType({ dailyPlan, video, output, contentType }) {
     output.clipTranscript
   ].join(" ").toLowerCase();
   const keywordMap = {
-    motivasi_renungan: ["motivasi", "renungan", "keluarga", "orang tua", "perjuangan", "kisah hidup", "pengalaman", "bangkit", "kerja keras", "pelajaran hidup"],
-    sejarah_tokoh: ["sejarah", "tokoh", "biografi", "pahlawan", "kisah nyata", "peristiwa", "kerajaan", "peradaban", "tokoh dunia"],
-    kisah_islami: ["allah", "rezeki", "sabar", "ikhlas", "sedekah", "dosa", "ujian", "ceramah", "kajian", "hikmah", "akhlak", "kisah islami"],
-    fakta_sains: ["fakta", "sains", "pengetahuan", "teknologi", "psikologi", "tubuh manusia", "fenomena alam", "edukasi", "ilmu"],
-    misteri_trending: ["misteri sejarah", "fenomena", "arkeologi", "teka teki", "fakta menarik", "trending", "viral edukatif"]
+    inspiratif_hikmah: ["hikmah", "nasihat", "renungan", "keluarga", "orang tua", "perjuangan", "kisah hidup", "pengalaman", "rezeki", "sabar", "ikhlas", "syukur", "pelajaran hidup"],
+    podcast_lucu_hikmah: ["podcast", "lucu", "ketawa", "ngakak", "cerita", "pengalaman", "relate", "obrolan", "teman", "keluarga", "komedi", "kok iya", "bercanda", "blunder", "awkward", "kocak"]
   };
   const scores = Object.fromEntries(Object.entries(keywordMap).map(([themeName, words]) => [
     themeName,
@@ -1616,7 +1687,7 @@ function classifyContentType({ dailyPlan, video, output, contentType }) {
     ? Math.max(0.6, Math.min(0.95, bestScore / Math.max(totalHits, bestScore)))
     : Number(video.confidence_score ?? output.confidenceScore ?? 0.75);
   return {
-    contentType: dailyTheme === "misteri_trending" ? resolved : dailyTheme,
+    contentType: ["inspiratif_hikmah", "podcast_lucu_hikmah"].includes(dailyTheme) ? dailyTheme : resolved,
     confidenceScore,
     reason: bestScore > 0
       ? `Keyword classifier memilih ${resolved} (${bestScore} hit). Daily theme=${dailyTheme}.`
@@ -1640,7 +1711,7 @@ function dailyReport(result = {}) {
   }, 0);
   const errorOrSkippedCount = clips.filter((clip) => !clip.ok).length + (result.failedSelections?.length || 0);
 
-  return {
+  const report = {
     ...result,
     tanggal_wib: plan.dateWib,
     mode: plan.mode || "legacy",
@@ -1687,6 +1758,19 @@ function dailyReport(result = {}) {
       metadata_file: clip.metadata_path || ""
     }))
   };
+  saveDailyReport(report).catch(() => {});
+  return report;
+}
+
+async function saveDailyReport(report) {
+  const date = report.tanggal_wib || todayDate();
+  const dir = path.join(config.dataDir, "reports");
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(
+    path.join(dir, `daily_report_${date}.json`),
+    `${JSON.stringify(report, null, 2)}\n`,
+    "utf8"
+  );
 }
 
 function splitList(value) {

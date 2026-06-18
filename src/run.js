@@ -35,7 +35,7 @@ const options = {
   forcePublish: optionalBoolArg("--force-publish"),
   url: argValue("--url", ""),
   range: argValue("--range", ""),
-  aiProvider: "openai",
+  aiProvider: argValue("--ai-provider", process.env.AI_PROVIDER || config.ai.provider || "auto"),
   qualityProfile: argValue("--quality", process.env.VIDEO_QUALITY_PROFILE || "standard"),
   clipCount: Number(argValue("--clip-count", process.env.CLIP_COUNT || "1")),
   subtitleFont: argValue("--subtitle-font", process.env.SUBTITLE_FONT_FAMILY || "Segoe UI Semibold"),

@@ -1,0 +1,24 @@
+{
+  "timezone": "Asia/Jakarta",
+  "daily_upload_limit": 3,
+  "slots": [
+    {
+      "name": "pagi",
+      "time": "07:00",
+      "category": "inspiratif_hikmah",
+      "vibe": "renungan_pagi"
+    },
+    {
+      "name": "siang",
+      "time": "12:00",
+      "category": "podcast_lucu_hikmah",
+      "vibe": "lucu_relate"
+    },
+    {
+      "name": "malam",
+      "time": "19:30",
+      "category": "inspiratif_hikmah",
+      "vibe": "renungan_malam"
+    }
+  ]
+}

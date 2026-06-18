@@ -12,14 +12,25 @@ const FRAME = {
 const rendererPath = path.join(config.srcDir, "branding-renderer.py");
 
 const CONTENT_TYPE_ALIASES = {
-  renungan: "kisah_islami",
-  inspiratif: "motivasi_renungan",
-  mindset: "motivasi_renungan",
-  opini: "misteri_trending",
-  mixed_best: "misteri_trending"
+  renungan: "inspiratif_hikmah",
+  inspiratif: "inspiratif_hikmah",
+  hikmah: "inspiratif_hikmah",
+  motivasi_renungan: "inspiratif_hikmah",
+  sejarah_tokoh: "inspiratif_hikmah",
+  kisah_islami: "inspiratif_hikmah",
+  mindset: "inspiratif_hikmah",
+  podcast: "podcast_lucu_hikmah",
+  lucu: "podcast_lucu_hikmah",
+  humor_insight: "podcast_lucu_hikmah",
+  fakta_sains: "podcast_lucu_hikmah",
+  opini: "podcast_lucu_hikmah",
+  misteri_trending: "podcast_lucu_hikmah",
+  mixed_best: "podcast_lucu_hikmah"
 };
 
 const LEGACY_FRAME_ENV_KEY = {
+  inspiratif_hikmah: "KISAH_ISLAMI",
+  podcast_lucu_hikmah: "HUMOR_INSIGHT",
   motivasi_renungan: "MINDSET",
   sejarah_tokoh: "MIXED_BEST",
   kisah_islami: "RENUNGAN",
@@ -28,6 +39,8 @@ const LEGACY_FRAME_ENV_KEY = {
 };
 
 const FRAME_PALETTE = {
+  inspiratif_hikmah: { accent: "#F5C542", secondary: "#E7C77A" },
+  podcast_lucu_hikmah: { accent: "#FFD166", secondary: "#00E5FF" },
   motivasi_renungan: { accent: "#B6FF00", secondary: "#00E5FF" },
   sejarah_tokoh: { accent: "#00E5FF", secondary: "#7C3AED" },
   kisah_islami: { accent: "#00E5FF", secondary: "#7C3AED" },
@@ -37,6 +50,8 @@ const FRAME_PALETTE = {
 };
 
 const FRAME_LABELS = {
+  inspiratif_hikmah: "MENIT HIKMAH",
+  podcast_lucu_hikmah: "LUCU TAPI DALAM",
   motivasi_renungan: "MENIT HIKMAH",
   sejarah_tokoh: "KISAH NYATA",
   kisah_islami: "MENIT HIKMAH",
@@ -95,6 +110,40 @@ function ffmpegPathArg(filePath) {
   return String(filePath).replace(/\\/g, "/").replace(/'/g, "\\'");
 }
 
+function escapeFontPath(filePath) {
+  return String(filePath)
+    .replace(/\\/g, "/")
+    .replace(/:/g, "\\:")
+    .replace(/'/g, "\\'");
+}
+
+function firstReadableFontFile() {
+  const candidates = [
+    process.env.VIDEO_LOWER_THIRD_FONT_FILE,
+    process.env.SUBTITLE_FONT_FILE,
+    process.env.THUMBNAIL_FONT_FILE,
+    process.env.BUMPER_FONT_FILE,
+    "C:/Windows/Fonts/arialbd.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"
+  ].filter(Boolean);
+  for (const fontPath of candidates) {
+    try {
+      if (existsSync(fontPath)) return fontPath;
+    } catch {
+      // Try the next font candidate.
+    }
+  }
+  return "";
+}
+
+function drawtextFontOption() {
+  const fontFile = firstReadableFontFile();
+  if (fontFile) return `fontfile='${escapeFontPath(fontFile)}'`;
+  return "font='Arial'";
+}
+
 function lightFilterChain() {
   return [
     "eq=brightness=0.012:contrast=1.035:saturation=1.06",
@@ -145,7 +194,9 @@ function premiumFrameConfig(contentType = "") {
     accentBarEnabled: boolValue(process.env.FRAME_ACCENT_BAR_ENABLED, adaptiveNeon),
     accentBarPosition: process.env.FRAME_ACCENT_BAR_POSITION || "left",
     accentBarWidth: Math.round(numberEnv("FRAME_ACCENT_BAR_WIDTH", 8, 3, 16)),
-    labelEnabled: boolValue(process.env.FRAME_ACCENT_LABEL_ENABLED, adaptiveNeon),
+    labelEnabled: process.platform === "win32" && !boolValue(process.env.FRAME_FORCE_DRAWTEXT_LABEL, false)
+      ? false
+      : boolValue(process.env.FRAME_ACCENT_LABEL_ENABLED, adaptiveNeon),
     label: frameLabel(contentType)
   };
 }
@@ -162,7 +213,7 @@ function resolveFramePalette(contentType = "") {
 
 function normalizeContentType(value) {
   const key = String(value || "").toLowerCase().trim();
-  return CONTENT_TYPE_ALIASES[key] || key || "misteri_trending";
+  return CONTENT_TYPE_ALIASES[key] || key || "inspiratif_hikmah";
 }
 
 function normalizeHexColor(value) {
@@ -171,7 +222,7 @@ function normalizeHexColor(value) {
 }
 
 function frameLabel(contentType = "") {
-  return FRAME_LABELS[normalizeContentType(contentType)] || "PILIHAN HARI INI";
+  return FRAME_LABELS[normalizeContentType(contentType)] || "MENIT HIKMAH";
 }
 
 function drawColor(value) {
@@ -260,7 +311,7 @@ function buildFilterGraph({ useFrame, useFilter, useWatermark, useLowerThird, pr
       current = "barred";
     }
     if (frame.labelEnabled) {
-      filters.push(`[${current}]drawtext=font='Arial':text='${escapeDrawtext(frame.label)}':fontcolor=${drawColor(frame.accentColor)}:fontsize=34:bordercolor=black@0.82:borderw=2:x=${frame.x}:y=${Math.max(88, frame.y - 56)}[labeled]`);
+      filters.push(`[${current}]drawtext=${drawtextFontOption()}:text='${escapeDrawtext(frame.label)}':fontcolor=${drawColor(frame.accentColor)}:fontsize=34:bordercolor=black@0.82:borderw=2:x=${frame.x}:y=${Math.max(88, frame.y - 56)}[labeled]`);
       current = "labeled";
     }
     if (frame.accentEnabled) {

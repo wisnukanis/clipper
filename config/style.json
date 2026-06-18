@@ -1,0 +1,36 @@
+{
+  "video": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "safe_margin_x": 80,
+    "safe_margin_top": 120,
+    "safe_margin_bottom": 250
+  },
+  "subtitle": {
+    "font_family": "Poppins ExtraBold",
+    "fallback_font": "DejaVu Sans Bold",
+    "font_size": 68,
+    "color": "#FFFFFF",
+    "stroke_color": "#000000",
+    "stroke_width": 5,
+    "max_lines": 2,
+    "highlight_color": "#FFD54A"
+  },
+  "hook": {
+    "font_size": 90,
+    "duration_seconds": 2,
+    "max_words": 5
+  },
+  "cta": {
+    "font_size": 56,
+    "duration_seconds": 4,
+    "position": "bottom_safe"
+  },
+  "logo": {
+    "enabled": true,
+    "position": "top_right",
+    "opacity": 0.85,
+    "size_px": 110
+  }
+}

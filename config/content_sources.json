@@ -1,0 +1,252 @@
+{
+  "podcast_lucu_hikmah": [
+    {
+      "name": "HAS Creative",
+      "url": "https://www.youtube.com/@HASCreative/videos",
+      "type": "youtube_channel",
+      "priority": 1,
+      "category": "podcast_lucu_hikmah",
+      "content_tone": "santai_lucu",
+      "expect_humor": true,
+      "theme_prompt": "Prioritaskan momen obrolan santai yang lucu, punchline natural, cerita pengalaman hidup yang relate, atau momen ngakak yang tidak dibuat-buat. Hindari bagian monolog panjang, teori, atau segmen yang terlalu serius.",
+      "notes": "Source utama untuk obrolan santai, podcast warung kopi, cerita lucu, pengalaman hidup, dan punchline ringan.",
+      "allowed_keywords": [
+        "PWK", "Podcast Warung Kopi", "podcast", "cerita", "lucu",
+        "pengalaman", "hidup", "keluarga", "kerja", "usaha", "rezeki",
+        "perjuangan", "gagal", "sukses", "ngakak", "ketawa", "pelajaran",
+        "obrolan", "teman", "relate", "awkward", "blunder", "malu",
+        "kesalahan", "momen", "seru", "kocak"
+      ],
+      "blocked_keywords": [
+        "politik", "kontroversi", "skandal", "kriminal", "dewasa",
+        "judi", "rokok", "miras", "provokasi", "perselingkuhan", "kasus",
+        "cerai", "KDRT", "bunuh diri", "depresi berat", "pelecehan",
+        "korban", "trauma", "kekerasan"
+      ]
+    },
+    {
+      "name": "VINDES",
+      "url": "https://www.youtube.com/@VINDES/videos",
+      "type": "youtube_channel",
+      "priority": 1,
+      "category": "podcast_lucu_hikmah",
+      "content_tone": "santai_lucu",
+      "expect_humor": true,
+      "theme_prompt": "Prioritaskan momen nostalgia yang lucu, cerita pertemanan, blunder masa kecil atau masa muda, dan obrolan yang relate dengan kehidupan sehari-hari. Cari punchline atau reaksi spontan yang natural.",
+      "notes": "Source utama untuk obrolan lucu, nostalgia, cerita pertemanan, entertainment ringan, dan momen relate.",
+      "allowed_keywords": [
+        "podcast", "cerita", "lucu", "pengalaman", "hidup", "keluarga",
+        "teman", "nostalgia", "kerja", "usaha", "perjuangan", "ngakak",
+        "ketawa", "pelajaran", "obrolan", "masa kecil", "relate",
+        "awkward", "blunder", "malu", "dulu", "waktu kecil", "kocak",
+        "ketahuan", "panik", "salah"
+      ],
+      "blocked_keywords": [
+        "politik", "kontroversi", "skandal", "kriminal", "dewasa",
+        "judi", "rokok", "miras", "provokasi", "perselingkuhan", "kasus",
+        "cerai", "KDRT", "bunuh diri", "depresi berat", "pelecehan",
+        "korban", "trauma", "kekerasan"
+      ]
+    },
+    {
+      "name": "Raditya Dika",
+      "url": "https://www.youtube.com/@radityadika/videos",
+      "type": "youtube_channel",
+      "priority": 1,
+      "category": "podcast_lucu_hikmah",
+      "content_tone": "komedi_observasional",
+      "expect_humor": true,
+      "theme_prompt": "Prioritaskan momen punchline, cerita memalukan atau awkward, observasi lucu tentang keluarga dan kehidupan sehari-hari, atau storytime yang ada plot twist-nya. Cari momen di mana penonton pasti tertawa atau merasa sangat relate. Hindari bagian yang terlalu serius atau monolog panjang tanpa humor.",
+      "notes": "Source utama untuk cerita keluarga, komedi observasional, pengalaman hidup, self-improvement ringan, dan cerita relate.",
+      "allowed_keywords": [
+        "podcast", "cerita", "lucu", "keluarga", "anak", "istri",
+        "hidup", "pengalaman", "kerja", "komedi", "pelajaran", "rumah tangga",
+        "orang tua", "relate", "ngakak", "ketawa", "stand up", "storytime",
+        "kesalahan", "malu", "awkward", "gagal lucu", "panik", "kocak",
+        "ketahuan", "blunder", "plot twist", "ternyata"
+      ],
+      "blocked_keywords": [
+        "politik", "kontroversi", "skandal", "kriminal", "dewasa",
+        "judi", "provokasi", "perselingkuhan", "kasus", "cerai",
+        "KDRT", "bunuh diri", "depresi berat", "pelecehan", "korban",
+        "trauma", "kekerasan"
+      ]
+    },
+    {
+      "name": "CURHAT BANG Denny Sumargo",
+      "url": "https://www.youtube.com/@curhatbang/videos",
+      "type": "youtube_channel",
+      "priority": 2,
+      "category": "podcast_lucu_hikmah",
+      "content_tone": "reflektif_inspiratif",
+      "expect_humor": false,
+      "theme_prompt": "FILTER KETAT. Hanya ambil segmen tentang perjuangan hidup, bangkit dari kegagalan, keluarga, atau hikmah positif. Tolak semua segmen yang membahas drama artis, perceraian, konflik personal, atau topik sensitif. Pastikan clip bisa berdiri sendiri tanpa konteks drama.",
+      "notes": "Source cadangan untuk cerita hidup, perjuangan, pengalaman emosional, keluarga, dan hikmah. Filter harus ketat agar tidak masuk drama sensitif.",
+      "allowed_keywords": [
+        "cerita hidup", "keluarga", "perjuangan", "sukses", "gagal",
+        "pengalaman", "hikmah", "inspiratif", "bangkit", "orang tua",
+        "anak", "usaha", "karier", "belajar", "proses", "motivasi"
+      ],
+      "blocked_keywords": [
+        "perselingkuhan", "kasus", "skandal", "kriminal", "viral",
+        "pelaku", "kontroversi", "politik", "perceraian", "aib",
+        "konflik", "cerai", "KDRT", "bunuh diri", "depresi berat",
+        "pelecehan", "korban", "trauma", "kekerasan", "artis",
+        "selebritis", "gosip", "drama", "ribut"
+      ]
+    },
+    {
+      "name": "Makna Talks",
+      "url": "https://www.youtube.com/@MaknaTalks/videos",
+      "type": "youtube_channel",
+      "priority": 2,
+      "category": "podcast_lucu_hikmah",
+      "content_tone": "reflektif",
+      "expect_humor": false,
+      "theme_prompt": "Prioritaskan momen insight mendalam, kalimat yang bikin mikir, atau cerita perjalanan hidup yang relate. Channel ini lebih reflektif daripada lucu - cari momen 'menampar' atau 'adem' yang kuat, bukan humor. Clip harus bisa dipahami tanpa konteks percakapan sebelumnya.",
+      "notes": "Source cadangan untuk obrolan reflektif, makna hidup, karier, keluarga, perjalanan, dan inspirasi. Lebih cocok untuk konten renungan daripada humor.",
+      "allowed_keywords": [
+        "cerita", "makna", "hidup", "karier", "keluarga", "perjalanan",
+        "inspiratif", "pengalaman", "belajar", "gagal", "sukses", "proses",
+        "pelajaran", "insight", "sadar", "ternyata", "berubah", "perspektif"
+      ],
+      "blocked_keywords": [
+        "politik", "kontroversi", "skandal", "kriminal", "dewasa",
+        "provokasi", "perselingkuhan", "kasus", "cerai", "KDRT",
+        "bunuh diri", "depresi berat", "pelecehan", "korban", "trauma"
+      ]
+    }
+  ],
+  "inspiratif_hikmah": [
+    {
+      "name": "Adi Hidayat Official",
+      "url": "https://www.youtube.com/channel/UC5KW9VowHehb_jHAhDMZpEQ/videos",
+      "handle": "@AdiHidayatOfficial",
+      "channel_id": "UC5KW9VowHehb_jHAhDMZpEQ",
+      "type": "youtube_channel",
+      "priority": 1,
+      "category": "inspiratif_hikmah",
+      "content_tone": "ceramah_inspiratif",
+      "expect_humor": false,
+      "theme_prompt": "Prioritaskan momen nasihat konkret, cerita pendek yang mengandung hikmah, atau kalimat tajam yang bikin mikir. Hindari bagian pengantar panjang, pembacaan dalil panjang, atau penjelasan teknis fiqih. Clip harus bisa dipahami dan dirasakan tanpa konteks video sebelumnya.",
+      "notes": "Source untuk nasihat, hikmah, rezeki, sabar, ikhlas, keluarga, dan renungan. Pilih clip yang berupa cerita atau nasihat pendek, bukan bahasan panjang yang sulit dipotong.",
+      "allowed_keywords": [
+        "hikmah", "nasihat", "rezeki", "sabar", "ikhlas", "syukur",
+        "hidup", "ujian", "keluarga", "orang tua", "anak", "kerja",
+        "usaha", "perjuangan", "cerita", "renungan", "motivasi", "doa",
+        "tenang", "berubah", "tobat", "bangkit", "kisah", "pengalaman"
+      ],
+      "blocked_keywords": [
+        "politik", "fitnah", "debat", "provokasi", "kriminal",
+        "horor", "mistis berlebihan", "khilafiyah berat",
+        "hukum detail", "perdebatan", "cerai", "KDRT"
+      ]
+    },
+    {
+      "name": "Shift Media",
+      "url": "https://www.youtube.com/@ShiftMediaId/videos",
+      "type": "youtube_channel",
+      "priority": 1,
+      "category": "inspiratif_hikmah",
+      "content_tone": "ceramah_anak_muda",
+      "expect_humor": false,
+      "theme_prompt": "Prioritaskan cerita hijrah yang relate untuk anak muda, momen insight tentang pertemanan, karier, atau keluarga, dan nasihat yang disampaikan dengan bahasa ringan. Cari kalimat yang langsung 'menampar' atau bikin sadar tanpa intro panjang.",
+      "notes": "Source untuk cerita hijrah, anak muda, pengalaman hidup, nasihat, keluarga, dan motivasi ringan.",
+      "allowed_keywords": [
+        "hijrah", "cerita", "hidup", "nasihat", "hikmah", "keluarga",
+        "perjuangan", "renungan", "motivasi", "anak muda", "teman",
+        "proses", "sabar", "ikhlas", "berubah", "bangkit", "karier",
+        "pertemanan", "relate", "pengalaman", "tobat"
+      ],
+      "blocked_keywords": [
+        "politik", "kontroversi", "skandal", "provokasi", "debat",
+        "khilafiyah berat", "kasus", "cerai", "KDRT", "kriminal"
+      ]
+    },
+    {
+      "name": "Teras Dakwah",
+      "url": "https://www.youtube.com/@TerasDakwah/videos",
+      "type": "youtube_channel",
+      "priority": 2,
+      "category": "inspiratif_hikmah",
+      "content_tone": "dakwah_ringan",
+      "expect_humor": false,
+      "theme_prompt": "Cari momen nasihat singkat yang langsung ke inti, cerita bernuansa dakwah yang relate untuk anak muda, atau kalimat yang mengandung insight mendalam dalam bahasa yang ringan dan tidak menggurui.",
+      "notes": "Source untuk nasihat ringan dan cerita bernuansa dakwah anak muda.",
+      "allowed_keywords": [
+        "cerita", "hikmah", "nasihat", "renungan", "hidup", "keluarga",
+        "perjuangan", "sabar", "ikhlas", "rezeki", "anak muda",
+        "berubah", "tobat", "bangkit", "pengalaman", "relate"
+      ],
+      "blocked_keywords": [
+        "politik", "debat", "provokasi", "kontroversi",
+        "khilafiyah berat", "kasus", "cerai", "KDRT", "kriminal"
+      ]
+    },
+    {
+      "name": "Tafaqquh Online",
+      "url": "https://www.youtube.com/@TafaqquhOnline/videos",
+      "type": "youtube_channel",
+      "priority": 2,
+      "category": "inspiratif_hikmah",
+      "content_tone": "ceramah_ringan",
+      "expect_humor": false,
+      "theme_prompt": "Hindari bagian pembahasan fiqih teknis atau diskusi panjang. Cari hanya segmen berupa cerita pendek, nasihat konkret, atau kalimat hikmah yang berdiri sendiri. Clip harus langsung masuk ke inti tanpa butuh konteks panjang.",
+      "notes": "Source cadangan untuk hikmah dan renungan. Hindari pembahasan fiqih panjang, pilih bagian cerita/nasihat yang berdiri sendiri.",
+      "allowed_keywords": [
+        "hikmah", "nasihat", "renungan", "hidup", "rezeki", "sabar",
+        "ikhlas", "keluarga", "orang tua", "perjuangan", "cerita",
+        "kisah", "pengalaman", "berubah", "bangkit"
+      ],
+      "blocked_keywords": [
+        "politik", "debat", "provokasi", "khilafiyah berat",
+        "hukum detail", "kontroversi", "cerai", "KDRT", "kriminal"
+      ]
+    },
+    {
+      "name": "Makna Talks",
+      "url": "https://www.youtube.com/@MaknaTalks/videos",
+      "type": "youtube_channel",
+      "priority": 1,
+      "category": "inspiratif_hikmah",
+      "content_tone": "reflektif",
+      "expect_humor": false,
+      "theme_prompt": "Prioritaskan momen insight mendalam, kalimat yang bikin mikir, atau cerita perjalanan hidup yang relate. Cari momen 'menampar' atau 'adem' yang kuat. Clip harus bisa dipahami tanpa konteks percakapan sebelumnya.",
+      "notes": "Dipindahkan ke inspiratif_hikmah sebagai priority 1 karena tone lebih reflektif daripada lucu.",
+      "allowed_keywords": [
+        "cerita", "makna", "hidup", "karier", "keluarga", "perjalanan",
+        "inspiratif", "pengalaman", "belajar", "gagal", "sukses", "proses",
+        "pelajaran", "insight", "sadar", "ternyata", "berubah", "perspektif"
+      ],
+      "blocked_keywords": [
+        "politik", "kontroversi", "skandal", "kriminal", "dewasa",
+        "provokasi", "perselingkuhan", "kasus", "cerai", "KDRT",
+        "bunuh diri", "depresi berat", "pelecehan", "korban", "trauma"
+      ]
+    }
+  ],
+  "fallback_queries": {
+    "podcast_lucu_hikmah": [
+      "podcast lucu indonesia ada hikmahnya",
+      "blunder podcast indonesia ngakak",
+      "cerita memalukan tapi lucu indonesia",
+      "momen ketawa podcast warung kopi",
+      "cerita awkward pengalaman nyata indonesia",
+      "punchline podcast indonesia terbaik",
+      "cerita lucu keluarga indonesia",
+      "storytime lucu relate kehidupan"
+    ],
+    "inspiratif_hikmah": [
+      "renungan hidup islam indonesia",
+      "ceramah pendek penuh hikmah",
+      "nasihat kehidupan islam",
+      "kisah inspiratif indonesia",
+      "motivasi hidup indonesia",
+      "nasihat orang tua islam",
+      "kisah perjuangan hidup islami",
+      "ceramah singkat bikin nangis",
+      "nasihat ustaz tentang rezeki",
+      "kalimat hikmah yang menampar"
+    ]
+  }
+}

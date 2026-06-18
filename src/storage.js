@@ -18,6 +18,14 @@ export async function ensureProjectDirs() {
   await fs.mkdir(config.thumbnailDir, { recursive: true });
   await fs.mkdir(config.metadataDir, { recursive: true });
   await fs.mkdir(config.logDir, { recursive: true });
+  await fs.mkdir(path.join(config.dataDir, "reports"), { recursive: true });
+  await fs.mkdir(path.join(config.dataDir, "discovery_cache"), { recursive: true });
+  await fs.mkdir(path.join(config.rootDir, "output", "raw"), { recursive: true });
+  await fs.mkdir(path.join(config.rootDir, "output", "clips"), { recursive: true });
+  await fs.mkdir(path.join(config.rootDir, "output", "final"), { recursive: true });
+  await fs.mkdir(path.join(config.rootDir, "output", "uploaded"), { recursive: true });
+  await fs.mkdir(path.join(config.rootDir, "output", "upload_failed"), { recursive: true });
+  await fs.mkdir(path.join(config.rootDir, "logs"), { recursive: true });
   for (const filename of Object.values(dataFiles)) {
     const target = path.join(config.dataDir, filename);
     try {

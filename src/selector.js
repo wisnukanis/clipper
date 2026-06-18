@@ -59,11 +59,20 @@ export async function selectNextVideo(options = {}) {
 
   const activeThemes = themes.filter((theme) => theme.status === "active");
   const themeAlias = {
-    renungan: "kisah_islami",
-    inspiratif: "motivasi_renungan",
-    mindset: "motivasi_renungan",
-    opini: "misteri_trending",
-    mixed_best: "misteri_trending"
+    renungan: "inspiratif_hikmah",
+    inspiratif: "inspiratif_hikmah",
+    hikmah: "inspiratif_hikmah",
+    podcast: "podcast_lucu_hikmah",
+    lucu: "podcast_lucu_hikmah",
+    humor_insight: "podcast_lucu_hikmah",
+    mindset: "inspiratif_hikmah",
+    motivasi_renungan: "inspiratif_hikmah",
+    sejarah_tokoh: "inspiratif_hikmah",
+    kisah_islami: "inspiratif_hikmah",
+    opini: "podcast_lucu_hikmah",
+    fakta_sains: "podcast_lucu_hikmah",
+    misteri_trending: "podcast_lucu_hikmah",
+    mixed_best: "podcast_lucu_hikmah"
   };
   const optionTheme = themeAlias[options.theme] || options.theme;
   const requestedTheme = optionTheme && optionTheme !== "auto" ? optionTheme : "";

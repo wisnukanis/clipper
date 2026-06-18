@@ -66,7 +66,8 @@ function encodePathSegment(value) {
 
 function buildConfig() {
   const openaiModels = listEnv("OPENAI_MODELS");
-  const openaiModel = cleanText(process.env.OPENAI_MODEL || "gpt-4.1-nano");
+  const aiProvider = cleanText(process.env.AI_PROVIDER || "auto").toLowerCase();
+  const openaiModel = cleanText(process.env.OPENAI_MODEL || "gpt-4o-mini");
   const openaiBaseUrl = cleanBaseUrl(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1");
   const openaiDefaultModels = openaiBaseUrl === "https://api.openai.com/v1"
     ? ["gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"]
@@ -99,7 +100,7 @@ function buildConfig() {
     metadataDir: path.join(rootDir, "generated", "metadata"),
     logDir: path.join(rootDir, "generated", "logs"),
     localPort: numberEnv("LOCAL_PORT", 8788),
-    timezone: cleanText(process.env.APP_TIMEZONE || "Asia/Jakarta"),
+    timezone: cleanText(process.env.TIMEZONE || process.env.APP_TIMEZONE || "Asia/Jakarta"),
     publicBaseUrl: cleanBaseUrl(process.env.PUBLIC_BASE_URL),
     uploadDriver,
     dryRun: boolEnv("DRY_RUN", true),
@@ -187,7 +188,12 @@ function buildConfig() {
     instagramIgUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
     instagramAccessToken: cleanText(process.env.INSTAGRAM_ACCESS_TOKEN),
     ai: {
-      provider: "openai"
+      provider: ["auto", "gemini", "openai"].includes(aiProvider) ? aiProvider : "auto",
+      requiredForPublish: boolEnv("AI_REQUIRED_FOR_PUBLISH", false)
+    },
+    gemini: {
+      apiKeys: listEnv("GEMINI_API_KEYS", "GEMINI_API_KEY"),
+      model: cleanText(process.env.GEMINI_MODEL || "gemini-flash-latest")
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || "",

@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 
 const failedOpenAiModels = new Set();
+const failedGeminiKeys = new Set();
 
 function timeoutSignal(ms) {
   const controller = new AbortController();
@@ -30,6 +31,11 @@ function openAiUrl(pathname) {
   return `${config.openai.baseUrl.replace(/\/+$/, "")}/${pathname.replace(/^\/+/, "")}`;
 }
 
+function geminiUrl(model) {
+  const safeModel = encodeURIComponent(model || config.gemini.model || "gemini-flash-latest");
+  return `https://generativelanguage.googleapis.com/v1beta/models/${safeModel}:generateContent`;
+}
+
 async function generateOpenAiText(prompt, options = {}) {
   if (!config.openai.apiKey) return "";
   const models = [...new Set([options.model, ...(config.openai.models || []), config.openai.model].filter(Boolean))];
@@ -51,6 +57,10 @@ async function generateOpenAiText(prompt, options = {}) {
 }
 
 async function generateOpenAiTextWithModel(prompt, options = {}) {
+  if (config.openai.baseUrl !== "https://api.openai.com/v1") {
+    return generateOpenAiChatTextWithModel(prompt, options);
+  }
+
   try {
     return await generateOpenAiResponseTextWithModel(prompt, options);
   } catch (error) {
@@ -60,6 +70,71 @@ async function generateOpenAiTextWithModel(prompt, options = {}) {
     console.warn(`OpenAI-compatible /responses tidak tersedia, coba /chat/completions: ${error.message}`);
     return generateOpenAiChatTextWithModel(prompt, options);
   }
+}
+
+function outputTextFromGemini(data) {
+  const parts = [];
+  for (const candidate of data?.candidates || []) {
+    for (const part of candidate?.content?.parts || []) {
+      if (part?.text) parts.push(part.text);
+    }
+  }
+  return parts.join("").trim();
+}
+
+async function generateGeminiText(prompt, options = {}) {
+  const keys = config.gemini.apiKeys || [];
+  if (!keys.length) return "";
+  let lastError = null;
+
+  for (const [index, key] of keys.entries()) {
+    const keyId = String(index);
+    if (failedGeminiKeys.has(keyId)) continue;
+    try {
+      return await generateGeminiTextWithKey(prompt, { ...options, apiKey: key });
+    } catch (error) {
+      lastError = error;
+      failedGeminiKeys.add(keyId);
+      console.warn(`Gemini key#${index + 1} gagal, coba fallback berikutnya: ${error.message}`);
+    }
+  }
+
+  if (lastError) throw lastError;
+  return "";
+}
+
+async function generateGeminiTextWithKey(prompt, options = {}) {
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: prompt }]
+      }
+    ],
+    generationConfig: {
+      temperature: options.temperature ?? config.openai.temperature,
+      maxOutputTokens: Math.max(200, Number(options.maxOutputTokens || 900))
+    }
+  };
+
+  const timeout = timeoutSignal(options.timeoutMs || config.openai.requestTimeoutMs);
+  const response = await fetch(geminiUrl(config.gemini.model), {
+    method: "POST",
+    signal: timeout.signal,
+    headers: {
+      "Content-Type": "application/json",
+      "X-goog-api-key": options.apiKey
+    },
+    body: JSON.stringify(body)
+  }).finally(timeout.clear);
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = data?.error?.message || `Gemini request failed: ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+  return outputTextFromGemini(data);
 }
 
 async function generateOpenAiResponseTextWithModel(prompt, options = {}) {
@@ -131,9 +206,27 @@ async function generateOpenAiChatTextWithModel(prompt, options = {}) {
 }
 
 export async function generateAiText(prompt, options = {}) {
+  const provider = String(options.provider || config.ai.provider || "auto").toLowerCase();
+
+  if (provider === "auto" || provider === "gemini") {
+    try {
+      const text = await generateGeminiText(prompt, options);
+      if (text) return text;
+      if (options.throwOnError && provider === "gemini") {
+        throw new Error("Gemini merespons tanpa teks.");
+      }
+    } catch (error) {
+      if (options.throwOnError && provider === "gemini") throw error;
+      console.warn(`Gemini AI provider gagal: ${error.message}`);
+    }
+  }
+
+  if (provider === "gemini") return "";
+
   try {
     const text = await generateOpenAiText(prompt, options);
     if (text) return text;
+    if (options.throwOnError) throw new Error("OpenAI merespons tanpa teks.");
   } catch (error) {
     if (options.throwOnError) throw error;
     console.warn(`OpenAI AI provider gagal: ${error.message}`);

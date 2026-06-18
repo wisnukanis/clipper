@@ -1,0 +1,20 @@
+{
+  "renungan_pagi": {
+    "folders": ["assets/music/renungan", "assets/music/inspiratif", "assets/music"],
+    "music_volume": 0.05,
+    "voice_volume": 0.95,
+    "ducking": true
+  },
+  "lucu_relate": {
+    "folders": ["assets/music/podcast_funny", "assets/music"],
+    "music_volume": 0.06,
+    "voice_volume": 0.95,
+    "ducking": true
+  },
+  "renungan_malam": {
+    "folders": ["assets/music/renungan", "assets/music"],
+    "music_volume": 0.045,
+    "voice_volume": 0.95,
+    "ducking": true
+  }
+}

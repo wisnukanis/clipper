@@ -1,0 +1,146 @@
+{
+  "status": "discovered",
+  "dailyPlan": {
+    "dateWib": "2026-05-31",
+    "dayKey": "sunday",
+    "timezone": "Asia/Jakarta",
+    "mode": "mixed_daily",
+    "contentType": "inspiratif_hikmah",
+    "dailyTheme": "mixed_daily",
+    "targetMin": 1,
+    "targetMax": 1,
+    "targetCount": 1,
+    "slots": [
+      "07:00"
+    ],
+    "slotPlans": [
+      {
+        "slot_index": 1,
+        "slot_time_wib": "07:00",
+        "content_type": "inspiratif_hikmah",
+        "slot_content_type": "inspiratif_hikmah",
+        "discover_query": "renungan hidup islam indonesia|ceramah pendek penuh hikmah|nasihat kehidupan islam|kisah inspiratif indonesia|motivasi hidup indonesia|nasihat orang tua|kisah perjuangan hidup",
+        "channel_handles": "UC5KW9VowHehb_jHAhDMZpEQ|@ShiftMediaId|@TerasDakwah|@TafaqquhOnline",
+        "selected_channel_handles": [
+          "UC5KW9VowHehb_jHAhDMZpEQ",
+          "@ShiftMediaId",
+          "@TerasDakwah",
+          "@TafaqquhOnline"
+        ],
+        "discovery_mode": "theme_aware_slot",
+        "theme_prompt": "Pilih potongan cerita inspiratif dan hikmah kehidupan yang relate, emosional secukupnya, dan bisa berdiri sendiri. Prioritaskan cerita keluarga, perjuangan, rezeki, sabar, ikhlas, pengalaman pribadi, nasihat orang tua, dan twist yang bikin hati adem. Hindari ceramah teoritis panjang tanpa cerita atau konteks yang menggantung. Wajib hindari politik praktis, SARA provokatif, horor ekstrem, gosip vulgar, konten dewasa, kekerasan eksplisit, dan klaim agama sensitif tanpa sumber jelas. Jika ragu, turunkan context_safety_score dan jangan pilih untuk auto-publish.",
+        "hashtags": [
+          "#Shorts",
+          "#CeritaInspiratif",
+          "#Hikmah",
+          "#Renungan",
+          "#MotivasiHidup",
+          "#CeritaHidup"
+        ]
+      }
+    ],
+    "query": "renungan hidup islam indonesia|ceramah pendek penuh hikmah|nasihat kehidupan islam|kisah inspiratif indonesia|motivasi hidup indonesia|nasihat orang tua|kisah perjuangan hidup",
+    "dailyQuery": "renungan hidup islam indonesia",
+    "discoveryMode": "theme_aware_slot",
+    "channelHandles": "UC5KW9VowHehb_jHAhDMZpEQ|@ShiftMediaId|@TerasDakwah|@TafaqquhOnline",
+    "themePrompt": "Pilih potongan cerita inspiratif dan hikmah kehidupan yang relate, emosional secukupnya, dan bisa berdiri sendiri. Prioritaskan cerita keluarga, perjuangan, rezeki, sabar, ikhlas, pengalaman pribadi, nasihat orang tua, dan twist yang bikin hati adem. Hindari ceramah teoritis panjang tanpa cerita atau konteks yang menggantung. Wajib hindari politik praktis, SARA provokatif, horor ekstrem, gosip vulgar, konten dewasa, kekerasan eksplisit, dan klaim agama sensitif tanpa sumber jelas. Jika ragu, turunkan context_safety_score dan jangan pilih untuk auto-publish.",
+    "hashtags": [
+      "#Shorts",
+      "#CeritaInspiratif",
+      "#Hikmah",
+      "#Renungan",
+      "#MotivasiHidup",
+      "#CeritaHidup"
+    ],
+    "publishSlotWib": "07:00"
+  },
+  "discoveryResult": {
+    "per_slot": [
+      {
+        "slot_index": 1,
+        "slot_time_wib": "07:00",
+        "slot_content_type": "inspiratif_hikmah",
+        "skipped": false,
+        "reason": "",
+        "query": "renungan hidup islam indonesia|ceramah pendek penuh hikmah|nasihat kehidupan islam|kisah inspiratif indonesia|motivasi hidup indonesia|nasihat orang tua|kisah perjuangan hidup",
+        "selected_channel_handles": [
+          "UC5KW9VowHehb_jHAhDMZpEQ",
+          "@ShiftMediaId",
+          "@TerasDakwah",
+          "@TafaqquhOnline"
+        ],
+        "found_count": 955,
+        "channel_found_count": 0,
+        "query_found_count": 1,
+        "trending_found_count": 0,
+        "passed_filter_count": 1,
+        "added_count": 1
+      }
+    ],
+    "found_count": 955,
+    "channel_found_count": 0,
+    "query_found_count": 1,
+    "trending_found_count": 0,
+    "passed_filter_count": 1,
+    "added": [],
+    "added_count": 1
+  },
+  "discoveryResults": [
+    {
+      "slot_index": 1,
+      "slot_time_wib": "07:00",
+      "slot_content_type": "inspiratif_hikmah",
+      "skipped": false,
+      "reason": "",
+      "query": "renungan hidup islam indonesia|ceramah pendek penuh hikmah|nasihat kehidupan islam|kisah inspiratif indonesia|motivasi hidup indonesia|nasihat orang tua|kisah perjuangan hidup",
+      "selected_channel_handles": [
+        "UC5KW9VowHehb_jHAhDMZpEQ",
+        "@ShiftMediaId",
+        "@TerasDakwah",
+        "@TafaqquhOnline"
+      ],
+      "found_count": 955,
+      "channel_found_count": 0,
+      "query_found_count": 1,
+      "trending_found_count": 0,
+      "passed_filter_count": 1,
+      "added_count": 1
+    }
+  ],
+  "clips": [],
+  "failedSelections": [],
+  "successful_clip_count": 0,
+  "failed_clip_count": 0,
+  "tanggal_wib": "2026-05-31",
+  "mode": "mixed_daily",
+  "target_count": 1,
+  "slots": [
+    {
+      "slot_index": 1,
+      "slot_time_wib": "07:00",
+      "slot_content_type": "inspiratif_hikmah",
+      "query": "renungan hidup islam indonesia|ceramah pendek penuh hikmah|nasihat kehidupan islam|kisah inspiratif indonesia|motivasi hidup indonesia|nasihat orang tua|kisah perjuangan hidup",
+      "selected_channel_handles": [
+        "UC5KW9VowHehb_jHAhDMZpEQ",
+        "@ShiftMediaId",
+        "@TerasDakwah",
+        "@TafaqquhOnline"
+      ]
+    }
+  ],
+  "tema_hari_ini": "inspiratif_hikmah",
+  "target_video_hari_ini": "1-1",
+  "query_yang_dipakai": "renungan hidup islam indonesia|ceramah pendek penuh hikmah|nasihat kehidupan islam|kisah inspiratif indonesia|motivasi hidup indonesia|nasihat orang tua|kisah perjuangan hidup",
+  "jumlah_video_ditemukan": 955,
+  "jumlah_video_ditemukan_dari_channel": 0,
+  "jumlah_video_ditemukan_dari_query": 1,
+  "jumlah_video_dari_trending": 0,
+  "jumlah_video_lolos_filter": 1,
+  "jumlah_transcript_berhasil": 0,
+  "jumlah_kandidat_clip_dibuat": 0,
+  "jumlah_video_dirender": 0,
+  "jumlah_video_scheduled_published": 0,
+  "jumlah_error_skipped": 0,
+  "shortage": "Stok/render kurang dari target minimum 1; tersedia 0.",
+  "outputs": []
+}

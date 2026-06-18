@@ -289,6 +289,9 @@ function firstStrongLine(value) {
 
 function cleanText(value = "") {
   return String(value)
+    .replace(/\s*(?:\[(?:musik|music|audio|tepuk tangan|applause|tertawa|laughs?)\]|\((?:musik|music|audio|tepuk tangan|applause|tertawa|laughs?)\))\s*/gi, " ")
+    .replace(/\b(?:ee+|e+|hm+|hmm+|uh+|um+|anu|apa namanya|maksud gua|maksud gue|maksud saya)\b/gi, " ")
+    .replace(/^\s*(?:[\d.,:;"'()\-–—\s]+|(?:eh|ee|e|hm|hmm|uh|um|oke|ok)\b[\s,.:;-]*)+/i, "")
     .replace(/\s+/g, " ")
     .replace(/[^\p{L}\p{N}\s#@.,!?|:'"-]/gu, "")
     .trim();

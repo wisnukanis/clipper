@@ -14,6 +14,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_OPENAI_MODELS = set()
+FAILED_GEMINI_KEYS = set()
+GEMINI_VIRAL_CONTENT_INSTRUCTION = """
+Anda adalah seorang ahli video editor dan spesialis pertumbuhan (growth hacker) di YouTube Shorts, TikTok, dan Reels.
+Tugas Anda adalah menganalisis transkrip teks dan menentukan waktu mulai (start_time) dan waktu selesai (end_time)
+untuk dipotong menjadi video pendek yang menarik.
+
+Kriteria potongan:
+1. Wajib memiliki HOOK yang meledak-ledak dalam 3 detik pertama transkrip yang dipilih.
+2. Durasi total harus berada di antara 40 hingga 60 detik, atau ikuti batas durasi dari prompt jika lebih spesifik.
+3. Pilih bagian yang memiliki muatan emosional tinggi, edukasi padat, punchline/hikmah, atau pernyataan yang memicu komentar.
+4. Awal clip harus langsung berupa fakta mengejutkan, pertanyaan retoris, klimaks argumen, punchline natural, atau pernyataan tajam yang aman.
+5. Potongan harus tetap jelas, berdiri sendiri, tidak dimulai dari konteks menggantung, dan punya konklusi atau cliffhanger yang membuat loop terasa natural.
+"""
 YTDLP_AUTH_ERROR_PATTERNS = (
     "sign in to confirm",
     "not a bot",
@@ -59,17 +72,17 @@ def log_progress(stage, overall=None, *, stage_pct=None, clip=None, total=None, 
 
 
 def load_env():
-    env_path = ROOT / ".env"
-    if not env_path.exists():
-        return
-
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    for env_path in [ROOT / ".env", ROOT.parent / ".env"]:
+        if not env_path.exists():
             continue
 
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 def parse_int(value, default):
@@ -110,6 +123,10 @@ def parse_keys_from_env(*names):
 
 
 def cfg():
+    ai_provider = os.environ.get("AI_PROVIDER", "auto").strip().lower()
+    if ai_provider not in {"auto", "openai", "gemini"}:
+        ai_provider = "auto"
+
     transcribe_provider = os.environ.get("TRANSCRIBE_PROVIDER", "deepgram").strip().lower()
     if transcribe_provider not in {"offline", "auto", "deepgram"}:
         transcribe_provider = "deepgram"
@@ -123,15 +140,20 @@ def cfg():
     ]))
 
     return {
-        "ai_provider": "openai",
+        "ai_provider": ai_provider,
         "openai_model": openai_model,
         "openai_models": openai_models,
         "openai_base_url": openai_base_url,
         "openai_temperature": os.environ.get("OPENAI_TEMPERATURE", "0.35"),
+        "gemini_keys": parse_keys(os.environ.get("GEMINI_API_KEYS") or os.environ.get("GEMINI_API_KEY")),
+        "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
         "ai_request_timeout": parse_int(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS"), 25),
         "ai_clip_selection": parse_int(os.environ.get("AI_CLIP_SELECTION_ENABLED"), 1),
+        "ai_required_for_publish": parse_int(os.environ.get("AI_REQUIRED_FOR_PUBLISH"), 0),
         "ai_candidate_max_count": parse_int(os.environ.get("AI_CANDIDATE_MAX_COUNT"), 5),
         "ai_candidate_max_chars": parse_int(os.environ.get("AI_CANDIDATE_MAX_CHARS"), 7000),
+        "min_clip_coherence_score": parse_float(os.environ.get("MIN_CLIP_COHERENCE_SCORE"), 5.5),
+        "allow_low_coherence_fallback": parse_int(os.environ.get("ALLOW_LOW_COHERENCE_FALLBACK"), 0),
         "viral_strategy": parse_int(os.environ.get("VIRAL_STRATEGY_ENABLED"), 1),
         "viral_strategy_required": parse_int(os.environ.get("VIRAL_STRATEGY_REQUIRED"), 0),
         "min_viral_score_to_publish": parse_int(os.environ.get("MIN_VIRAL_SCORE_TO_PUBLISH"), 60),
@@ -1193,6 +1215,9 @@ def transcript_text(segments):
 
 def extract_json(text):
     raw = str(text or "").strip()
+    if not raw:
+        raise ValueError("AI tidak mengembalikan teks JSON.")
+
     decoder = json.JSONDecoder()
 
     try:
@@ -1206,12 +1231,21 @@ def extract_json(text):
         data, _ = decoder.raw_decode(fenced.group(1).strip())
         return data
 
-    start = raw.find("[")
-    if start < 0:
-        raise ValueError("AI tidak mengembalikan JSON array valid.")
+    starts = sorted(
+        [index for index in [raw.find("["), raw.find("{")] if index >= 0]
+    )
+    if not starts:
+        raise ValueError("AI tidak mengembalikan JSON object/array valid.")
 
-    data, _ = decoder.raw_decode(raw[start:])
-    return data
+    last_error = None
+    for start in starts:
+        try:
+            data, _ = decoder.raw_decode(raw[start:])
+            return data
+        except json.JSONDecodeError as exc:
+            last_error = exc
+
+    raise ValueError(f"AI tidak mengembalikan JSON valid: {last_error}")
 
 
 def openai_output_text(data):
@@ -1238,12 +1272,24 @@ def openai_url(config, path):
     return f"{base_url}/{str(path).lstrip('/')}"
 
 
+def openai_headers(api_key):
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+    }
+
+
 def call_openai_text(prompt, config, model=None):
     api_key = str(config.get("openai_api_key") or "").strip()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY belum diisi.")
 
     model = str(model or config.get("openai_model") or "gpt-4.1-nano").strip()
+    if str(config.get("openai_base_url") or "").rstrip("/") != "https://api.openai.com/v1":
+        return call_openai_chat_text(prompt, config, api_key, model)
+
     try:
         return call_openai_responses_text(prompt, config, api_key, model)
     except urllib.error.HTTPError as exc:
@@ -1260,16 +1306,13 @@ def call_openai_responses_text(prompt, config, api_key, model):
         "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}]
         if str(config.get("openai_base_url") or "").rstrip("/") == "https://api.openai.com/v1"
         else prompt,
-        "max_output_tokens": 1600,
+        "max_output_tokens": 4096,
     }
     payload = json.dumps(body).encode("utf-8")
     request = urllib.request.Request(
         openai_url(config, "responses"),
         data=payload,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
+        headers=openai_headers(api_key),
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=max(5, int(config.get("ai_request_timeout") or 25))) as response:
@@ -1283,18 +1326,15 @@ def call_openai_chat_text(prompt, config, api_key, model):
         "messages": [{"role": "user", "content": prompt}],
     }
     if model.startswith("gpt-5"):
-        body["max_completion_tokens"] = 1600
+        body["max_completion_tokens"] = 4096
     else:
-        body["max_tokens"] = 1600
+        body["max_tokens"] = 4096
         body["temperature"] = float(config.get("openai_temperature") or 0.45)
     payload = json.dumps(body).encode("utf-8")
     request = urllib.request.Request(
         openai_url(config, "chat/completions"),
         data=payload,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
+        headers=openai_headers(api_key),
         method="POST",
     )
     try:
@@ -1306,8 +1346,74 @@ def call_openai_chat_text(prompt, config, api_key, model):
     return openai_chat_output_text(data)
 
 
+def gemini_output_text(response):
+    text = getattr(response, "text", None)
+    if text:
+        return str(text).strip()
+
+    parts = []
+    for candidate in getattr(response, "candidates", []) or []:
+        content = getattr(candidate, "content", None)
+        for part in getattr(content, "parts", []) or []:
+            value = getattr(part, "text", None)
+            if value:
+                parts.append(str(value))
+    return "".join(parts).strip()
+
+
+def call_gemini_text(prompt, config, api_key, model=None):
+    api_key = str(api_key or "").strip()
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEYS belum diisi.")
+
+    model_name = str(model or config.get("gemini_model") or "gemini-flash-latest").strip()
+    try:
+        from google import generativeai as genai
+    except ImportError as exc:
+        raise RuntimeError("Library google-generativeai belum terinstall. Jalankan: pip install google-generativeai") from exc
+
+    genai.configure(api_key=api_key)
+    model_obj = genai.GenerativeModel(
+        model_name=model_name,
+        system_instruction=GEMINI_VIRAL_CONTENT_INSTRUCTION,
+    )
+    generation_config = {
+        "temperature": float(config.get("openai_temperature") or 0.35),
+        "max_output_tokens": 4096,
+        "response_mime_type": "application/json",
+    }
+    response = model_obj.generate_content(
+        prompt,
+        generation_config=generation_config,
+        request_options={"timeout": max(5, int(config.get("ai_request_timeout") or 25))},
+    )
+    text = gemini_output_text(response)
+    if not text:
+        raise RuntimeError("Gemini merespons tanpa teks.")
+    return text
+
+
 def call_json_with_ai_fallback(prompt, config, label):
     last_error = None
+
+    def try_gemini():
+        nonlocal last_error
+        keys = config.get("gemini_keys") or []
+        if not keys:
+            return None
+        model = config.get("gemini_model") or "gemini-flash-latest"
+        for index, key in enumerate(keys):
+            key_id = hashlib.sha1(str(key).encode("utf-8")).hexdigest()[:8]
+            if key_id in FAILED_GEMINI_KEYS:
+                continue
+            try:
+                log_info(f"{label} memakai Gemini {model} key#{index + 1}")
+                return extract_json(call_gemini_text(prompt, config, key, model))
+            except Exception as exc:
+                last_error = exc
+                FAILED_GEMINI_KEYS.add(key_id)
+                log_warn(f"Gemini {model} key#{index + 1} gagal: {exc}")
+        return None
 
     def try_openai():
         nonlocal last_error
@@ -1325,11 +1431,24 @@ def call_json_with_ai_fallback(prompt, config, label):
                 log_warn(f"OpenAI {model} gagal: {exc}")
         return None
 
-    result = try_openai()
+    provider = str(config.get("ai_provider") or "auto").lower()
+
+    result = try_gemini() if provider in {"auto", "gemini"} else None
     if result is not None:
         return result
 
-    raise RuntimeError(str(last_error or "OpenAI AI provider gagal."))
+    result = try_openai() if provider in {"auto", "openai"} else None
+    if result is not None:
+        return result
+
+    raise RuntimeError(str(last_error or "Semua AI provider gagal."))
+
+
+def has_ai_analyzer(config):
+    return bool(
+        (config.get("gemini_keys") or [])
+        or str(config.get("openai_api_key") or "").strip()
+    )
 
 
 def segment_text_window(segments, start, end, max_chars=180):
@@ -1342,6 +1461,109 @@ def segment_text_window(segments, start, end, max_chars=180):
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 3].rstrip() + "..."
+
+
+START_CONTEXT_FILLERS = {
+    "jadi", "nah", "terus", "lalu", "dan", "tapi", "kalau", "karena", "yang",
+    "itu", "ini", "ee", "eh", "hmm", "oke", "ok", "baik", "sebenarnya",
+}
+
+HANGING_END_WORDS = {
+    "dan", "atau", "tapi", "karena", "kalau", "yang", "untuk", "ke", "di",
+    "dari", "jadi", "terus", "lalu", "sehingga", "supaya", "biar", "kayak",
+    "seperti", "bahwa", "dengan",
+}
+
+HOOK_OR_EMOTION_WORDS = {
+    "rahasia", "ternyata", "jangan", "kenapa", "masalah", "gagal", "sukses",
+    "lucu", "ngakak", "ketawa", "haru", "sedih", "kaget", "malu", "blunder",
+    "hikmah", "pelajaran", "rezeki", "sabar", "ikhlas", "keluarga", "perjuangan",
+    "pengalaman", "kisah", "cerita", "tobat", "berubah", "bangkit",
+}
+
+CLOSURE_WORDS = {
+    "akhirnya", "ternyata", "makanya", "intinya", "pelajaran", "hikmah",
+    "kesimpulannya", "itulah", "makna", "sebabnya", "yang penting", "maka",
+    "jadi", "pesannya",
+}
+
+
+def first_word(text):
+    match = re.search(r"\b[\w']+\b", str(text or "").lower(), flags=re.UNICODE)
+    return match.group(0) if match else ""
+
+
+def last_word(text):
+    words = re.findall(r"\b[\w']+\b", str(text or "").lower(), flags=re.UNICODE)
+    return words[-1] if words else ""
+
+
+def clip_coherence_score(text, start, duration):
+    normalized = normalize_text(text)
+    words = normalized.split()
+    word_count = len(words)
+    score = 5.0
+    reasons = []
+
+    if word_count >= 28:
+        score += 1.2
+        reasons.append("isi cukup panjang untuk dipahami")
+    elif word_count >= 18:
+        score += 0.4
+        reasons.append("isi cukup berdiri sendiri")
+    else:
+        score -= 2.2
+        reasons.append("teks terlalu pendek")
+
+    opening = first_word(normalized)
+    ending = last_word(normalized)
+    if opening in START_CONTEXT_FILLERS:
+        score -= 1.4
+        reasons.append(f"awal menggantung: {opening}")
+    else:
+        score += 0.7
+        reasons.append("awal tidak terasa acak")
+
+    if ending in HANGING_END_WORDS:
+        score -= 1.8
+        reasons.append(f"akhir menggantung: {ending}")
+    elif re.search(r"[.!?。！？]$", str(text or "").strip()):
+        score += 0.8
+        reasons.append("akhir punya tanda selesai")
+    else:
+        score += 0.3
+        reasons.append("akhir cukup aman")
+
+    if any(word in normalized for word in HOOK_OR_EMOTION_WORDS):
+        score += 1.2
+        reasons.append("ada hook/emosi/topik kuat")
+    else:
+        score -= 0.8
+        reasons.append("hook atau emosi kurang jelas")
+
+    if any(word in normalized for word in CLOSURE_WORDS):
+        score += 0.8
+        reasons.append("ada sinyal punchline/hikmah/penutup")
+
+    if 25 <= float(duration or 0) <= 60:
+        score += 0.6
+        reasons.append("durasi cocok Shorts")
+    else:
+        score -= 0.4
+
+    unique_ratio = len(set(words)) / max(word_count, 1)
+    if word_count >= 20 and unique_ratio < 0.45:
+        score -= 0.7
+        reasons.append("kata terlalu repetitif")
+
+    if float(start or 0) < 15:
+        score -= 0.6
+        reasons.append("terlalu dekat intro video")
+
+    return {
+        "score": round(clamp(score, 0, 10), 1),
+        "reasons": reasons[:5],
+    }
 
 
 def local_clip_score(text, start, duration):
@@ -1499,8 +1721,9 @@ def normalize_score_1_10(value, fallback=0):
     except (TypeError, ValueError):
         score = float(fallback or 0)
     if score > 10:
-        score = score / 10
-    return round(clamp(score, 0, 10), 1)
+        score = score / 10.0
+    score = max(1.0, min(10.0, score))
+    return round(score, 1)
 
 
 def clip_component_scores(clip):
@@ -1547,9 +1770,9 @@ def weighted_final_score(scores):
         + float(scores.get("retention_score", 0)) * 0.15
         + float(scores.get("emotion_score", 0)) * 0.15
         + float(scores.get("clarity_score", 0)) * 0.10
-        + float(scores.get("context_safety_score", 0)) * 0.15
+        + float(scores.get("context_safety_score", 0)) * 0.05
         + float(scores.get("thumbnail_readability_score", 0)) * 0.05
-        + float(scores.get("shareability_score", 0)) * 0.05,
+        + float(scores.get("shareability_score", 0)) * 0.15,
         2,
     )
 
@@ -1559,8 +1782,14 @@ def concrete_hook_score(text):
     strong_patterns = [
         "rahasia", "ternyata", "jangan", "kenapa", "ini yang jarang dibahas",
         "pengalaman nyata", "cerita personal", "konflik", "ini bukan", "kita harus",
+        "mengejutkan", "tidak disangka", "kisah nyata", "pengakuan",
+        "tobat", "berubah", "dulu saya", "saya pernah", "saat itu saya",
     ]
-    weak_patterns = ["nasihat umum", "secara umum", "pada kesempatan ini", "menurut saya", "sebenarnya gini"]
+    weak_patterns = [
+        "nasihat umum", "secara umum", "pada kesempatan ini", "menurut saya", "sebenarnya gini",
+        "alhamdulillah", "bismillah", "assalamualaikum",
+        "kali ini kita akan", "pada video ini",
+    ]
     score = 5.5
     for pattern in strong_patterns:
         if pattern in value:
@@ -1568,8 +1797,6 @@ def concrete_hook_score(text):
     for pattern in weak_patterns:
         if pattern in value:
             score -= 1.2
-    if re.search(r"\b(rahasia|ternyata|jangan|kenapa)\b", value):
-        score += 0.8
     return normalize_score_1_10(score, 6)
 
 
@@ -1587,12 +1814,142 @@ def thumbnail_readability_score(text):
     return normalize_score_1_10(score, 7)
 
 
+MEDIA_NOISE_RE = re.compile(
+    r"(?i)(?:\[(?:musik|music|audio|tepuk tangan|applause|tertawa|laughs?)\]|"
+    r"\((?:musik|music|audio|tepuk tangan|applause|tertawa|laughs?)\))"
+)
+LEADING_NOISE_RE = re.compile(
+    r"^\s*(?:[\d.,:;\"'()\-–—\s]+|(?:eh|ee|e|hm|hmm|uh|um|oke|ok)\b[\s,.:;-]*)+",
+    re.IGNORECASE,
+)
+FILLER_PHRASE_RE = re.compile(
+    r"\b(?:ee+|e+|hm+|hmm+|uh+|um+|anu|apa namanya|maksud gua|maksud gue|maksud saya)\b",
+    re.IGNORECASE,
+)
+
+
+def clean_public_text(text):
+    value = str(text or "")
+    value = MEDIA_NOISE_RE.sub(" ", value)
+    value = FILLER_PHRASE_RE.sub(" ", value)
+    value = re.sub(r"\b(\w+)(?:\s+\1\b){2,}", r"\1", value, flags=re.IGNORECASE)
+    value = re.sub(r"\s+", " ", value).strip()
+    value = LEADING_NOISE_RE.sub("", value).strip()
+    value = value.strip(" \"'.,;:-–—")
+    return value
+
+
+def title_case_id(text):
+    small_words = {"dan", "di", "ke", "dari", "yang", "untuk", "dengan", "atau"}
+    words = []
+    for index, word in enumerate(str(text or "").split()):
+        lower = word.lower()
+        if index > 0 and lower in small_words:
+            words.append(lower)
+        else:
+            words.append(lower.capitalize())
+    return " ".join(words)
+
+
+def keyword_present(text, keywords):
+    normalized = normalize_text(text)
+    return any(keyword in normalized for keyword in keywords)
+
+
+def is_raw_or_weak_title(title):
+    value = clean_public_text(title)
+    if not value:
+        return True
+    normalized = normalize_text(value)
+    if re.match(r"^\d+\b", value):
+        return True
+    if first_word(normalized) in START_CONTEXT_FILLERS:
+        return True
+    if len(value.split()) > 8:
+        return True
+    if any(token in normalized.split() for token in {"eh", "ee", "hmm", "gua", "gue"}):
+        return True
+    return False
+
+
+def local_editorial_title(text, index=0, content_type=""):
+    cleaned = clean_public_text(text)
+    normalized = normalize_text(cleaned)
+    is_podcast = "podcast" in str(content_type or "").lower()
+    is_hikmah = "hikmah" in str(content_type or "").lower() or keyword_present(
+        normalized,
+        ["allah", "iman", "hati", "hidup", "rezeki", "sabar", "ikhlas", "takut", "cemas", "keluarga"],
+    )
+
+    patterns = []
+    if is_podcast and keyword_present(normalized, ["teman", "circle", "malu", "ketawa", "ngakak", "lucu", "gua", "gue"]):
+        patterns.extend(["CIRCLE ITU NGARUH BANGET", "INI RELATE BANGET"])
+    if is_podcast and keyword_present(normalized, ["gagal", "bangkit", "perjuangan", "usaha", "sukses"]):
+        patterns.extend(["CERITA INI ADA HIKMAHNYA", "GAGALNYA MALAH JADI CERITA"])
+    if not is_podcast and keyword_present(normalized, ["cemas", "takut", "gelisah", "sedih"]):
+        patterns.extend(["SAAT HATI MULAI TAKUT", "RASA CEMAS ADA MAKSUDNYA"])
+    if not is_podcast and keyword_present(normalized, ["allah", "iman", "alquran", "doa"]):
+        patterns.extend(["ALLAH SEDANG MENENANGKANMU", "JANGAN MENYERAH DULU"])
+    if not is_podcast and keyword_present(normalized, ["ibu", "ayah", "orang tua", "keluarga", "anak"]):
+        patterns.extend(["KELUARGA YANG BIKIN SADAR", "PESAN INI MENAMPAR HATI"])
+    if not is_podcast and keyword_present(normalized, ["gagal", "bangkit", "perjuangan", "usaha", "sukses"]):
+        patterns.extend(["GAGAL BUKAN AKHIR", "PROSESNYA BIKIN KUAT"])
+    if keyword_present(normalized, ["jangan"]):
+        patterns.append("JANGAN ABAIKAN PESAN INI")
+    if keyword_present(normalized, ["ternyata"]):
+        patterns.append("TERNYATA INI MAKSUDNYA")
+    if keyword_present(normalized, ["kenapa", "mengapa"]):
+        patterns.append("KENAPA INI SERING TERJADI")
+
+    if not patterns:
+        if is_podcast:
+            patterns = ["OBROLAN INI RELATE BANGET", "MOMEN INI BIKIN MIKIR"]
+        elif is_hikmah:
+            patterns = ["NASIHAT INI BIKIN SADAR", "SATU MENIT UNTUK MERENUNG"]
+        else:
+            patterns = ["BAGIAN INI BIKIN MIKIR", "INI YANG JARANG DIBAHAS"]
+
+    title = patterns[index % len(patterns)]
+    return " ".join(title.split()[:8])[:70]
+
+
 def local_clip_title(text, index):
+    text = clean_public_text(text)
     words = [word for word in re.split(r"\s+", text.strip()) if word]
     title = " ".join(words[:8]).strip(" .,!?;:-")
     if not title:
         return f"Clip {index + 1}"
     return title[:70]
+
+
+def local_caption(text, title, content_type=""):
+    cleaned = clean_public_text(text)
+    sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+    body = ""
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if len(sentence.split()) >= 5:
+            body = sentence
+            break
+    if not body:
+        body = cleaned
+    body = body[:260].rstrip(" ,;:-")
+    if body and not re.search(r"[.!?]$", body):
+        body += "."
+
+    if "podcast" in str(content_type or "").lower():
+        tags = "#PodcastIndonesia #LucuRelate #HikmahHidup #Shorts"
+        if "circle" in normalize_text(title):
+            body = "Kadang obrolan santai justru paling jujur soal hidup dan pertemanan."
+        elif not body:
+            body = "Momen ringan yang relate, lucu, tapi tetap ada pelajaran kecilnya."
+    else:
+        tags = "#HikmahHidup #Renungan #MotivasiIslami #Shorts"
+        if not body:
+            body = "Nasihat singkat ini bisa jadi pengingat saat hati sedang tidak tenang."
+
+    opening = title_case_id(title)
+    return f"{opening}. {body}\n\n{tags}".strip()
 
 
 def build_candidate_clips(segments, config):
@@ -1616,12 +1973,18 @@ def build_candidate_clips(segments, config):
                 break
 
             text = segment_text_window(segments, start, end, max_chars=per_candidate_chars)
-            if len(text.split()) < 8:
+            if len(text.split()) < 18:
+                continue
+
+            coherence = clip_coherence_score(text, start, duration)
+            if coherence["score"] < float(config.get("min_clip_coherence_score", 5.5)):
                 continue
 
             scored.append(
                 {
-                    "score": local_clip_score(text, start, duration),
+                    "score": local_clip_score(text, start, duration) + coherence["score"] * 4,
+                    "coherence_score": coherence["score"],
+                    "coherence_reasons": coherence["reasons"],
                     "start": start,
                     "end": end,
                     "duration": duration,
@@ -1642,16 +2005,20 @@ def build_candidate_clips(segments, config):
         if len(selected) >= max_candidates:
             break
 
-    if not selected and segments:
+    if not selected and segments and int(config.get("allow_low_coherence_fallback", 0)) == 1:
         start = float(segments[0].get("start", 0))
         end = min(float(segments[-1].get("end", start + max_duration)), start + max_duration)
+        text = segment_text_window(segments, start, end, max_chars=per_candidate_chars)
+        coherence = clip_coherence_score(text, start, end - start)
         selected.append(
             {
                 "score": 0,
+                "coherence_score": coherence["score"],
+                "coherence_reasons": coherence["reasons"],
                 "start": start,
                 "end": end,
                 "duration": end - start,
-                "text": segment_text_window(segments, start, end, max_chars=per_candidate_chars),
+                "text": text,
             }
         )
 
@@ -1675,25 +2042,42 @@ def build_candidate_clips(segments, config):
                 "duration": round(float(item["duration"]), 2),
                 "text": text,
                 "local_score": round(float(item["score"]), 2),
+                "coherence_score": item.get("coherence_score", 0),
+                "coherence_reasons": item.get("coherence_reasons", []),
             }
         )
 
     return candidates
 
 
-def candidate_to_clip(candidate, index=0, reason=""):
-    text = str(candidate.get("text", "")).strip()
-    title = local_clip_title(text, index)
+def candidate_to_clip(candidate, index=0, reason="", config=None):
+    text = clean_public_text(candidate.get("text", ""))
+    content_type = (
+        candidate.get("content_type")
+        or candidate.get("category")
+        or (config or {}).get("content_type")
+        or (config or {}).get("theme")
+        or ""
+    )
+    title = local_editorial_title(text, index, content_type)
+    plain_title = local_clip_title(text, index)
+    caption = local_caption(text, title, content_type)
     viral_score = normalize_viral_score(None, candidate.get("local_score", 0))
     return {
         "title": title,
         "best_title": title.upper(),
-        "title_alternatives": normalize_title_alternatives([title, local_clip_title(text, index + 1)]),
-        "reason": reason or "Fallback lokal memilih bagian dengan sinyal hook, angka, konflik, dan kata kunci kuat.",
+        "title_alternatives": normalize_title_alternatives(
+            [
+                title,
+                local_editorial_title(text, index + 1, content_type),
+                local_editorial_title(text, index + 2, content_type),
+            ]
+        ),
+        "reason": reason or "Fallback lokal memilih bagian paling kuat lalu membuat judul editorial yang lebih bersih dan menarik.",
         "start": float(candidate.get("start", 0)),
         "end": float(candidate.get("end", 0)),
         "duration": float(candidate.get("duration", 0)),
-        "hook": text,
+        "hook": plain_title,
         "screen_hook": title.upper(),
         "summary": text[:220],
         "main_emotion": "penasaran",
@@ -1707,12 +2091,14 @@ def candidate_to_clip(candidate, index=0, reason=""):
         "thumbnail_readability_score": thumbnail_readability_score(title),
         "face_expression_score": 7.0,
         "shareability_score": 6.5,
+        "coherence_score": float(candidate.get("coherence_score", 0)),
+        "coherence_reasons": candidate.get("coherence_reasons", []),
         "risks": "",
-        "caption": text,
-        "reason_hook_selected": "Fallback lokal memilih hook paling konkret dari awal transcript.",
+        "caption": caption,
+        "reason_hook_selected": "Fallback lokal membersihkan transcript lalu membuat hook editorial yang lebih kuat.",
         "candidate_id": candidate.get("candidate_id") or index + 1,
         "clip_transcript": text,
-        "selected_angle": local_clip_title(text, index),
+        "selected_angle": title_case_id(title),
         "viral_score": viral_score,
         "viral_score_1_10": normalize_score_1_10(viral_score, 0),
         "publish_decision": "local_fallback",
@@ -1724,14 +2110,18 @@ def find_important_clips(segments, config):
     if not candidates:
         raise RuntimeError("Tidak ada kandidat clip lokal dari transcript.")
 
-    local_clips = [candidate_to_clip(item, index) for index, item in enumerate(candidates)]
+    local_clips = [candidate_to_clip(item, index, config=config) for index, item in enumerate(candidates)]
 
     if int(config.get("ai_clip_selection", 1)) != 1:
+        if int(config.get("ai_required_for_publish", 0)) == 1:
+            raise RuntimeError("AI_REQUIRED_FOR_PUBLISH=1 tetapi AI_CLIP_SELECTION_ENABLED=0.")
         log_warn("AI_CLIP_SELECTION_ENABLED=0. Pakai kandidat lokal offline.")
         return validate_clips(local_clips, segments, config)
 
-    if not config.get("openai_api_key"):
-        log_warn("OPENAI_API_KEY kosong. Pakai fallback analisis lokal offline.")
+    if not has_ai_analyzer(config):
+        if int(config.get("ai_required_for_publish", 0)) == 1:
+            raise RuntimeError("AI_REQUIRED_FOR_PUBLISH=1 tetapi GEMINI_API_KEYS/OPENAI_API_KEY kosong.")
+        log_warn("GEMINI_API_KEYS/OPENAI_API_KEY kosong. Pakai fallback analisis lokal offline.")
         return validate_clips(local_clips, segments, config)
 
     log_info(
@@ -1745,11 +2135,13 @@ def find_important_clips(segments, config):
 Viral strategy wajib dipakai:
 - Buat analisis untuk 5 kandidat yang tersedia, lalu pilih {config['clip_count']} kandidat paling kuat untuk dirender.
 - Beri hook_score, concrete_hook_score, retention_score, emotion_score, clarity_score, context_safety_score, thumbnail_readability_score, face_expression_score, shareability_score, viral_score_1_10, dan context_safe_score_1_10 untuk tiap kandidat.
-- Hitung final_score = hook_score*0.20 + concrete_hook_score*0.15 + retention_score*0.15 + emotion_score*0.15 + clarity_score*0.10 + context_safety_score*0.15 + thumbnail_readability_score*0.05 + shareability_score*0.05.
+- Hitung final_score = hook_score*0.20 + concrete_hook_score*0.15 + retention_score*0.15 + emotion_score*0.15 + clarity_score*0.10 + context_safety_score*0.05 + thumbnail_readability_score*0.05 + shareability_score*0.15.
 - Tolak kandidat dengan context_safety_score < 7 karena risiko salah konteks terlalu tinggi.
 - Prioritaskan hook konkret: rahasia, ternyata, jangan, kenapa, ini yang jarang dibahas, pengalaman nyata, konflik ringan, cerita personal, dan statement tajam tapi aman.
 - Kurangi kandidat abstrak: nasihat umum tanpa cerita, ceramah terlalu teoritis, potongan tanpa konflik, pembukaan terlalu pelan, dan wide shot terlalu lama.
 - Pilih kandidat dengan potensi retention paling kuat: cerita personal, konflik ringan, punchline, nasihat konkret, humor, rasa penasaran, atau kalimat yang bikin mikir.
+- Potongan harus terasa utuh: ada setup singkat, inti cerita/punchline/hikmah, dan tidak berakhir di kata sambung.
+- Jangan pilih potongan yang mulai dari tengah konteks seperti "jadi", "nah", "terus", "dan", "tapi", atau "kalau" kecuali kalimat setelahnya tetap jelas berdiri sendiri.
 - selected_angle harus menjelaskan sudut viral yang jelas, bukan kalimat umum.
 - publish_decision gunakan "publish" hanya jika viral_score_1_10 >= 7 atau hook sangat kuat; selain itu "borderline".
 - thumbnail_text, cover_hook, dan screen_hook wajib maksimal 3-5 kata, huruf kapital, kata terkuat di awal, tegas, universal, dan tidak clickbait palsu.
@@ -1760,31 +2152,34 @@ Viral strategy wajib dipakai:
 """
 
     prompt = f"""
-Anda adalah editor video short-form profesional.
+Anda adalah editor video short-form profesional dan spesialis pertumbuhan konten viral di YouTube Shorts, TikTok, dan Facebook Reels untuk pasar Indonesia.
 
 Tugas:
-Baca transcript kandidat di bawah sebagai editor Shorts/Reels Indonesia.
-Buat 5 kandidat clip terbaik, lalu pilih {config['clip_count']} kandidat terbaik untuk dirender.
+Analisis kandidat transkrip berikut dan pilih {config['clip_count']} bagian terbaik berdurasi pendek yang paling berpotensi viral dan menyentuh emosi penonton.
 
 Content type hari ini: {config.get('content_type') or config.get('theme') or 'auto'}.
 Arahan tema hari ini:
 {config.get('theme_prompt') or 'Ikuti kriteria umum dengan prioritas hook kuat, aman konteks, dan mudah dipahami.'}
 Hashtag prioritas tema: {config.get('theme_hashtags') or '-'}
 
-Kriteria:
-- Hook kuat dalam 2 detik pertama.
+Kriteria Pemotongan Eksklusif:
+1. 3-Second Hook Lembar Pertama: Bagian awal video (3 detik pertama) WAJIB langsung berupa kalimat yang kuat, pertanyaan retoris yang mendalam, fakta mengejutkan, atau kalimat pembuka ustadz/talent yang memicu rasa penasaran. JANGAN MEMULAI dengan kata sambung seperti "jadi", "lalu", "dan", basa-basi salam pembuka panjang, atau jeda diam. Langsung tusuk ke inti masalah.
+2. Nilai Emosional & Hikmah: Pilih segmen yang mengandung pesan moral yang kuat, nasihat kehidupan yang menyentuh hati, atau pembahasan hukum/cerita moral yang sering salah dipahami masyarakat. Ini penting agar memicu penonton untuk membagikan video atau mengetikkan opini mereka di kolom komentar.
+3. Durasi Ketat: Durasi segmen harus berada di antara {config['min_clip_seconds']} hingga {config['max_clip_seconds']} detik.
+4. Looping Video (Cliffhanger): Usahakan akhir video terpotong pada kalimat yang membuat kesimpulan menggantung atau sangat padat, sehingga penonton terdorong untuk menonton ulang video tersebut.
+5. Output JSON: Kembalikan data dalam format JSON valid saja, tanpa markdown.
+
+Kriteria tambahan:
 - Hook harus konkret dan cepat. Prioritaskan "rahasia", "ternyata", "jangan", "kenapa", "ini yang jarang dibahas", pengalaman nyata, konflik ringan, cerita personal, atau statement tajam tapi aman.
 - Bisa dipahami tanpa menonton video lengkap.
 - Memiliki satu gagasan utuh.
+- Awal dan akhir clip harus jelas; jangan terasa seperti terpotong dari tengah kalimat atau berhenti sebelum punchline/hikmah selesai.
 - Mengandung cerita, konflik, punchline, nasihat, humor, atau kalimat yang bikin mikir.
-- Durasi minimal {config['min_clip_seconds']} detik.
-- Durasi maksimal {config['max_clip_seconds']} detik.
 - Cocok untuk penonton Indonesia dan platform YouTube Shorts, Instagram Reels, dan Facebook Reels.
 - Tidak memelintir makna narasumber.
 - Utamakan keamanan konteks dan kekuatan hook.
 - Jangan mulai dari basa-basi seperti "jadi", "ee", "menurut saya", atau "pada kesempatan ini".
 - Hindari nasihat umum tanpa cerita, ceramah terlalu teoritis, potongan tanpa konflik, pembukaan terlalu pelan, wide shot terlalu lama, dan hook abstrak.
-- Output harus JSON valid saja, tanpa markdown.
 {viral_rules}
 
 Format output:
@@ -1798,7 +2193,7 @@ Format output:
       "cover_hook": "HOOK 5 KATA",
       "screen_hook": "HOOK 5 KATA",
       "upload_title": "Title upload maksimal 70 karakter",
-      "reason_selected": "Alasan clip ini menarik",
+      "reason_selected": "Alasan psikologis mengapa potongan ini akan membuat orang berhenti scroll",
       "hook_score": 8,
       "concrete_hook_score": 9,
       "retention_score": 8,
@@ -1808,7 +2203,7 @@ Format output:
       "thumbnail_readability_score": 8,
       "face_expression_score": 8,
       "shareability_score": 7,
-      "final_score": 8.15,
+      "final_score": 8.05,
       "viral_score_1_10": 8,
       "context_safe_score_1_10": 9,
       "main_emotion": "lucu/haru/adem/menampar/inspiratif/penasaran",
@@ -1819,15 +2214,15 @@ Format output:
   ],
   "selected_clips": [
   {{
-    "title": "JUDUL MAKSIMAL 8 KATA",
-    "best_title": "JUDUL TERBAIK MAKSIMAL 8 KATA",
+    "title": "JUDUL SHORTS MAKSIMAL 8 KATA",
+    "best_title": "JUDUL BOMBASTIS MAKSIMAL 8 KATA",
     "title_alternatives": ["ALTERNATIF 1", "ALTERNATIF 2", "ALTERNATIF 3"],
-    "reason": "Alasan segmen ini dipilih",
+    "reason": "Alasan psikologis mengapa potongan ini akan membuat orang berhenti scroll",
     "start": 80,
     "end": 130,
     "duration": 50,
     "summary": "Ringkasan isi segmen",
-    "hook": "Kalimat pembuka yang menarik",
+    "hook": "Kalimat 3 detik pertama yang menjadi jangkar perhatian",
     "cover_hook": "HOOK 5 KATA",
     "screen_hook": "HOOK 5 KATA",
     "upload_title": "Title upload maksimal 70 karakter",
@@ -1841,12 +2236,12 @@ Format output:
     "thumbnail_readability_score": 8,
     "face_expression_score": 8,
     "shareability_score": 7,
-    "final_score": 8.15,
+    "final_score": 8.05,
     "viral_score_1_10": 8,
     "context_safe_score_1_10": 9,
     "risks": "Risiko konteks/copyright jika ada, atau kosong",
     "reason_hook_selected": "Hook dipilih karena konkret, pendek, dan sesuai isi clip.",
-    "caption": "Caption posting singkat yang kalimatnya lengkap dan tidak terputus.",
+    "caption": "Caption postingan pendek yang kalimatnya lengkap, tidak terputus, dan dilengkapi 3-4 hashtag relevan.",
     "selected_angle": "Sudut viral utama",
     "thumbnail_text": "TEKS COVER MAKS 8 KATA",
     "publish_decision": "publish",
@@ -1866,6 +2261,8 @@ Candidate clips:
         clips = call_json_with_ai_fallback(prompt, config, "Analisis bagian penting")
         return validate_clips(clips, segments, config)
     except Exception as exc:
+        if int(config.get("ai_required_for_publish", 0)) == 1:
+            raise RuntimeError(f"AI_REQUIRED_FOR_PUBLISH=1 dan semua AI provider gagal: {exc}") from exc
         log_warn(f"Semua AI provider gagal. Pakai fallback analisis lokal offline: {exc}")
     return validate_clips(local_clips, segments, config)
 
@@ -1892,6 +2289,8 @@ def validate_clips(clips, segments, config):
             if analysis_candidates:
                 selected["analysis_candidates"] = analysis_candidates
             clips = [selected]
+        elif any(key in clips for key in ["start", "start_time", "startTime", "end", "end_time", "endTime"]):
+            clips = [clips]
         else:
             clips = clips.get("clips") or clips.get("data") or clips.get("results") or analysis_candidates
 
@@ -1928,6 +2327,15 @@ def validate_clips(clips, segments, config):
             or clip.get("clipTranscript")
             or segment_text_window(segments, start, end, max_chars=1200)
         )
+        clip_transcript = clean_public_text(clip_transcript)
+        coherence = clip_coherence_score(clip_transcript, start, end - start)
+        min_coherence = float(config.get("min_clip_coherence_score", 5.5))
+        if coherence["score"] < min_coherence:
+            log_warn(
+                f"Clip kandidat ditolak: coherence_score={coherence['score']}/10 "
+                f"min={min_coherence}. Alasan: {', '.join(coherence['reasons'])}"
+            )
+            continue
         local_score = local_clip_score(clip_transcript, start, end - start)
         viral_score = normalize_viral_score(
             clip.get("viral_score")
@@ -1954,9 +2362,15 @@ def validate_clips(clips, segments, config):
             "title",
             default=f"Clip {index + 1}",
         )
+        title = clean_public_text(title)
+        if is_raw_or_weak_title(title):
+            title = local_editorial_title(clip_transcript, index, config.get("content_type") or config.get("theme") or "")
         title = title[:70]
         title = " ".join(title.split()[:8]).strip()
         screen_hook = first_text_value(clip, "cover_hook", "coverHook", "screen_hook", "screenHook", "thumbnail_text", "thumbnailText", "hook", default=title)
+        screen_hook = clean_public_text(screen_hook)
+        if not screen_hook:
+            screen_hook = title
         screen_hook = " ".join(screen_hook.split()[:5]).strip().upper()
         title_alternatives = normalize_title_alternatives(
             clip.get("title_alternatives") or clip.get("titleAlternatives") or []
@@ -1978,14 +2392,16 @@ def validate_clips(clips, segments, config):
                 "start": start,
                 "end": end,
                 "duration": duration,
-                "summary": first_text_value(clip, "summary", "ringkasan", default=""),
-                "hook": clip.get("hook") or screen_hook,
+                "summary": clean_public_text(first_text_value(clip, "summary", "ringkasan", default="")),
+                "hook": clean_public_text(clip.get("hook") or screen_hook),
                 "cover_hook": screen_hook,
                 "screen_hook": screen_hook,
                 "main_emotion": first_text_value(clip, "main_emotion", "mainEmotion", "emotion", "emosi_utama", default=""),
                 "context_safe_score": context_safe_score,
                 **component_scores,
                 "final_score": final_score,
+                "coherence_score": coherence["score"],
+                "coherence_reasons": coherence["reasons"],
                 "risks": first_text_value(clip, "risks", "risk", "risiko", default=""),
                 "reason_hook_selected": first_text_value(
                     clip,
@@ -1996,9 +2412,17 @@ def validate_clips(clips, segments, config):
                     default="Hook dipilih karena paling konkret dan terbaca cepat.",
                 ),
                 "analysis_candidates": clip.get("analysis_candidates") or clip.get("analysisCandidates") or [],
-                "caption": clip.get("caption") or "",
+                "caption": (
+                    clean_public_text(
+                        clip.get("caption")
+                        or clip.get("hook")
+                        or clip.get("screen_hook")
+                        or clip.get("summary")
+                        or ""
+                    )
+                ),
                 "thumbnail_text": screen_hook,
-                "selected_angle": clip.get("selected_angle") or clip.get("selectedAngle") or "",
+                "selected_angle": clean_public_text(clip.get("selected_angle") or clip.get("selectedAngle") or ""),
                 "viral_score": viral_score,
                 "viral_score_1_10": normalize_score_1_10(viral_score, 0),
                 "publish_decision": publish_decision,
@@ -2012,6 +2436,7 @@ def validate_clips(clips, segments, config):
         result.sort(
             key=lambda item: (
                 float(item.get("final_score") or 0),
+                float(item.get("coherence_score") or 0),
                 float(item.get("context_safety_score") or item.get("context_safe_score") or 0),
                 int(item.get("viral_score") or 0),
             ),
@@ -2035,8 +2460,8 @@ def review_clip_transcript_segments(segments, clip, config, job_id, index):
     if int(config.get("transcript_review", 1)) != 1:
         return segments, None
 
-    if not config.get("openai_api_key"):
-        log_warn("Transcript review dilewati: OPENAI_API_KEY kosong.")
+    if not has_ai_analyzer(config):
+        log_warn("Transcript review dilewati: GEMINI_API_KEYS/OPENAI_API_KEY kosong.")
         return segments, None
 
     clip_start = float(clip["start"])
@@ -2203,9 +2628,9 @@ def subtitle_style_config(config):
     min_margin_h = max(150, int(width * 0.15))
     max_margin_h = max(min_margin_h, int(width * 0.30))
 
-    font_name = (os.environ.get("SUBTITLE_FONT_FAMILY") or "Segoe UI Semibold").strip() or "Segoe UI Semibold"
-    font_name = re.sub(r"[\r\n,]+", " ", font_name).strip() or "Segoe UI Semibold"
-    font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 46), 28, 84)
+    font_name = (os.environ.get("SUBTITLE_FONT_FAMILY") or "Arial Black").strip() or "Arial Black"
+    font_name = re.sub(r"[\r\n,]+", " ", font_name).strip() or "Arial Black"
+    font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_FONT_SIZE"), 48), 28, 84)
     min_font_size = clamp_int(parse_int(os.environ.get("SUBTITLE_MIN_FONT_SIZE"), 34), 24, font_size)
     margin_h = clamp_int(parse_int(os.environ.get("SUBTITLE_MARGIN_H"), default_margin_h), min_margin_h, max_margin_h)
     subtitle_y = parse_float(os.environ.get("SUBTITLE_POSITION_Y"), 0.72)
@@ -2225,10 +2650,10 @@ def subtitle_style_config(config):
         "max_lines": max_lines,
         "safe_width": max(240, width - (margin_h * 2)),
         "primary_colour": ass_colour_env("SUBTITLE_PRIMARY_COLOUR", "&H00FFFFFF"),
-        "outline_colour": ass_colour_env("SUBTITLE_OUTLINE_COLOUR", "&H00111111"),
-        "shadow_colour": ass_colour_env("SUBTITLE_SHADOW_COLOUR", "&H66000000"),
-        "outline": clamp_int(parse_int(os.environ.get("SUBTITLE_OUTLINE"), 4), 0, 12),
-        "shadow": clamp_int(parse_int(os.environ.get("SUBTITLE_SHADOW"), 1), 0, 8),
+        "outline_colour": ass_colour_env("SUBTITLE_OUTLINE_COLOUR", "&H00000000"),
+        "shadow_colour": ass_colour_env("SUBTITLE_SHADOW_COLOUR", "&H00000000"),
+        "outline": clamp_int(parse_int(os.environ.get("SUBTITLE_OUTLINE"), 5), 0, 12),
+        "shadow": clamp_int(parse_int(os.environ.get("SUBTITLE_SHADOW"), 0), 0, 8),
         "bold": -1 if parse_int(os.environ.get("SUBTITLE_BOLD"), 1) else 0,
     }
 
@@ -4502,6 +4927,8 @@ def main():
                 "contextSafetyScore": clip.get("context_safety_score", 0),
                 "shareabilityScore": clip.get("shareability_score", 0),
                 "finalScore": clip.get("final_score", 0),
+                "coherenceScore": clip.get("coherence_score", 0),
+                "coherenceReasons": clip.get("coherence_reasons", []),
                 "concreteHookScore": clip.get("concrete_hook_score", 0),
                 "thumbnailReadabilityScore": clip.get("thumbnail_readability_score", 0),
                 "faceExpressionScore": clip.get("face_expression_score", 0),

@@ -1,0 +1,263 @@
+{
+  "status": "mixed_daily_publish_done",
+  "dailyPlan": {
+    "dateWib": "2026-05-26",
+    "dayKey": "tuesday",
+    "timezone": "Asia/Jakarta",
+    "mode": "mixed_daily",
+    "contentType": "podcast_lucu_hikmah",
+    "dailyTheme": "mixed_daily",
+    "targetMin": 3,
+    "targetMax": 3,
+    "targetCount": 3,
+    "slots": [
+      "07:00",
+      "12:00",
+      "19:30"
+    ],
+    "slotPlans": [
+      {
+        "slot_index": 2,
+        "slot_time_wib": "12:00",
+        "content_type": "podcast_lucu_hikmah",
+        "slot_content_type": "podcast_lucu_hikmah",
+        "discover_query": "podcast lucu indonesia ada hikmahnya|cerita lucu podcast indonesia|obrolan lucu inspiratif|cerita pengalaman hidup lucu indonesia|podcast keluarga indonesia lucu|cerita hidup inspiratif lucu",
+        "channel_handles": "@HASCreative|@VINDES|@radityadika|@curhatbang|@MaknaTalks",
+        "selected_channel_handles": [
+          "@HASCreative",
+          "@VINDES",
+          "@radityadika",
+          "@curhatbang",
+          "@MaknaTalks"
+        ],
+        "discovery_mode": "theme_aware_slot",
+        "theme_prompt": "Pilih potongan podcast yang lucu, ringan, relate, tapi tetap punya makna. Prioritaskan pengalaman nyata, konflik ringan, punchline, ekspresi lucu, obrolan keluarga/kerja/usaha, dan ending yang bikin \"kok iya ya\". Hindari gosip mentah, vulgar, politik panas, atau candaan yang menyerang. Wajib hindari politik praktis, SARA provokatif, horor ekstrem, gosip vulgar, konten dewasa, kekerasan eksplisit, dan klaim agama sensitif tanpa sumber jelas. Jika ragu, turunkan context_safety_score dan jangan pilih untuk auto-publish.",
+        "hashtags": [
+          "#Shorts",
+          "#PodcastIndonesia",
+          "#CeritaLucu",
+          "#CeritaHidup",
+          "#InspirasiHidup",
+          "#Hikmah"
+        ]
+      }
+    ],
+    "query": "podcast lucu indonesia ada hikmahnya|cerita lucu podcast indonesia|obrolan lucu inspiratif|cerita pengalaman hidup lucu indonesia|podcast keluarga indonesia lucu|cerita hidup inspiratif lucu",
+    "dailyQuery": "podcast lucu indonesia ada hikmahnya",
+    "discoveryMode": "theme_aware_slot",
+    "channelHandles": "@HASCreative|@VINDES|@radityadika|@curhatbang|@MaknaTalks",
+    "themePrompt": "Pilih potongan podcast yang lucu, ringan, relate, tapi tetap punya makna. Prioritaskan pengalaman nyata, konflik ringan, punchline, ekspresi lucu, obrolan keluarga/kerja/usaha, dan ending yang bikin \"kok iya ya\". Hindari gosip mentah, vulgar, politik panas, atau candaan yang menyerang. Wajib hindari politik praktis, SARA provokatif, horor ekstrem, gosip vulgar, konten dewasa, kekerasan eksplisit, dan klaim agama sensitif tanpa sumber jelas. Jika ragu, turunkan context_safety_score dan jangan pilih untuk auto-publish.",
+    "hashtags": [
+      "#Shorts",
+      "#PodcastIndonesia",
+      "#CeritaLucu",
+      "#CeritaHidup",
+      "#InspirasiHidup",
+      "#Hikmah"
+    ],
+    "publishSlotWib": "19:30"
+  },
+  "discoveryResult": {
+    "per_slot": [
+      {
+        "slot_index": 2,
+        "slot_time_wib": "12:00",
+        "slot_content_type": "podcast_lucu_hikmah",
+        "skipped": false,
+        "reason": "",
+        "query": "podcast lucu indonesia ada hikmahnya|cerita lucu podcast indonesia|obrolan lucu inspiratif|cerita pengalaman hidup lucu indonesia|podcast keluarga indonesia lucu|cerita hidup inspiratif lucu",
+        "selected_channel_handles": [
+          "@HASCreative",
+          "@VINDES",
+          "@radityadika",
+          "@curhatbang",
+          "@MaknaTalks"
+        ],
+        "found_count": 522,
+        "channel_found_count": 0,
+        "query_found_count": 2,
+        "trending_found_count": 0,
+        "passed_filter_count": 2,
+        "added_count": 2
+      }
+    ],
+    "found_count": 522,
+    "channel_found_count": 0,
+    "query_found_count": 2,
+    "trending_found_count": 0,
+    "passed_filter_count": 2,
+    "added": [],
+    "added_count": 2
+  },
+  "discoveryResults": [
+    {
+      "slot_index": 2,
+      "slot_time_wib": "12:00",
+      "slot_content_type": "podcast_lucu_hikmah",
+      "skipped": false,
+      "reason": "",
+      "query": "podcast lucu indonesia ada hikmahnya|cerita lucu podcast indonesia|obrolan lucu inspiratif|cerita pengalaman hidup lucu indonesia|podcast keluarga indonesia lucu|cerita hidup inspiratif lucu",
+      "selected_channel_handles": [
+        "@HASCreative",
+        "@VINDES",
+        "@radityadika",
+        "@curhatbang",
+        "@MaknaTalks"
+      ],
+      "found_count": 522,
+      "channel_found_count": 0,
+      "query_found_count": 2,
+      "trending_found_count": 0,
+      "passed_filter_count": 2,
+      "added_count": 2
+    }
+  ],
+  "clips": [
+    {
+      "ok": true,
+      "clip_index": 1,
+      "clip_job_id": "JOB-20260526-1653-PODCASTARTIS-CC67",
+      "status": "published_with_warnings",
+      "content_type": "podcast_lucu_hikmah",
+      "title_best": "DAN SEJUJURNYA SEMUA KESUKSESAN BESAR ITU TIDAK AKAN",
+      "opening_hook": "DAN SEJUJURNYA SEMUA KESUKSESAN BESAR",
+      "cover_hook": "DAN SEJUJURNYA SEMUA KESUKSESAN BESAR",
+      "publish_slot_wib": "12:00",
+      "final_score": 7.43,
+      "context_safety_score": 7,
+      "concrete_hook_score": 7.4,
+      "thumbnail_readability_score": 8,
+      "face_expression_score": 7,
+      "confidence_score": 0.6666666666666666,
+      "candidate_clip_count": 0,
+      "error": "",
+      "public_video_url": "https://razqabermain.com/ig-generated/videos/JOB-20260526-1653-PODCASTARTIS-CC67.mp4",
+      "public_thumbnail_url": "https://razqabermain.com/ig-generated/thumbnails/JOB-20260526-1653-PODCASTARTIS-CC67-thumbnail.jpg",
+      "youtube_video_id": "IIc8frJOi9I",
+      "youtube_url": "https://www.youtube.com/watch?v=IIc8frJOi9I",
+      "instagram_media_id": "",
+      "facebook_video_id": "1472704781002220",
+      "tiktok_publish_id": "",
+      "threads_media_id": "",
+      "final_video_path": "C:\\xampp\\htdocs\\oto\\clipper\\generated\\videos\\JOB-20260526-1653-PODCASTARTIS-CC67-with-thumb-intro.mp4",
+      "original_final_video_path": "C:\\xampp\\htdocs\\oto\\clipper\\clipper\\output\\py-final-01-DAN-SEJUJURNYA-SEMUA-KESUKSESAN-BESAR-ITU-TIDAK-AKAN.mp4",
+      "metadata_path": "C:\\xampp\\htdocs\\oto\\clipper\\generated\\metadata\\JOB-20260526-1653-PODCASTARTIS-CC67.json",
+      "video_effects": {
+        "applied": true,
+        "frame": true,
+        "filter": true,
+        "watermark": true,
+        "lowerThird": true,
+        "lowerThirdText": "Dan sejujurnya semua kesuksesan besar itu tidak akan pernah terjadi tanpa",
+        "frameStyle": "premium_blur",
+        "frameColorMode": "adaptive_neon",
+        "frameShapeMode": "cut_corner",
+        "frameAccentColor": "#00E5FF",
+        "frameSecondaryColor": "#B6FF00",
+        "frameUseFullBorder": false,
+        "frameUsePartialGlow": true,
+        "frameAccentLabel": "PILIHAN HARI INI",
+        "frameAssetPath": "",
+        "watermarkAssetPath": "C:/xampp/htdocs/oto/clipper/assets/branding/logo.png"
+      },
+      "background_music": {
+        "id": "renungan-1",
+        "label": "renungan 1",
+        "file": "assets/music/musik renungan hikmah.mp3",
+        "mood": "",
+        "volume": 0.05,
+        "original_volume": 0.95,
+        "ducking_enabled": true,
+        "fade_in_seconds": 0.5,
+        "fade_out_seconds": 1
+      },
+      "thumbnail_intro": {
+        "applied": true,
+        "durationSeconds": 0.8,
+        "transitionEnabled": true,
+        "transitionSeconds": 0.3,
+        "transitionType": "zoom_blur",
+        "trimmedMainSeconds": null,
+        "introPath": "C:\\xampp\\htdocs\\oto\\clipper\\generated\\videos\\JOB-20260526-1653-PODCASTARTIS-CC67-thumb-intro.mp4",
+        "bumperApplied": true,
+        "bumperPath": "C:\\xampp\\htdocs\\oto\\clipper\\generated\\videos\\JOB-20260526-1653-PODCASTARTIS-CC67-bumper.mp4",
+        "bumperDurationSeconds": 1.1,
+        "bumper": {
+          "bumper_enabled": true,
+          "bumper_adaptive_enabled": true,
+          "bumper_duration": 1.1,
+          "bumper_series_label": "MENIT HIKMAH",
+          "bumper_tagline": "1 menit yang bikin mikir",
+          "bumper_mood": "reflective",
+          "bumper_icon": "spark",
+          "bumper_accent_color": "#00E5FF",
+          "bumper_motion": "soft_zoom",
+          "bumper_style": "adaptive_theme_stamp",
+          "bumper_reason": "Fallback lokal berdasarkan contenttype dan opening hook.",
+          "bumper_risk_notes": ""
+        }
+      },
+      "frame_quote_text": "Dan sejujurnya semua kesuksesan besar itu tidak akan pernah terjadi tanpa",
+      "caption": "Dan sejujurnya semua kesuksesan besar itu tidak akan pernah terjadi tanpa ada campur tangan dari rute manuver ajaib yang kamu tunjukkan pada saya siang tadi. Lugas kini berdiri tepat berhadapan dengan posisi duduk pijar. Menatap wajah polos gadis itu dengan pandangan kekaguman yang amat sangat tulus. Lugas merogoh bagian saku dalam jasnya. mengeluarkan sebuah dompet kulit tipis dan menarik lima buah lembar uang kertas pecahan 100 ribuan baru yang tadi sempat ditolak mentah-mententah oleh pijar. Terimalah uang ini untuk biaya ganti rugi perjalanan kita yang sangat bersejarah dan menyelamatkan karir saya tadi. Tolong jangan ditolak lagi untuk yang kedua kalinya ya. Anggap saja sisa kembalian dari uang ini adalah sebuah bonus tip tambahan.\n\nFallback lokal memilih bagian dengan sinyal hook, angka, konflik, dan kata kunci kuat.\n\nMenurut kamu, bagian paling relate yang mana?\n\nSumber lengkap: Gadis Ojol Kasih Tumpangan ke BOS KAYA yang Terjebak Macet, Tapi Malah Bikin si BOS Jatuh Cinta\nhttps://www.youtube.com/watch?v=SEGx8dfmvRw\nCredit: highlight dari video sumber.\n\n#Ceramah #Keluarga #SejujurnyaSemua #KesuksesanBesar #SejujurnyaSemuaKesuksesan #SemuaKesuksesan #BesarPernah #FallbackLokalMemilih",
+      "youtube_error": "",
+      "slot_index": 2,
+      "slot_time_wib": "12:00",
+      "slot_content_type": "podcast_lucu_hikmah"
+    }
+  ],
+  "failedSelections": [],
+  "successful_clip_count": 1,
+  "failed_clip_count": 0,
+  "tanggal_wib": "2026-05-26",
+  "mode": "mixed_daily",
+  "target_count": 3,
+  "slots": [
+    {
+      "slot_index": 2,
+      "slot_time_wib": "12:00",
+      "slot_content_type": "podcast_lucu_hikmah",
+      "query": "podcast lucu indonesia ada hikmahnya|cerita lucu podcast indonesia|obrolan lucu inspiratif|cerita pengalaman hidup lucu indonesia|podcast keluarga indonesia lucu|cerita hidup inspiratif lucu",
+      "selected_channel_handles": [
+        "@HASCreative",
+        "@VINDES",
+        "@radityadika",
+        "@curhatbang",
+        "@MaknaTalks"
+      ]
+    }
+  ],
+  "tema_hari_ini": "podcast_lucu_hikmah",
+  "target_video_hari_ini": "3-3",
+  "query_yang_dipakai": "podcast lucu indonesia ada hikmahnya|cerita lucu podcast indonesia|obrolan lucu inspiratif|cerita pengalaman hidup lucu indonesia|podcast keluarga indonesia lucu|cerita hidup inspiratif lucu",
+  "jumlah_video_ditemukan": 522,
+  "jumlah_video_ditemukan_dari_channel": 0,
+  "jumlah_video_ditemukan_dari_query": 2,
+  "jumlah_video_dari_trending": 0,
+  "jumlah_video_lolos_filter": 2,
+  "jumlah_transcript_berhasil": 1,
+  "jumlah_kandidat_clip_dibuat": 0,
+  "jumlah_video_dirender": 1,
+  "jumlah_video_scheduled_published": 1,
+  "jumlah_error_skipped": 0,
+  "shortage": "Stok/render kurang dari target minimum 3; tersedia 1.",
+  "outputs": [
+    {
+      "slot_index": 2,
+      "slot_time_wib": "12:00",
+      "content_type": "podcast_lucu_hikmah",
+      "title_best": "DAN SEJUJURNYA SEMUA KESUKSESAN BESAR ITU TIDAK AKAN",
+      "opening_hook": "DAN SEJUJURNYA SEMUA KESUKSESAN BESAR",
+      "cover_hook": "DAN SEJUJURNYA SEMUA KESUKSESAN BESAR",
+      "publish_slot_wib": "12:00",
+      "final_score": 7.43,
+      "context_safety_score": 7,
+      "concrete_hook_score": 7.4,
+      "thumbnail_readability_score": 8,
+      "face_expression_score": 7,
+      "confidence_score": 0.6666666666666666,
+      "status": "published_with_warnings",
+      "output_file": "C:\\xampp\\htdocs\\oto\\clipper\\generated\\videos\\JOB-20260526-1653-PODCASTARTIS-CC67-with-thumb-intro.mp4",
+      "metadata_file": "C:\\xampp\\htdocs\\oto\\clipper\\generated\\metadata\\JOB-20260526-1653-PODCASTARTIS-CC67.json"
+    }
+  ]
+}

@@ -2,6 +2,21 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { generateAiText } from "./ai.js";
 
+const MEDIA_NOISE_RE = /\s*(?:\[(?:musik|music|audio|tepuk tangan|applause|tertawa|laughs?)\]|\((?:musik|music|audio|tepuk tangan|applause|tertawa|laughs?)\))\s*/gi;
+const FILLER_PHRASE_RE = /\b(?:ee+|e+|hm+|hmm+|uh+|um+|anu|apa namanya|maksud gua|maksud gue|maksud saya)\b/gi;
+const LEADING_NOISE_RE = /^\s*(?:[\d.,:;"'()\-–—\s]+|(?:eh|ee|e|hm|hmm|uh|um|oke|ok)\b[\s,.:;-]*)+/i;
+
+function cleanPublicText(value) {
+  return String(value || "")
+    .replace(MEDIA_NOISE_RE, " ")
+    .replace(FILLER_PHRASE_RE, " ")
+    .replace(/\b(\p{L}+)(?:\s+\1\b){2,}/giu, "$1")
+    .replace(/\s+/g, " ")
+    .replace(LEADING_NOISE_RE, "")
+    .replace(/^[\s"'“”.,;:!?-]+|[\s"'“”.,;:-]+$/g, "")
+    .trim();
+}
+
 async function readClipContext(clipperRoot, output) {
   const parts = [output.title, output.hook, output.caption, output.reason].filter(Boolean);
   const reviewPath = output.transcriptReviewPath ? path.join(clipperRoot, output.transcriptReviewPath) : "";
@@ -167,12 +182,8 @@ export async function generateBumperSpec({ job, output, promptTemplate, aiProvid
     "- Harus sesuai isi clip.",
     "- Harus bisa terbaca dalam 1 detik.",
     "- Nada harus mengikuti isi clip:",
-    "  renungan = adem/reflektif",
-    "  inspiratif = hangat/relatable",
-    "  mindset = praktis/menampar elegan",
-    "  opini = tajam tapi aman",
-    "  humor_insight = lucu tapi tetap bermakna",
-    "  mixed_best = netral dan bikin mikir",
+    "  inspiratif_hikmah = adem/reflektif/bermakna",
+    "  podcast_lucu_hikmah = lucu, relate, tapi tetap bermakna",
     "",
     "Output JSON:",
     "{",
@@ -249,7 +260,7 @@ function fallbackFrameQuote(output) {
 }
 
 function normalizeFrameQuoteText(value) {
-  const cleaned = String(value || "")
+  const cleaned = cleanPublicText(value)
     .replace(/[`"'*_#]/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -287,7 +298,7 @@ function completeCaptionBody(value, fallback = "") {
 }
 
 function normalizeCaptionBody(value) {
-  return String(value || "")
+  return cleanPublicText(value)
     .replace(/\s*(?:\.{3}|…)\s*$/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -539,14 +550,25 @@ const BASE_HASHTAGS = [
 const HASHTAG_LIMIT = 8;
 
 const CONTENT_TYPE_ALIASES = {
-  renungan: "kisah_islami",
-  inspiratif: "motivasi_renungan",
-  mindset: "motivasi_renungan",
-  opini: "misteri_trending",
-  mixed_best: "misteri_trending"
+  renungan: "inspiratif_hikmah",
+  inspiratif: "inspiratif_hikmah",
+  hikmah: "inspiratif_hikmah",
+  motivasi_renungan: "inspiratif_hikmah",
+  sejarah_tokoh: "inspiratif_hikmah",
+  kisah_islami: "inspiratif_hikmah",
+  mindset: "inspiratif_hikmah",
+  podcast: "podcast_lucu_hikmah",
+  lucu: "podcast_lucu_hikmah",
+  humor_insight: "podcast_lucu_hikmah",
+  fakta_sains: "podcast_lucu_hikmah",
+  opini: "podcast_lucu_hikmah",
+  misteri_trending: "podcast_lucu_hikmah",
+  mixed_best: "podcast_lucu_hikmah"
 };
 
 const FALLBACK_BUMPER_TAGLINES = {
+  inspiratif_hikmah: "1 menit yang bikin tenang",
+  podcast_lucu_hikmah: "lucu, tapi ada isinya",
   motivasi_renungan: "1 menit yang bikin mikir",
   sejarah_tokoh: "kisah yang masih berbicara",
   kisah_islami: "1 menit untuk mengingat",
@@ -562,6 +584,8 @@ const FALLBACK_BUMPER_TAGLINES = {
 };
 
 const BUMPER_MOOD_BY_TYPE = {
+  inspiratif_hikmah: "reflective",
+  podcast_lucu_hikmah: "humorous",
   motivasi_renungan: "reflective",
   sejarah_tokoh: "serious",
   kisah_islami: "calm",
@@ -576,6 +600,8 @@ const BUMPER_MOOD_BY_TYPE = {
 };
 
 const BUMPER_ICON_BY_TYPE = {
+  inspiratif_hikmah: "heart",
+  podcast_lucu_hikmah: "smile",
   motivasi_renungan: "lightbulb",
   sejarah_tokoh: "book",
   kisah_islami: "heart",
@@ -792,7 +818,7 @@ function parseJsonObject(value) {
 
 function normalizeContentType(value) {
   const key = String(value || "").toLowerCase().trim();
-  return CONTENT_TYPE_ALIASES[key] || key || "mixed_best";
+  return CONTENT_TYPE_ALIASES[key] || key || "inspiratif_hikmah";
 }
 
 function envTagline(contentType) {
@@ -814,6 +840,8 @@ function defaultBumperAccent(mood, contentType = "") {
     const legacy = {
       renungan: "KISAH_ISLAMI",
       inspiratif: "MOTIVASI_RENUNGAN",
+      inspiratif_hikmah: "KISAH_ISLAMI",
+      podcast_lucu_hikmah: "HUMOR_INSIGHT",
       mindset: "MOTIVASI_RENUNGAN",
       opini: "MISTERI_TRENDING",
       mixed_best: "MISTERI_TRENDING"

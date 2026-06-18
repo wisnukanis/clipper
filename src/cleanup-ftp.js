@@ -40,6 +40,12 @@ function boolEnv(name, fallback = false) {
   return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
 }
 
+function numberEnv(name, fallback, min = 0, max = 100) {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(Math.floor(value), min), max);
+}
+
 function resolveMatch(arg) {
   return String(arg ?? cleanupEnv("MATCH") ?? "").trim();
 }
@@ -47,6 +53,11 @@ function resolveMatch(arg) {
 function cleanupEnv(suffix) {
   const prefix = config.ftp.envPrefix || "FTP";
   return process.env[`${prefix}_CLEANUP_${suffix}`] ?? process.env[`FTP_CLEANUP_${suffix}`];
+}
+
+function isConnectionError(error) {
+  const text = String(error?.code || "") + " " + String(error?.message || error || "");
+  return /timeout|timed out|etimedout|econnreset|econnrefused|socket|connection|closed/i.test(text);
 }
 
 function matchesCleanupFilter(name, match) {
@@ -151,6 +162,12 @@ async function main() {
   const match = resolveMatch(args.match);
   const dryRun = args.dryRun;
   const cutoffMs = Date.now() - retentionDays * 86400000;
+  const cleanupRetries = numberEnv(
+    `${config.ftp.envPrefix || "FTP"}_CLEANUP_RETRIES`,
+    numberEnv("FTP_CLEANUP_RETRIES", 3, 1, 10),
+    1,
+    10
+  );
 
   console.log(`${label} cleanup target: ${config.ftp.remoteDir}`);
   console.log(deleteAll
@@ -168,7 +185,7 @@ async function main() {
       const stats = await cleanupSubdir(client, dir, { cutoffMs, dryRun, deleteAll, match });
       mergeStats(totals, stats);
     }
-  }, { timeoutMs: config.ftp.cleanupTimeoutMs, retries: 2 });
+  }, { timeoutMs: config.ftp.cleanupTimeoutMs, retries: cleanupRetries });
 
   const freedMb = (totals.freedBytes / 1048576).toFixed(1);
   console.log("---");
@@ -178,6 +195,12 @@ async function main() {
 }
 
 main().catch((err) => {
+  const softFail = boolEnv(`${config.ftp.envPrefix || "FTP"}_CLEANUP_SOFT_FAIL`, boolEnv("FTP_CLEANUP_SOFT_FAIL", true));
+  if (softFail && isConnectionError(err)) {
+    console.warn(`Cleanup dilewati karena koneksi remote timeout/tidak stabil: ${err.message || err}`);
+    console.warn("Set SFTP_CLEANUP_SOFT_FAIL=false jika ingin timeout cleanup menggagalkan workflow.");
+    process.exit(0);
+  }
   console.error("Cleanup gagal:", err.stack || err.message);
   process.exit(1);
 });

@@ -4,83 +4,77 @@ import { config } from "./config.js";
 import { todayDate } from "./job-id.js";
 
 const DEFAULT_CONTENT_TYPES = [
-  "motivasi_renungan",
-  "sejarah_tokoh",
-  "kisah_islami",
-  "fakta_sains",
-  "misteri_trending"
+  "inspiratif_hikmah",
+  "podcast_lucu_hikmah"
 ];
 const CONTENT_TYPE_ALIASES = {
-  renungan: "kisah_islami",
-  inspiratif: "motivasi_renungan",
-  mindset: "motivasi_renungan",
-  opini: "misteri_trending",
-  mixed_best: "misteri_trending"
+  inspiratif: "inspiratif_hikmah",
+  renungan: "inspiratif_hikmah",
+  hikmah: "inspiratif_hikmah",
+  humor_insight: "podcast_lucu_hikmah",
+  lucu: "podcast_lucu_hikmah",
+  podcast: "podcast_lucu_hikmah",
+  kisah_islami_lama: "inspiratif_hikmah",
+  kisah_islami: "inspiratif_hikmah",
+  motivasi_renungan: "inspiratif_hikmah",
+  sejarah_tokoh: "inspiratif_hikmah",
+  fakta_sains: "podcast_lucu_hikmah",
+  misteri_trending: "podcast_lucu_hikmah",
+  mindset: "inspiratif_hikmah",
+  opini: "podcast_lucu_hikmah",
+  mixed_best: "podcast_lucu_hikmah"
 };
 const LEGACY_ENV_KEYS = {
-  motivasi_renungan: ["INSPIRATIF", "MINDSET"],
-  kisah_islami: ["RENUNGAN"],
-  misteri_trending: ["MIXED_BEST", "OPINI"]
+  inspiratif_hikmah: ["INSPIRATIF", "RENUNGAN", "MOTIVASI_RENUNGAN", "KISAH_ISLAMI", "SEJARAH_TOKOH"],
+  podcast_lucu_hikmah: ["HUMOR_INSIGHT", "MIXED_BEST", "OPINI", "FAKTA_SAINS", "MISTERI_TRENDING"]
 };
 export const CONTENT_TYPES = uniqueList([
-  ...DEFAULT_CONTENT_TYPES,
-  ...parseList(process.env.CONTENT_TYPES).map((item) => CONTENT_TYPE_ALIASES[item] || item)
+  ...(process.env.CONTENT_TYPES ? [] : DEFAULT_CONTENT_TYPES),
+  ...parseList(process.env.CONTENT_TYPES || DEFAULT_CONTENT_TYPES.join(",")).map((item) => CONTENT_TYPE_ALIASES[item] || item)
 ]).filter((item) => DEFAULT_CONTENT_TYPES.includes(item));
 
 const DEFAULT_WEEKLY = {
-  monday: "motivasi_renungan",
-  tuesday: "sejarah_tokoh",
-  wednesday: "kisah_islami",
-  thursday: "fakta_sains",
-  friday: "motivasi_renungan",
-  saturday: "misteri_trending",
-  sunday: "kisah_islami"
+  monday: "inspiratif_hikmah",
+  tuesday: "podcast_lucu_hikmah",
+  wednesday: "inspiratif_hikmah",
+  thursday: "podcast_lucu_hikmah",
+  friday: "inspiratif_hikmah",
+  saturday: "podcast_lucu_hikmah",
+  sunday: "inspiratif_hikmah"
 };
 
 const DEFAULT_QUERIES = {
-  motivasi_renungan: "motivasi hidup indonesia|renungan hidup|nasihat kehidupan|kisah perjuangan hidup|pengembangan diri indonesia|nasihat orang tua|cerita inspiratif indonesia|motivasi kerja keras|hidup sederhana bermakna|pelajaran hidup",
-  sejarah_tokoh: "sejarah indonesia|tokoh indonesia inspiratif|kisah nyata tokoh dunia|biografi tokoh indonesia|sejarah tokoh islam aman|kisah pahlawan indonesia|cerita sejarah singkat|fakta sejarah indonesia|kisah nyata inspiratif|tokoh dunia berpengaruh",
-  kisah_islami: "kisah islami penuh hikmah|hikmah kehidupan islam|cerita islami singkat|nilai moral islami|kisah sahabat nabi penuh hikmah|ceramah pendek islam adem|nasihat agama islam|akhlak mulia islam|kisah teladan islam|renungan islami",
-  fakta_sains: "fakta unik indonesia|sains ringan indonesia|pengetahuan populer|fakta psikologi ringan|fakta tubuh manusia|teknologi sederhana|fenomena alam dijelaskan|edukasi sains indonesia|fakta sejarah populer|ilmu pengetahuan umum",
-  misteri_trending: "misteri sejarah indonesia|fenomena menarik dunia|fakta unik misterius|teka teki sejarah|tempat bersejarah misterius|fenomena alam unik|trending edukatif indonesia|kisah nyata penuh tanda tanya|misteri arkeologi|fakta menarik trending aman"
+  inspiratif_hikmah: "cerita inspiratif indonesia|hikmah kehidupan|nasihat kehidupan|kisah perjuangan hidup|cerita keluarga menyentuh|motivasi hidup indonesia|rezeki tidak selalu uang|sabar ikhlas syukur|pengalaman hidup inspiratif|cerita orang tua",
+  podcast_lucu_hikmah: "podcast lucu indonesia ada hikmahnya|cerita lucu podcast indonesia|pengalaman lucu hidup podcast|obrolan lucu tapi bermakna|podcast keluarga lucu|cerita kocak ada pelajaran|ketawa tapi dalem podcast|podcast indonesia cerita hidup lucu"
 };
 
 const DEFAULT_CHANNELS = {
-  motivasi_renungan: "",
-  sejarah_tokoh: "",
-  kisah_islami: "",
-  fakta_sains: "",
-  misteri_trending: ""
+  inspiratif_hikmah: "",
+  podcast_lucu_hikmah: ""
 };
 
 const SAFETY_GUARD = "Wajib hindari politik praktis, SARA provokatif, horor ekstrem, gosip vulgar, konten dewasa, kekerasan eksplisit, dan klaim agama sensitif tanpa sumber jelas. Jika ragu, turunkan context_safety_score dan jangan pilih untuk auto-publish.";
 
 const THEME_PROMPTS = {
-  motivasi_renungan: `Pilih bagian motivasi dan renungan hidup yang hangat, reflektif, mudah dipahami, dan memberi dorongan hidup tanpa menggurui. Prioritaskan perjuangan, keluarga, kerja keras, kegagalan, bangkit, dan pelajaran hidup universal. ${SAFETY_GUARD}`,
-  sejarah_tokoh: `Pilih bagian sejarah, tokoh, dan kisah nyata yang informatif, inspiratif, serta punya pelajaran jelas. Prioritaskan biografi, peristiwa sejarah, pahlawan, tokoh dunia, dan kisah nyata yang aman konteks. ${SAFETY_GUARD}`,
-  kisah_islami: `Pilih bagian kisah Islami, hikmah, dan nilai moral yang adem, edukatif, dan tidak menyerang kelompok mana pun. Prioritaskan akhlak, hikmah, kisah teladan, sabar, syukur, keluarga, dan nasihat moral. ${SAFETY_GUARD}`,
-  fakta_sains: `Pilih bagian fakta unik, sains ringan, dan pengetahuan populer yang jelas, menarik, tidak menyesatkan, dan cocok untuk penonton umum. Prioritaskan fakta alam, tubuh manusia, psikologi ringan, teknologi, dan pengetahuan umum. ${SAFETY_GUARD}`,
-  misteri_trending: `Pilih bagian misteri sejarah, fenomena menarik, dan trending aman yang bikin penasaran tanpa horor ekstrem atau klaim liar. Prioritaskan teka-teki sejarah, fenomena alam, arkeologi, dan topik trending edukatif. ${SAFETY_GUARD}`
+  inspiratif_hikmah: `Pilih potongan cerita inspiratif dan hikmah kehidupan yang relate, emosional secukupnya, dan bisa berdiri sendiri. Prioritaskan cerita keluarga, perjuangan, rezeki, sabar, ikhlas, pengalaman pribadi, nasihat orang tua, dan twist yang bikin hati adem. Hindari ceramah teoritis panjang tanpa cerita atau konteks yang menggantung. ${SAFETY_GUARD}`,
+  podcast_lucu_hikmah: `Pilih potongan podcast yang lucu, ringan, relate, tapi tetap punya makna. Prioritaskan pengalaman nyata, konflik ringan, punchline, ekspresi lucu, obrolan keluarga/kerja/usaha, dan ending yang bikin "kok iya ya". Hindari gosip mentah, vulgar, politik panas, atau candaan yang menyerang. ${SAFETY_GUARD}`
 };
 
 const THEME_HASHTAGS = {
-  motivasi_renungan: ["#MotivasiHidup", "#RenunganHidup", "#PelajaranHidup", "#Inspirasi", "#ShortsIndonesia"],
-  sejarah_tokoh: ["#Sejarah", "#TokohInspiratif", "#KisahNyata", "#Pengetahuan", "#ShortsIndonesia"],
-  kisah_islami: ["#KisahIslami", "#Hikmah", "#NilaiMoral", "#RenunganIslami", "#ShortsIndonesia"],
-  fakta_sains: ["#FaktaUnik", "#SainsRingan", "#Pengetahuan", "#Edukasi", "#ShortsIndonesia"],
-  misteri_trending: ["#MisteriSejarah", "#FenomenaMenarik", "#FaktaMenarik", "#TrendingAman", "#ShortsIndonesia"]
+  inspiratif_hikmah: ["#Shorts", "#CeritaInspiratif", "#Hikmah", "#Renungan", "#MotivasiHidup", "#CeritaHidup"],
+  podcast_lucu_hikmah: ["#Shorts", "#PodcastIndonesia", "#CeritaLucu", "#CeritaHidup", "#InspirasiHidup", "#Hikmah"]
 };
 
-const DEFAULT_SLOT_TYPES_5 = ["motivasi_renungan", "sejarah_tokoh", "kisah_islami", "fakta_sains", "misteri_trending"];
-const DEFAULT_SLOT_TYPES_4 = ["motivasi_renungan", "sejarah_tokoh", "kisah_islami", "fakta_sains"];
+const DEFAULT_SLOT_TYPES_5 = ["inspiratif_hikmah", "podcast_lucu_hikmah", "inspiratif_hikmah", "podcast_lucu_hikmah", "inspiratif_hikmah"];
+const DEFAULT_SLOT_TYPES_4 = ["inspiratif_hikmah", "podcast_lucu_hikmah", "inspiratif_hikmah", "podcast_lucu_hikmah"];
 
 export function resolveDailyPlan(options = {}) {
   const now = new Date();
   const dateWib = options.targetDate || todayDate(config.timezone);
   const dayKey = weekdayKey(now, config.timezone);
   const dailyThemeMode = String(process.env.DAILY_THEME_MODE || "").trim().toLowerCase();
-  const targetMax = clampNumber(options.targetCount || process.env.DAILY_TARGET_MAX, 5, 4, 5);
-  const targetMin = clampNumber(process.env.DAILY_TARGET_MIN, 4, 1, targetMax);
+  const targetMax = clampNumber(options.targetCount || process.env.DAILY_TARGET_MAX, 3, 1, 5);
+  const targetMin = clampNumber(process.env.DAILY_TARGET_MIN, Math.min(3, targetMax), 1, targetMax);
   const targetCount = clampNumber(options.targetCount || targetMax, targetMax, targetMin, targetMax);
   const slots = publishSlots(targetCount);
   const themeAware = process.env.THEME_AWARE_DISCOVERY !== "false";
@@ -92,7 +86,9 @@ export function resolveDailyPlan(options = {}) {
       themeAware,
       selectedSlot: options.slot || process.env.CLIPPER_SLOT || "all"
     });
-    const primary = slotPlans[0] || resolveSlotPlan(1, slots[0] || "05:30", "misteri_trending", themeAware);
+    const slotWib = currentOrNextSlot(slots, now, config.timezone);
+    const activeSlot = slotPlans.find((s) => s.slot_time_wib === slotWib) || slotPlans[0];
+    const primary = activeSlot || resolveSlotPlan(1, slots[0] || "07:00", "inspiratif_hikmah", themeAware);
     return {
       dateWib,
       dayKey,
@@ -109,9 +105,9 @@ export function resolveDailyPlan(options = {}) {
       dailyQuery: primary.discover_query.split("|")[0] || process.env.AUTO_DISCOVER_DAILY_QUERY || "",
       discoveryMode: themeAware ? "theme_aware_slot" : "legacy",
       channelHandles: primary.channel_handles,
-      themePrompt: THEME_PROMPTS[primary.content_type] || THEME_PROMPTS.misteri_trending,
-      hashtags: THEME_HASHTAGS[primary.content_type] || THEME_HASHTAGS.misteri_trending,
-      publishSlotWib: currentOrNextSlot(slots, now, config.timezone)
+      themePrompt: THEME_PROMPTS[primary.content_type] || THEME_PROMPTS.inspiratif_hikmah,
+      hashtags: THEME_HASHTAGS[primary.content_type] || THEME_HASHTAGS.inspiratif_hikmah,
+      publishSlotWib: slotWib
     };
   }
 
@@ -120,7 +116,7 @@ export function resolveDailyPlan(options = {}) {
     ? requestedTheme
     : normalizeContentType(process.env[`${dayKey.toUpperCase()}_THEME`]) || DEFAULT_WEEKLY[dayKey];
   const themeQuery = themeAware ? envForTheme(theme, "DISCOVER_QUERY") || DEFAULT_QUERIES[theme] || "" : "";
-  const query = themeQuery || process.env.AUTO_DISCOVER_DAILY_QUERY || process.env.AUTO_DISCOVER_QUERY || DEFAULT_QUERIES.misteri_trending;
+  const query = themeQuery || process.env.AUTO_DISCOVER_DAILY_QUERY || process.env.AUTO_DISCOVER_QUERY || DEFAULT_QUERIES.inspiratif_hikmah;
   const dailyQuery = process.env[`${theme.toUpperCase()}_DAILY_QUERY`] || query.split("|")[0] || process.env.AUTO_DISCOVER_DAILY_QUERY || "";
   const channelHandles = envForTheme(theme, "CHANNEL_HANDLES") || process.env.AUTO_DISCOVER_CHANNEL_HANDLES || DEFAULT_CHANNELS[theme] || "";
 
@@ -139,8 +135,8 @@ export function resolveDailyPlan(options = {}) {
     dailyQuery,
     discoveryMode: themeAware ? "theme_aware" : "legacy",
     channelHandles,
-    themePrompt: THEME_PROMPTS[theme] || THEME_PROMPTS.misteri_trending,
-    hashtags: THEME_HASHTAGS[theme] || THEME_HASHTAGS.misteri_trending,
+    themePrompt: THEME_PROMPTS[theme] || THEME_PROMPTS.inspiratif_hikmah,
+    hashtags: THEME_HASHTAGS[theme] || THEME_HASHTAGS.inspiratif_hikmah,
     publishSlotWib: currentOrNextSlot(slots, now, config.timezone)
   };
 }
@@ -155,8 +151,8 @@ export function applyDailyPlanToEnv(plan) {
   process.env.AUTO_DISCOVER_ADD_COUNT = fastProductionMode()
     ? String(plan.targetMax)
     : String(Number(process.env.AUTO_DISCOVER_ADD_COUNT || 5) || 5);
-  process.env.AUTO_DISCOVER_DAILY_QUEUE_LIMIT = String(Math.max(25, plan.targetMax, Number(process.env.AUTO_DISCOVER_DAILY_QUEUE_LIMIT || 0) || 0));
-  process.env.MAX_SCHEDULED_POSTS_PER_DAY = String(plan.targetMax);
+  process.env.AUTO_DISCOVER_DAILY_QUEUE_LIMIT = String(Math.max(9, plan.targetMax, Number(process.env.AUTO_DISCOVER_DAILY_QUEUE_LIMIT || 0) || 0));
+  process.env.MAX_SCHEDULED_POSTS_PER_DAY = String(Number(process.env.YOUTUBE_DAILY_UPLOAD_LIMIT || plan.targetMax) || plan.targetMax);
   process.env.CLIP_COUNT = String(plan.targetMax);
   process.env.THEME_PROMPT = plan.themePrompt;
   process.env.THEME_HASHTAGS = plan.hashtags.join(" ");
@@ -165,7 +161,7 @@ export function applyDailyPlanToEnv(plan) {
 }
 
 export function applySlotPlanToEnv(slotPlan, plan = {}) {
-  const contentType = normalizeContentType(slotPlan?.content_type) || "misteri_trending";
+  const contentType = normalizeContentType(slotPlan?.content_type) || "inspiratif_hikmah";
   process.env.CONTENT_TYPE = contentType;
   process.env.DAILY_THEME = plan.dailyTheme || contentType;
   process.env.AUTO_DISCOVER_QUERY = slotPlan.discover_query || process.env.AUTO_DISCOVER_QUERY || "";
@@ -175,8 +171,8 @@ export function applySlotPlanToEnv(slotPlan, plan = {}) {
     ? String(Number(process.env.AUTO_DISCOVER_ADD_COUNT_PER_SLOT || 1) || 1)
     : String(Number(process.env.AUTO_DISCOVER_ADD_COUNT_PER_SLOT || process.env.AUTO_DISCOVER_ADD_COUNT || 5) || 5);
   process.env.CLIP_COUNT = "1";
-  process.env.THEME_PROMPT = THEME_PROMPTS[contentType] || THEME_PROMPTS.misteri_trending;
-  process.env.THEME_HASHTAGS = (THEME_HASHTAGS[contentType] || THEME_HASHTAGS.misteri_trending).join(" ");
+  process.env.THEME_PROMPT = THEME_PROMPTS[contentType] || THEME_PROMPTS.inspiratif_hikmah;
+  process.env.THEME_HASHTAGS = (THEME_HASHTAGS[contentType] || THEME_HASHTAGS.inspiratif_hikmah).join(" ");
   process.env.CLIPPER_SLOT = String(slotPlan.slot_index || "");
 }
 
@@ -240,7 +236,7 @@ function envForTheme(theme, suffix, rawTheme = "") {
 }
 
 function queryForTheme(theme, themeAware, rawTheme = "") {
-  if (!themeAware) return process.env.AUTO_DISCOVER_QUERY || DEFAULT_QUERIES.misteri_trending;
+  if (!themeAware) return process.env.AUTO_DISCOVER_QUERY || DEFAULT_QUERIES.inspiratif_hikmah;
   return envForTheme(theme, "DISCOVER_QUERY", rawTheme)
     || DEFAULT_QUERIES[theme]
     || process.env.AUTO_DISCOVER_DAILY_QUERY
@@ -253,7 +249,9 @@ function channelHandlesForTheme(theme, rawTheme = "") {
 }
 
 function resolveSlotPlans({ targetCount, slots, themeAware, selectedSlot = "all" }) {
-  const requestedSlot = String(selectedSlot || "all").trim().toLowerCase();
+  const slotNameMap = { pagi: "1", siang: "2", malam: "3" };
+  const requestedSlotRaw = String(selectedSlot || "all").trim().toLowerCase();
+  const requestedSlot = slotNameMap[requestedSlotRaw] || requestedSlotRaw;
   const defaults = targetCount <= 4 ? DEFAULT_SLOT_TYPES_4 : DEFAULT_SLOT_TYPES_5;
   const fromMix = slotTypesFromMix(targetCount);
   const slotTypes = defaults.map((fallback, index) => {
@@ -265,14 +263,14 @@ function resolveSlotPlans({ targetCount, slots, themeAware, selectedSlot = "all"
     .map((slot, index) => {
       const slotIndex = index + 1;
       const timeWib = process.env[`SLOT_${slotIndex}_TIME_WIB`] || slot;
-      const rawSlotType = process.env[`SLOT_${slotIndex}_CONTENT_TYPE`] || slotTypes[index] || "misteri_trending";
+      const rawSlotType = process.env[`SLOT_${slotIndex}_CONTENT_TYPE`] || slotTypes[index] || "inspiratif_hikmah";
       return resolveSlotPlan(slotIndex, timeWib, rawSlotType, themeAware);
     })
     .filter((slot) => requestedSlot === "all" || String(slot.slot_index) === requestedSlot);
 }
 
 function resolveSlotPlan(slotIndex, timeWib, contentType, themeAware) {
-  const normalized = normalizeContentType(contentType) || "misteri_trending";
+  const normalized = normalizeContentType(contentType) || "inspiratif_hikmah";
   const discoverQuery = queryForTheme(normalized, themeAware, contentType);
   const channelHandles = channelHandlesForTheme(normalized, contentType);
   return {
@@ -284,8 +282,8 @@ function resolveSlotPlan(slotIndex, timeWib, contentType, themeAware) {
     channel_handles: channelHandles,
     selected_channel_handles: parseLooseList(channelHandles),
     discovery_mode: themeAware ? "theme_aware_slot" : "legacy",
-    theme_prompt: THEME_PROMPTS[normalized] || THEME_PROMPTS.misteri_trending,
-    hashtags: THEME_HASHTAGS[normalized] || THEME_HASHTAGS.misteri_trending
+    theme_prompt: THEME_PROMPTS[normalized] || THEME_PROMPTS.inspiratif_hikmah,
+    hashtags: THEME_HASHTAGS[normalized] || THEME_HASHTAGS.inspiratif_hikmah
   };
 }
 
@@ -321,11 +319,11 @@ function clampNumber(value, fallback, min, max) {
 }
 
 function publishSlots(targetMax) {
-  const slots = String(process.env.DAILY_PUBLISH_SLOTS_WIB || "05:30,09:30,12:15,16:30,19:30")
+  const slots = String(process.env.UPLOAD_SLOTS || process.env.DAILY_PUBLISH_SLOTS_WIB || "07:00,12:00,19:30")
     .split(",")
     .map((slot) => slot.trim())
     .filter(Boolean);
-  return slots.slice(0, targetMax <= 4 ? 4 : 5);
+  return slots.slice(0, targetMax);
 }
 
 function parseLooseList(value) {
