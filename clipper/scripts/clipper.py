@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -384,6 +385,24 @@ def ytdlp_option_enabled(value):
     return bool(value) and value not in {"0", "false", "off", "none", "null"}
 
 
+def resolve_ytdlp_js_runtimes(value):
+    runtimes = []
+
+    for runtime in str(value or "").split(","):
+        runtime = runtime.strip()
+        if not runtime:
+            continue
+
+        name = runtime.split(":", 1)[0].strip()
+        if name == "node" and ":" not in runtime:
+            node_path = shutil.which("node") or shutil.which("nodejs")
+            runtimes.append(f"node:{node_path}" if node_path else runtime)
+        else:
+            runtimes.append(runtime)
+
+    return ",".join(runtimes)
+
+
 def ytdlp_common_args():
     args = []
 
@@ -391,7 +410,7 @@ def ytdlp_common_args():
     cookies_browser = os.environ.get("YTDLP_COOKIES_FROM_BROWSER", "").strip()
     user_agent = os.environ.get("YTDLP_USER_AGENT", "").strip()
     referer = os.environ.get("YTDLP_REFERER", "").strip()
-    js_runtimes = os.environ.get("YTDLP_JS_RUNTIMES", "node").strip()
+    js_runtimes = resolve_ytdlp_js_runtimes(os.environ.get("YTDLP_JS_RUNTIMES", "node"))
     remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github").strip()
     sleep_requests = os.environ.get("YTDLP_SLEEP_REQUESTS", "").strip()
     sleep_interval = os.environ.get("YTDLP_SLEEP_INTERVAL", "").strip()

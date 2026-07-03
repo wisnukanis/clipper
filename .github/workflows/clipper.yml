@@ -525,7 +525,7 @@ jobs:
       YTDLP_JS_RUNTIMES: node
       YTDLP_REMOTE_COMPONENTS: ejs:github
       YTDLP_COOKIES_TXT: ${{ secrets.YTDLP_COOKIES_TXT }}
-      YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
+      YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36' }}
       YTDLP_REFERER: https://www.youtube.com/
 
       YTDLP_SLEEP_REQUESTS: ${{ secrets.YTDLP_SLEEP_REQUESTS || '0' }}
@@ -567,7 +567,7 @@ jobs:
           echo "Node runtime: $NODE_BIN"
           node --version
           echo "$NODE_DIR" >> "$GITHUB_PATH"
-          echo "YTDLP_JS_RUNTIMES=node" >> "$GITHUB_ENV"
+          echo "YTDLP_JS_RUNTIMES=node:${NODE_BIN}" >> "$GITHUB_ENV"
 
       - name: Fail fast required secrets
         shell: bash
