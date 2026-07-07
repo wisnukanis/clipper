@@ -1187,46 +1187,69 @@ jobs:
             UA_ARGS+=(--user-agent "$YTDLP_USER_AGENT")
           fi
 
-          set +e
-          YTDLP_OUTPUT="$(yt-dlp \
-            --cookies cookies.txt \
-            "${UA_ARGS[@]}" \
-            --referer "$YTDLP_REFERER" \
-            --js-runtimes "$YTDLP_JS_RUNTIMES" \
-            --remote-components "$YTDLP_REMOTE_COMPONENTS" \
-            --sleep-requests "$YTDLP_SLEEP_REQUESTS" \
-            --sleep-interval "$YTDLP_SLEEP_INTERVAL" \
-            --max-sleep-interval "$YTDLP_MAX_SLEEP_INTERVAL" \
-            --retries "$YTDLP_RETRIES" \
-            --fragment-retries "$YTDLP_FRAGMENT_RETRIES" \
-            --retry-sleep "$YTDLP_RETRY_SLEEP" \
-            --socket-timeout "$YTDLP_SOCKET_TIMEOUT" \
-            --ignore-no-formats-error \
-            --skip-download \
-            --print title \
-            "$TEST_URL" 2>&1)"
-          YTDLP_STATUS=$?
-          set -e
+          COOKIE_TEST_ATTEMPTS="${YTDLP_COOKIE_TEST_ATTEMPTS:-3}"
+          COOKIE_TEST_DELAY_SECONDS="${YTDLP_COOKIE_TEST_DELAY_SECONDS:-20}"
+          YTDLP_OUTPUT=""
+          YTDLP_STATUS=1
 
-          printf '%s\n' "$YTDLP_OUTPUT"
+          for attempt in $(seq 1 "$COOKIE_TEST_ATTEMPTS"); do
+            echo "yt-dlp cookie test attempt $attempt/$COOKIE_TEST_ATTEMPTS"
 
-          if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
-            echo "::error::YTDLP_COOKIES_TXT sudah tidak valid/terrotasi. Export ulang dari private/incognito: login YouTube, buka https://www.youtube.com/robots.txt di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT."
-            exit 1
-          fi
+            set +e
+            YTDLP_OUTPUT="$(yt-dlp \
+              --cookies cookies.txt \
+              "${UA_ARGS[@]}" \
+              --referer "$YTDLP_REFERER" \
+              --js-runtimes "$YTDLP_JS_RUNTIMES" \
+              --remote-components "$YTDLP_REMOTE_COMPONENTS" \
+              --sleep-requests "$YTDLP_SLEEP_REQUESTS" \
+              --sleep-interval "$YTDLP_SLEEP_INTERVAL" \
+              --max-sleep-interval "$YTDLP_MAX_SLEEP_INTERVAL" \
+              --retries "$YTDLP_RETRIES" \
+              --fragment-retries "$YTDLP_FRAGMENT_RETRIES" \
+              --retry-sleep "$YTDLP_RETRY_SLEEP" \
+              --socket-timeout "$YTDLP_SOCKET_TIMEOUT" \
+              --ignore-no-formats-error \
+              --skip-download \
+              --print title \
+              "$TEST_URL" 2>&1)"
+            YTDLP_STATUS=$?
+            set -e
 
-          if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'sign in to confirm|not a bot|use --cookies'; then
-            echo "::error::YouTube masih meminta login/cookies. Ikuti panduan export cookies yt-dlp: gunakan private/incognito session dan jangan buka lagi session itu setelah export."
-            exit 1
-          fi
+            printf '%s\n' "$YTDLP_OUTPUT"
 
-          if [ "$YTDLP_STATUS" -ne 0 ]; then
+            if [ "$YTDLP_STATUS" -eq 0 ]; then
+              echo "yt-dlp cookie test passed."
+              exit 0
+            fi
+
             if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'Requested format is not available|Only images are available'; then
               echo "::warning::yt-dlp cookie test could not validate downloadable formats for TEST_URL, but no login/cookie failure was detected. Continuing to production."
               exit 0
             fi
-            exit "$YTDLP_STATUS"
+
+            if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser|sign in to confirm|not a bot|use --cookies|No video formats found'; then
+              if [ "$attempt" -lt "$COOKIE_TEST_ATTEMPTS" ]; then
+                echo "::warning::YouTube/yt-dlp cookie test looked transient. Retrying in ${COOKIE_TEST_DELAY_SECONDS}s..."
+                sleep "$COOKIE_TEST_DELAY_SECONDS"
+                continue
+              fi
+            fi
+
+            break
+          done
+
+          if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
+            echo "::error::YTDLP_COOKIES_TXT masih dianggap tidak valid/terrotasi setelah $COOKIE_TEST_ATTEMPTS percobaan. Jika rerun tetap gagal, export ulang dari private/incognito: login YouTube, buka https://www.youtube.com/robots.txt di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT."
+            exit 1
           fi
+
+          if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'sign in to confirm|not a bot|use --cookies'; then
+            echo "::error::YouTube masih meminta login/cookies setelah $COOKIE_TEST_ATTEMPTS percobaan. Ikuti panduan export cookies yt-dlp: gunakan private/incognito session dan jangan buka lagi session itu setelah export."
+            exit 1
+          fi
+
+          exit "$YTDLP_STATUS"
 
       - name: Check configuration
         run: npm run check -- --offline
