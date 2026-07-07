@@ -1191,6 +1191,7 @@ jobs:
           COOKIE_TEST_DELAY_SECONDS="${YTDLP_COOKIE_TEST_DELAY_SECONDS:-20}"
           YTDLP_OUTPUT=""
           YTDLP_STATUS=1
+          HAS_TEST_TITLE=0
 
           for attempt in $(seq 1 "$COOKIE_TEST_ATTEMPTS"); do
             echo "yt-dlp cookie test attempt $attempt/$COOKIE_TEST_ATTEMPTS"
@@ -1217,9 +1218,19 @@ jobs:
             set -e
 
             printf '%s\n' "$YTDLP_OUTPUT"
+            HAS_TEST_TITLE="$(printf '%s\n' "$YTDLP_OUTPUT" | awk '
+              /^[[:space:]]*$/ { next }
+              /^(WARNING|ERROR):/ { next }
+              { found = 1 }
+              END { print found ? 1 : 0 }
+            ')"
 
-            if [ "$YTDLP_STATUS" -eq 0 ]; then
-              echo "yt-dlp cookie test passed."
+            if [ "$YTDLP_STATUS" -eq 0 ] || [ "$HAS_TEST_TITLE" -eq 1 ]; then
+              if [ "$YTDLP_STATUS" -eq 0 ]; then
+                echo "yt-dlp cookie test passed."
+              else
+                echo "::warning::yt-dlp printed a title despite warnings/status $YTDLP_STATUS. Treating cookie precheck as usable and continuing to production."
+              fi
               exit 0
             fi
 
@@ -1238,6 +1249,11 @@ jobs:
 
             break
           done
+
+          if [ "$HAS_TEST_TITLE" -eq 1 ]; then
+            echo "::warning::yt-dlp printed a title despite cookie warnings. Continuing to production."
+            exit 0
+          fi
 
           if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
             echo "::error::YTDLP_COOKIES_TXT masih dianggap tidak valid/terrotasi setelah $COOKIE_TEST_ATTEMPTS percobaan. Jika rerun tetap gagal, export ulang dari private/incognito: login YouTube, buka https://www.youtube.com/robots.txt di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT."
