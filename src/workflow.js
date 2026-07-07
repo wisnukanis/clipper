@@ -376,69 +376,111 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
 
     if (options.mode === "discover") continue;
 
-    let selection = await selectQueuedWorkflowVideo({
-      options: {
-        ...options,
-        theme: slotPlan.content_type,
-        dailyPlan: slotDailyPlan,
-        forceReprocess: options.forceReprocess
-      },
-      excludedVideoIds,
-      preferredVideoIds: (discoveryResult?.added || []).map((video) => video.id).filter(Boolean)
-    });
+    const preferredVideoIds = (discoveryResult?.added || []).map((video) => video.id).filter(Boolean);
+    let slotSucceeded = false;
+    const maxSlotAttempts = queueFailoverLimit();
 
-    if (!selection) {
-      const fallbackContentType = slotPlan.content_type === "podcast_lucu_hikmah" ? "inspiratif_hikmah" : "podcast_lucu_hikmah";
-      selection = await selectQueuedWorkflowVideo({
-        options: { ...options, theme: fallbackContentType, dailyPlan: { ...slotDailyPlan, contentType: fallbackContentType } },
-        excludedVideoIds
-      });
-    }
-
-    if (!selection) {
-      failedSelections.push({
-        slot_index: slotPlan.slot_index,
-        slot_time_wib: slotPlan.slot_time_wib,
-        slot_content_type: slotPlan.content_type,
-        error: "Tidak ada kandidat slot yang lolos queue/fallback."
-      });
-      continue;
-    }
-
-    excludedVideoIds.add(selection.video.id);
-    try {
-      const result = await processSelectedWorkflow({
-        selection,
+    for (let attempt = 1; attempt <= maxSlotAttempts; attempt += 1) {
+      let selection = await selectQueuedWorkflowVideo({
         options: {
           ...options,
           theme: slotPlan.content_type,
-          clipCount: 1,
           dailyPlan: slotDailyPlan,
-          slotPlan
+          forceReprocess: options.forceReprocess
         },
-        scheduledDailyLimit,
-        scheduledPostedToday,
-        keepVideoQueued: false
+        excludedVideoIds,
+        preferredVideoIds
       });
-      clips.push(...(result.clips || []).map((clip) => ({
-        ...clip,
-        slot_index: slotPlan.slot_index,
-        slot_time_wib: slotPlan.slot_time_wib,
-        slot_content_type: slotPlan.content_type
-      })));
-    } catch (error) {
-      failedSelections.push({
+
+      if (!selection) {
+        const fallbackContentType = slotPlan.content_type === "podcast_lucu_hikmah" ? "inspiratif_hikmah" : "podcast_lucu_hikmah";
+        selection = await selectQueuedWorkflowVideo({
+          options: { ...options, theme: fallbackContentType, dailyPlan: { ...slotDailyPlan, contentType: fallbackContentType } },
+          excludedVideoIds
+        });
+      }
+
+      if (!selection) {
+        if (attempt === 1) {
+          failedSelections.push({
+            slot_index: slotPlan.slot_index,
+            slot_time_wib: slotPlan.slot_time_wib,
+            slot_content_type: slotPlan.content_type,
+            error: "Tidak ada kandidat slot yang lolos queue/fallback."
+          });
+        }
+        break;
+      }
+
+      excludedVideoIds.add(selection.video.id);
+      try {
+        const result = await processSelectedWorkflow({
+          selection,
+          options: {
+            ...options,
+            theme: slotPlan.content_type,
+            clipCount: 1,
+            dailyPlan: slotDailyPlan,
+            slotPlan
+          },
+          scheduledDailyLimit,
+          scheduledPostedToday,
+          keepVideoQueued: false
+        });
+        clips.push(...(result.clips || []).map((clip) => ({
+          ...clip,
+          slot_index: slotPlan.slot_index,
+          slot_time_wib: slotPlan.slot_time_wib,
+          slot_content_type: slotPlan.content_type
+        })));
+        slotSucceeded = true;
+        break;
+      } catch (error) {
+        failedSelections.push({
+          slot_index: slotPlan.slot_index,
+          slot_time_wib: slotPlan.slot_time_wib,
+          slot_content_type: slotPlan.content_type,
+          attempt,
+          video_id: selection.video.id,
+          url: selection.video.url,
+          error: error.message
+        });
+        await appendLog("slot_video_failed_skip", {
+          slot_index: slotPlan.slot_index,
+          slot_time_wib: slotPlan.slot_time_wib,
+          slot_content_type: slotPlan.content_type,
+          attempt,
+          max_attempts: maxSlotAttempts,
+          video_id: selection.video.id,
+          url: selection.video.url,
+          error: error.message
+        });
+      }
+    }
+
+    if (!slotSucceeded) {
+      await appendLog("slot_failed_no_clip", {
         slot_index: slotPlan.slot_index,
         slot_time_wib: slotPlan.slot_time_wib,
         slot_content_type: slotPlan.content_type,
-        video_id: selection.video.id,
-        url: selection.video.url,
-        error: error.message
+        attempted_video_count: failedSelections.filter((item) => item.slot_index === slotPlan.slot_index).length
       });
     }
   }
 
   await uploadStateToRemote().catch(() => {});
+  const successfulClipCount = clips.filter((clip) => clip.ok).length;
+  const failedClipCount = failedSelections.length;
+  if (options.mode !== "discover" && successfulClipCount <= 0) {
+    await appendLog("mixed_daily_no_successful_clip", {
+      failed_clip_count: failedClipCount,
+      failedSelections
+    });
+    throw new Error(
+      `Tidak ada video final yang berhasil dibuat. Semua kandidat gagal (${failedClipCount} failure). ` +
+      "Cek failedSelections di log untuk URL dan error detail."
+    );
+  }
   return dailyReport({
     status: options.mode === "discover" ? "discovered" : options.publish && canPublish() ? "mixed_daily_publish_done" : "mixed_daily_rendered",
     dailyPlan,
@@ -446,8 +488,8 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
     discoveryResults,
     clips,
     failedSelections,
-    successful_clip_count: clips.filter((clip) => clip.ok).length,
-    failed_clip_count: failedSelections.length
+    successful_clip_count: successfulClipCount,
+    failed_clip_count: failedClipCount
   });
 }
 

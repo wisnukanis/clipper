@@ -31,10 +31,17 @@ Kriteria potongan:
 YTDLP_AUTH_ERROR_PATTERNS = (
     "sign in to confirm",
     "not a bot",
-    "use --cookies",
     "cookies-from-browser",
-    "cookies.txt",
     "login required",
+    "no longer valid",
+    "rotated in the browser",
+)
+YTDLP_AUTH_REQUIRED_PATTERNS = (
+    "sign in to confirm",
+    "not a bot",
+    "login required",
+)
+YTDLP_COOKIE_WARNING_PATTERNS = (
     "no longer valid",
     "rotated in the browser",
 )
@@ -347,6 +354,16 @@ def is_ytdlp_auth_error(error):
     return any(pattern in output for pattern in YTDLP_AUTH_ERROR_PATTERNS)
 
 
+def is_ytdlp_hard_auth_error(error):
+    output = command_output(error).lower()
+    return any(pattern in output for pattern in YTDLP_AUTH_REQUIRED_PATTERNS)
+
+
+def is_ytdlp_cookie_warning(error):
+    output = command_output(error).lower()
+    return any(pattern in output for pattern in YTDLP_COOKIE_WARNING_PATTERNS)
+
+
 def raise_ytdlp_auth_error(error):
     raise YoutubeAuthRequiredError(
         "YOUTUBE_AUTH_REQUIRED: YouTube meminta login/cookies saat yt-dlp mengambil video. "
@@ -371,8 +388,10 @@ def run_ytdlp(args, capture=False):
             last_missing = exc
             continue
         except subprocess.CalledProcessError as exc:
-            if is_ytdlp_auth_error(exc):
+            if is_ytdlp_hard_auth_error(exc):
                 raise_ytdlp_auth_error(exc)
+            if is_ytdlp_cookie_warning(exc):
+                log_warn("yt-dlp memberi warning cookies, tapi bukan auth hard-fail. Lanjut fallback normal.")
             raise
 
     if last_missing:
@@ -495,8 +514,8 @@ def download_subtitle(url, job_id, language):
         selected_lang = candidates[0] if candidates else None
         if selected_lang:
             log_info(f"Transcript tersedia. Bahasa dipakai: {selected_lang}")
-    except YoutubeAuthRequiredError:
-        raise
+    except YoutubeAuthRequiredError as exc:
+        log_warn(f"Gagal membaca daftar transcript karena YouTube auth/cookies. Coba lanjut ambil subtitle langsung: {exc}")
     except Exception as exc:
         log_warn(f"Gagal membaca daftar transcript: {exc}")
 
@@ -518,8 +537,9 @@ def download_subtitle(url, job_id, language):
                 url,
             ]
         )
-    except YoutubeAuthRequiredError:
-        raise
+    except YoutubeAuthRequiredError as exc:
+        log_warn(f"Gagal mengambil subtitle karena YouTube auth/cookies. Lanjut fallback audio bila tersedia: {exc}")
+        return None
     except subprocess.CalledProcessError as exc:
         log_warn(f"Gagal mengambil subtitle: {exc}")
 
