@@ -527,14 +527,15 @@ jobs:
       YTDLP_COOKIES_TXT: ${{ secrets.YTDLP_COOKIES_TXT }}
       YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36' }}
       YTDLP_REFERER: https://www.youtube.com/
+      YTDLP_EXTRACTOR_ARGS: ${{ secrets.YTDLP_EXTRACTOR_ARGS }}
 
-      YTDLP_SLEEP_REQUESTS: ${{ secrets.YTDLP_SLEEP_REQUESTS || '0' }}
-      YTDLP_SLEEP_INTERVAL: ${{ secrets.YTDLP_SLEEP_INTERVAL || '0' }}
-      YTDLP_MAX_SLEEP_INTERVAL: ${{ secrets.YTDLP_MAX_SLEEP_INTERVAL || '0' }}
-      YTDLP_RETRIES: ${{ secrets.YTDLP_RETRIES || '1' }}
-      YTDLP_FRAGMENT_RETRIES: ${{ secrets.YTDLP_FRAGMENT_RETRIES || '1' }}
+      YTDLP_SLEEP_REQUESTS: ${{ secrets.YTDLP_SLEEP_REQUESTS || '5' }}
+      YTDLP_SLEEP_INTERVAL: ${{ secrets.YTDLP_SLEEP_INTERVAL || '8' }}
+      YTDLP_MAX_SLEEP_INTERVAL: ${{ secrets.YTDLP_MAX_SLEEP_INTERVAL || '14' }}
+      YTDLP_RETRIES: ${{ secrets.YTDLP_RETRIES || '3' }}
+      YTDLP_FRAGMENT_RETRIES: ${{ secrets.YTDLP_FRAGMENT_RETRIES || '3' }}
       YTDLP_RETRY_SLEEP: ${{ secrets.YTDLP_RETRY_SLEEP || 'exp=1:6' }}
-      YTDLP_SOCKET_TIMEOUT: ${{ secrets.YTDLP_SOCKET_TIMEOUT || '20' }}
+      YTDLP_SOCKET_TIMEOUT: ${{ secrets.YTDLP_SOCKET_TIMEOUT || '30' }}
 
     steps:
       - name: Checkout
@@ -1031,7 +1032,15 @@ jobs:
           if [ "${PYTHON_VENV_REBUILT:-false}" = "true" ]; then
             python -m pip install --upgrade pip wheel setuptools
           fi
-          python -m pip install --prefer-binary -r clipper/requirements.txt
+          if [ -f clipper/requirements.txt ]; then
+            python -m pip install --prefer-binary -r clipper/requirements.txt
+          elif [ -f requirements.txt ]; then
+            python -m pip install --prefer-binary -r requirements.txt
+          elif [ -f requirements-offline.txt ]; then
+            python -m pip install --prefer-binary -r requirements-offline.txt
+          else
+            echo "::warning::Tidak ada requirements Python ditemukan; lanjut dengan dependency yang sudah tersedia."
+          fi
 
       - name: Update yt-dlp
         shell: bash
@@ -1158,6 +1167,11 @@ jobs:
           echo "YTDLP_COOKIES_FILE=${YTDLP_COOKIES_FILE:-not_set}"
           echo "YTDLP_JS_RUNTIMES=$YTDLP_JS_RUNTIMES"
           echo "YTDLP_REMOTE_COMPONENTS=$YTDLP_REMOTE_COMPONENTS"
+          if [ -n "$YTDLP_EXTRACTOR_ARGS" ]; then
+            echo "YTDLP_EXTRACTOR_ARGS=configured"
+          else
+            echo "YTDLP_EXTRACTOR_ARGS=not_set"
+          fi
           echo "YTDLP_REFERER=$YTDLP_REFERER"
           echo "YTDLP_SLEEP_REQUESTS=$YTDLP_SLEEP_REQUESTS"
           echo "YTDLP_SLEEP_INTERVAL=$YTDLP_SLEEP_INTERVAL"
@@ -1187,6 +1201,36 @@ jobs:
             UA_ARGS+=(--user-agent "$YTDLP_USER_AGENT")
           fi
 
+          YTDLP_TEST_ARGS=(
+            --cookies cookies.txt
+            "${UA_ARGS[@]}"
+            --ignore-no-formats-error
+            --skip-download
+            --print title
+          )
+
+          add_ytdlp_test_arg() {
+            local option="$1"
+            local value="$2"
+            local normalized
+            normalized="$(printf '%s' "${value:-}" | tr '[:upper:]' '[:lower:]')"
+            if [ -n "${value:-}" ] && [ "$normalized" != "0" ] && [ "$normalized" != "false" ] && [ "$normalized" != "off" ] && [ "$normalized" != "none" ] && [ "$normalized" != "null" ]; then
+              YTDLP_TEST_ARGS+=("$option" "$value")
+            fi
+          }
+
+          add_ytdlp_test_arg --referer "$YTDLP_REFERER"
+          add_ytdlp_test_arg --js-runtimes "$YTDLP_JS_RUNTIMES"
+          add_ytdlp_test_arg --remote-components "$YTDLP_REMOTE_COMPONENTS"
+          add_ytdlp_test_arg --extractor-args "$YTDLP_EXTRACTOR_ARGS"
+          add_ytdlp_test_arg --sleep-requests "$YTDLP_SLEEP_REQUESTS"
+          add_ytdlp_test_arg --sleep-interval "$YTDLP_SLEEP_INTERVAL"
+          add_ytdlp_test_arg --max-sleep-interval "$YTDLP_MAX_SLEEP_INTERVAL"
+          add_ytdlp_test_arg --retries "$YTDLP_RETRIES"
+          add_ytdlp_test_arg --fragment-retries "$YTDLP_FRAGMENT_RETRIES"
+          add_ytdlp_test_arg --retry-sleep "$YTDLP_RETRY_SLEEP"
+          add_ytdlp_test_arg --socket-timeout "$YTDLP_SOCKET_TIMEOUT"
+
           COOKIE_TEST_ATTEMPTS="${YTDLP_COOKIE_TEST_ATTEMPTS:-3}"
           COOKIE_TEST_DELAY_SECONDS="${YTDLP_COOKIE_TEST_DELAY_SECONDS:-20}"
           YTDLP_OUTPUT=""
@@ -1197,23 +1241,7 @@ jobs:
             echo "yt-dlp cookie test attempt $attempt/$COOKIE_TEST_ATTEMPTS"
 
             set +e
-            YTDLP_OUTPUT="$(yt-dlp \
-              --cookies cookies.txt \
-              "${UA_ARGS[@]}" \
-              --referer "$YTDLP_REFERER" \
-              --js-runtimes "$YTDLP_JS_RUNTIMES" \
-              --remote-components "$YTDLP_REMOTE_COMPONENTS" \
-              --sleep-requests "$YTDLP_SLEEP_REQUESTS" \
-              --sleep-interval "$YTDLP_SLEEP_INTERVAL" \
-              --max-sleep-interval "$YTDLP_MAX_SLEEP_INTERVAL" \
-              --retries "$YTDLP_RETRIES" \
-              --fragment-retries "$YTDLP_FRAGMENT_RETRIES" \
-              --retry-sleep "$YTDLP_RETRY_SLEEP" \
-              --socket-timeout "$YTDLP_SOCKET_TIMEOUT" \
-              --ignore-no-formats-error \
-              --skip-download \
-              --print title \
-              "$TEST_URL" 2>&1)"
+            YTDLP_OUTPUT="$(yt-dlp "${YTDLP_TEST_ARGS[@]}" "$TEST_URL" 2>&1)"
             YTDLP_STATUS=$?
             set -e
 
@@ -1268,7 +1296,17 @@ jobs:
           exit "$YTDLP_STATUS"
 
       - name: Check configuration
-        run: npm run check -- --offline
+        shell: bash
+        run: |
+          if [ ! -f src/run.js ]; then
+            echo "::notice::src/run.js tidak ada; skip npm config check production dan pakai Python fallback saat generate."
+          elif node -e "process.exit(require('./package.json').scripts?.check ? 0 : 1)"; then
+            npm run check -- --offline
+          elif node -e "process.exit(require('./package.json').scripts?.['test:env'] ? 0 : 1)"; then
+            npm run test:env
+          else
+            echo "::warning::Tidak ada npm script check/test:env; skip config check."
+          fi
 
       - name: Generate and publish
         env:
@@ -1341,11 +1379,36 @@ jobs:
           args+=(--subtitle-margin-h "$SUBTITLE_MARGIN_H")
 
           echo "Running command:"
-          printf 'node src/run.js'
-          printf ' %q' "${args[@]}"
-          printf '\n'
+          if [ -f src/run.js ]; then
+            printf 'node src/run.js'
+            printf ' %q' "${args[@]}"
+            printf '\n'
+            node src/run.js "${args[@]}"
+          elif [ -f clipper/scripts/clipper.py ] || [ -f scripts/clipper.py ]; then
+            if [ -z "$URL" ]; then
+              echo "::error::src/run.js tidak ada, jadi workflow fallback Python hanya bisa jalan untuk manual URL. Isi input url atau restore pipeline production src/run.js."
+              exit 1
+            fi
 
-          node src/run.js "${args[@]}"
+            py_runner="scripts/clipper.py"
+            if [ -f clipper/scripts/clipper.py ]; then
+              py_runner="clipper/scripts/clipper.py"
+            fi
+
+            py_args=("$URL")
+            if [ -n "$RANGE" ]; then
+              py_args+=(--range "$RANGE")
+            fi
+
+            echo "src/run.js tidak ada; fallback ke $py_runner."
+            printf 'python %q' "$py_runner"
+            printf ' %q' "${py_args[@]}"
+            printf '\n'
+            python "$py_runner" "${py_args[@]}"
+          else
+            echo "::error::Tidak menemukan runner: src/run.js, clipper/scripts/clipper.py, atau scripts/clipper.py."
+            exit 1
+          fi
 
       - name: Upload rendered review artifacts
         if: ${{ always() && env.AUTO_PUBLISH != 'true' }}

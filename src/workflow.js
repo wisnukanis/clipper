@@ -436,6 +436,7 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
         slotSucceeded = true;
         break;
       } catch (error) {
+        const sourceBlocked = isYoutubeSourceBlocked(error);
         failedSelections.push({
           slot_index: slotPlan.slot_index,
           slot_time_wib: slotPlan.slot_time_wib,
@@ -443,6 +444,7 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
           attempt,
           video_id: selection.video.id,
           url: selection.video.url,
+          terminal_source_block: sourceBlocked,
           error: error.message
         });
         await appendLog("slot_video_failed_skip", {
@@ -453,8 +455,22 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
           max_attempts: maxSlotAttempts,
           video_id: selection.video.id,
           url: selection.video.url,
+          terminal_source_block: sourceBlocked,
           error: error.message
         });
+
+        if (sourceBlocked) {
+          await appendLog("mixed_daily_stopped_source_blocked", {
+            reason: "youtube_auth_required",
+            failed_video_count: failedSelections.length,
+            failed_videos: failedSelections
+          });
+          throw new Error(
+            "YouTube memblokir download dari runner GitHub (bot-check/login). " +
+            "Kandidat ada, tapi tidak bisa diproses karena YTDLP_COOKIES_TXT tidak valid/ter-rotate. " +
+            "Export ulang cookies YouTube format Netscape lalu update GitHub Secret YTDLP_COOKIES_TXT."
+          );
+        }
       }
     }
 
@@ -472,10 +488,18 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
   const successfulClipCount = clips.filter((clip) => clip.ok).length;
   const failedClipCount = failedSelections.length;
   if (options.mode !== "discover" && successfulClipCount <= 0) {
+    const sourceBlocked = failedSelections.some((item) => isYoutubeSourceBlocked(item.error));
     await appendLog("mixed_daily_no_successful_clip", {
       failed_clip_count: failedClipCount,
+      terminal_source_block: sourceBlocked,
       failedSelections
     });
+    if (sourceBlocked) {
+      throw new Error(
+        "Tidak ada video final karena YouTube memblokir semua download dari runner GitHub (bot-check/login). " +
+        "Ini bukan kandidat kosong; update GitHub Secret YTDLP_COOKIES_TXT dengan cookies YouTube yang baru."
+      );
+    }
     throw new Error(
       `Tidak ada video final yang berhasil dibuat. Semua kandidat gagal (${failedClipCount} failure). ` +
       "Cek failedSelections di log untuk URL dan error detail."

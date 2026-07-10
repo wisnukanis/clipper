@@ -369,7 +369,8 @@ def raise_ytdlp_auth_error(error):
         "YOUTUBE_AUTH_REQUIRED: YouTube meminta login/cookies saat yt-dlp mengambil video. "
         "Jika YTDLP_COOKIES_TXT sudah diisi, cookies kemungkinan sudah dirotasi/tidak valid. "
         "Export ulang dari private/incognito session: login YouTube, buka https://www.youtube.com/robots.txt "
-        "di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT."
+        "di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT. "
+        "Jika cookies baru tetap gagal, isi YTDLP_EXTRACTOR_ARGS sesuai panduan yt-dlp terbaru untuk YouTube/PO token."
     ) from error
 
 
@@ -431,6 +432,7 @@ def ytdlp_common_args():
     referer = os.environ.get("YTDLP_REFERER", "").strip()
     js_runtimes = resolve_ytdlp_js_runtimes(os.environ.get("YTDLP_JS_RUNTIMES", "node"))
     remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github").strip()
+    extractor_args = os.environ.get("YTDLP_EXTRACTOR_ARGS", "").strip()
     sleep_requests = os.environ.get("YTDLP_SLEEP_REQUESTS", "").strip()
     sleep_interval = os.environ.get("YTDLP_SLEEP_INTERVAL", "").strip()
     max_sleep_interval = os.environ.get("YTDLP_MAX_SLEEP_INTERVAL", "").strip()
@@ -461,6 +463,9 @@ def ytdlp_common_args():
 
     if js_runtimes:
         args.extend(["--js-runtimes", js_runtimes])
+
+    if extractor_args:
+        args.extend(["--extractor-args", extractor_args])
 
     if ytdlp_option_enabled(sleep_requests):
         args.extend(["--sleep-requests", sleep_requests])
@@ -515,7 +520,8 @@ def download_subtitle(url, job_id, language):
         if selected_lang:
             log_info(f"Transcript tersedia. Bahasa dipakai: {selected_lang}")
     except YoutubeAuthRequiredError as exc:
-        log_warn(f"Gagal membaca daftar transcript karena YouTube auth/cookies. Coba lanjut ambil subtitle langsung: {exc}")
+        log_warn(f"Gagal membaca daftar transcript karena YouTube auth/cookies: {exc}")
+        raise
     except Exception as exc:
         log_warn(f"Gagal membaca daftar transcript: {exc}")
 
@@ -538,8 +544,8 @@ def download_subtitle(url, job_id, language):
             ]
         )
     except YoutubeAuthRequiredError as exc:
-        log_warn(f"Gagal mengambil subtitle karena YouTube auth/cookies. Lanjut fallback audio bila tersedia: {exc}")
-        return None
+        log_warn(f"Gagal mengambil subtitle karena YouTube auth/cookies: {exc}")
+        raise
     except subprocess.CalledProcessError as exc:
         log_warn(f"Gagal mengambil subtitle: {exc}")
 
