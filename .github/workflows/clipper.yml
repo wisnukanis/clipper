@@ -1,6 +1,9 @@
 name: Clipper Daily Automation
 
 on:
+  # Temporary canary trigger. Removed after one verified YouTube publication.
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       mode:
@@ -1195,7 +1198,7 @@ jobs:
           fi
 
       - name: Test YouTube cookies before automation
-        if: ${{ env.YTDLP_COOKIES_TXT != '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || vars.TEST_YOUTUBE_COOKIES == 'true') }}
+        if: ${{ env.YTDLP_COOKIES_TXT != '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event_name == 'push' || vars.TEST_YOUTUBE_COOKIES == 'true') }}
         working-directory: clipper
         shell: bash
         env:
@@ -1315,6 +1318,13 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "schedule" ] && [ "$EVENT_SCHEDULE" = "0 22 * * *" ]; then
             MODE="discover"
+          fi
+          if [ "$EVENT_NAME" = "push" ]; then
+            # One-video production canary for this deployment only.
+            MODE="full"
+            SLOT="1"
+            TARGET_COUNT="1"
+            FORCE_PUBLISH_INPUT="true"
           fi
           if [ "$EVENT_NAME" = "schedule" ]; then
             case "$EVENT_SCHEDULE" in
