@@ -149,6 +149,7 @@ function buildConfig() {
     },
     youtube: {
       enabled: boolEnv("YOUTUBE_UPLOAD_ENABLED", false),
+      required: boolEnv("YOUTUBE_PUBLISH_REQUIRED", true),
       customThumbnailEnabled: boolEnv("YOUTUBE_CUSTOM_THUMBNAIL_ENABLED", false),
       clientId: cleanText(process.env.YOUTUBE_CLIENT_ID),
       clientSecret: process.env.YOUTUBE_CLIENT_SECRET || "",

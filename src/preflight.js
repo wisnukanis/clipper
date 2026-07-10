@@ -335,7 +335,14 @@ async function checkFacebook(online, required = false) {
 
 async function checkYoutube(online, required = canPublish()) {
   if (!config.youtube.enabled) {
-    return checkResult("YouTube Data API", true, "YOUTUBE_UPLOAD_ENABLED=false", false);
+    return checkResult(
+      "YouTube Data API",
+      !required,
+      required
+        ? "YOUTUBE_UPLOAD_ENABLED=false, padahal publish YouTube diwajibkan"
+        : "YOUTUBE_UPLOAD_ENABLED=false",
+      required
+    );
   }
 
   const missing = missingEnv(["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]);

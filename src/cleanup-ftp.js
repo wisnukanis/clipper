@@ -1,4 +1,7 @@
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { config, shouldUploadToRemote } from "./config.js";
 import { withRemoteClient } from "./uploader.js";
 
@@ -73,7 +76,71 @@ function matchesCleanupFilter(name, match) {
   });
 }
 
-async function cleanupSubdir(client, dir, { cutoffMs, dryRun, deleteAll, match }) {
+function filenameFromUrl(value) {
+  if (!value) return "";
+  try {
+    return decodeURIComponent(new URL(value).pathname.split("/").pop() || "");
+  } catch {
+    return "";
+  }
+}
+
+function pendingJobId(item = {}) {
+  if (item.job_id) return String(item.job_id);
+  const filename = path.basename(String(item.video_path || "").replace(/\\/g, "/"));
+  return filename.replace(/-with-thumb-intro(?=\.mp4$)/i, "").replace(/\.mp4$/i, "");
+}
+
+function activePendingItem(item = {}) {
+  if (String(item.status || "pending").toLowerCase() !== "pending") return false;
+  const maxAgeDays = Math.max(1, Number(process.env.PENDING_UPLOAD_MAX_AGE_DAYS || 7) || 7);
+  const createdAt = Date.parse(item.created_at || item.updated_at || "");
+  return !Number.isFinite(createdAt) || Date.now() - createdAt <= maxAgeDays * 86400000;
+}
+
+export function protectedPendingNames(items = []) {
+  const protectedByFolder = {
+    videos: new Set(),
+    thumbnails: new Set(),
+    metadata: new Set()
+  };
+
+  for (const item of items.filter(activePendingItem)) {
+    const jobId = pendingJobId(item);
+    const videoName = filenameFromUrl(item.video_url || item.public_video_url) || (jobId ? `${jobId}.mp4` : "");
+    const thumbnailName = filenameFromUrl(item.thumbnail_url || item.public_thumbnail_url)
+      || (jobId ? `${jobId}-thumbnail.jpg` : "");
+    const metadataName = filenameFromUrl(item.metadata_url || item.public_metadata_url)
+      || (jobId ? `${jobId}.json` : "");
+    if (videoName) protectedByFolder.videos.add(videoName);
+    if (thumbnailName) protectedByFolder.thumbnails.add(thumbnailName);
+    if (metadataName) protectedByFolder.metadata.add(metadataName);
+  }
+  return protectedByFolder;
+}
+
+async function loadRemotePendingUploads(client) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clipper-cleanup-"));
+  const target = path.join(tempDir, "pending_uploads.json");
+  try {
+    await client.cd("/");
+    await client.cd(path.posix.join(config.ftp.remoteDir, "state"));
+    await client.downloadTo(target, "pending_uploads.json");
+    const parsed = JSON.parse(await fs.readFile(target, "utf8"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    if (/no such|not found|does not exist|\b550\b|code 2\b/i.test(message)) {
+      console.warn(`Pending upload state belum ada; cleanup lanjut tanpa protection: ${message}`);
+      return [];
+    }
+    throw new Error(`Cleanup dibatalkan karena pending upload state tidak dapat dibaca: ${message}`);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function cleanupSubdir(client, dir, { cutoffMs, dryRun, deleteAll, match, protectedNames = new Set() }) {
   let stats = { scanned: 0, deleted: 0, freedBytes: 0, skipped: 0, errors: 0 };
 
   try {
@@ -98,6 +165,12 @@ async function cleanupSubdir(client, dir, { cutoffMs, dryRun, deleteAll, match }
     stats.scanned += 1;
 
     if (!matchesCleanupFilter(item.name, match)) {
+      stats.skipped += 1;
+      continue;
+    }
+
+    if (!deleteAll && protectedNames.has(item.name)) {
+      console.log(`= ${dir}/${item.name}: dilindungi karena masih ada di pending upload queue`);
       stats.skipped += 1;
       continue;
     }
@@ -180,9 +253,20 @@ async function main() {
   const totals = { scanned: 0, deleted: 0, freedBytes: 0, skipped: 0, errors: 0 };
 
   await withRemoteClient(async (client) => {
+    const pendingItems = await loadRemotePendingUploads(client);
+    const protectedByFolder = protectedPendingNames(pendingItems);
+    if (pendingItems.length) {
+      console.log(`Pending protection aktif untuk ${pendingItems.length} item queue.`);
+    }
     for (const sub of subdirs) {
       const dir = path.posix.join(config.ftp.remoteDir, sub);
-      const stats = await cleanupSubdir(client, dir, { cutoffMs, dryRun, deleteAll, match });
+      const stats = await cleanupSubdir(client, dir, {
+        cutoffMs,
+        dryRun,
+        deleteAll,
+        match,
+        protectedNames: protectedByFolder[sub] || new Set()
+      });
       mergeStats(totals, stats);
     }
   }, { timeoutMs: config.ftp.cleanupTimeoutMs, retries: cleanupRetries });
@@ -194,13 +278,15 @@ async function main() {
   if (totals.errors > 0) process.exit(2);
 }
 
-main().catch((err) => {
-  const softFail = boolEnv(`${config.ftp.envPrefix || "FTP"}_CLEANUP_SOFT_FAIL`, boolEnv("FTP_CLEANUP_SOFT_FAIL", true));
-  if (softFail && isConnectionError(err)) {
-    console.warn(`Cleanup dilewati karena koneksi remote timeout/tidak stabil: ${err.message || err}`);
-    console.warn("Set SFTP_CLEANUP_SOFT_FAIL=false jika ingin timeout cleanup menggagalkan workflow.");
-    process.exit(0);
-  }
-  console.error("Cleanup gagal:", err.stack || err.message);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    const softFail = boolEnv(`${config.ftp.envPrefix || "FTP"}_CLEANUP_SOFT_FAIL`, boolEnv("FTP_CLEANUP_SOFT_FAIL", true));
+    if (softFail && isConnectionError(err)) {
+      console.warn(`Cleanup dilewati karena koneksi remote timeout/tidak stabil: ${err.message || err}`);
+      console.warn("Set SFTP_CLEANUP_SOFT_FAIL=false jika ingin timeout cleanup menggagalkan workflow.");
+      process.exit(0);
+    }
+    console.error("Cleanup gagal:", err.stack || err.message);
+    process.exit(1);
+  });
+}

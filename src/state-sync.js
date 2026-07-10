@@ -10,7 +10,10 @@ const stateFiles = [
   "prompts.json",
   "jobs.json",
   "history.json",
-  "discovery-cache.json"
+  "discovery-cache.json",
+  "pending_uploads.json",
+  "daily_upload_counter.json",
+  "used_sources.json"
 ];
 
 function remoteStateDir() {

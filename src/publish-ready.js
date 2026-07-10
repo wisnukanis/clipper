@@ -1,5 +1,8 @@
+import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { config } from "./config.js";
 import { appendHistory } from "./history.js";
 import { publishReel } from "./instagram.js";
@@ -82,14 +85,36 @@ async function resolveVideoPath(job) {
 
   await fs.mkdir(path.join(config.generatedDir, "ready-videos"), { recursive: true });
   const target = path.join(config.generatedDir, "ready-videos", `${job.job_id}.mp4`);
+  try {
+    const existing = await fs.stat(target);
+    if (existing.isFile() && existing.size > 0) return target;
+  } catch {
+    // Download the remote copy below.
+  }
   const response = await fetch(job.public_video_url);
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     throw new Error(`Gagal download ulang video ready dari remote storage: HTTP ${response.status}`);
   }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length) throw new Error("Video ready dari remote storage kosong.");
-  await fs.writeFile(target, buffer);
-  return target;
+  const temp = `${target}.part`;
+  try {
+    await pipeline(Readable.fromWeb(response.body), createWriteStream(temp));
+    const stat = await fs.stat(temp);
+    if (!stat.size) throw new Error("Video ready dari remote storage kosong.");
+    await fs.rename(temp, target);
+    return target;
+  } catch (error) {
+    await fs.rm(temp, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+function youtubeIdFromUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.searchParams.get("v") || (url.hostname === "youtu.be" ? url.pathname.slice(1) : "");
+  } catch {
+    return "";
+  }
 }
 
 const jobId = argValue("--job", "");
@@ -111,6 +136,11 @@ if (!job) {
 
 if (!config.youtube.enabled && !config.instagram.enabled && !config.tiktok.enabled && !config.threads.enabled) {
   console.error("Tidak ada platform aktif. Aktifkan YOUTUBE_UPLOAD_ENABLED, INSTAGRAM_UPLOAD_ENABLED, TIKTOK_UPLOAD_ENABLED, atau THREADS_UPLOAD_ENABLED.");
+  process.exit(1);
+}
+
+if (config.youtube.required && !config.youtube.enabled) {
+  console.error("YOUTUBE_PUBLISH_REQUIRED=true tetapi YOUTUBE_UPLOAD_ENABLED=false.");
   process.exit(1);
 }
 
@@ -142,7 +172,7 @@ await patchItem("jobs", job.job_id, onlyYoutubeThumbnail ? {
 });
 
 let youtube = (job.youtube_url || job.youtube_video_id) ? {
-  videoId: job.youtube_video_id,
+  videoId: job.youtube_video_id || youtubeIdFromUrl(job.youtube_url),
   url: job.youtube_url || (job.youtube_video_id ? `https://www.youtube.com/watch?v=${job.youtube_video_id}` : ""),
   customThumbnail: job.youtube_custom_thumbnail === true,
   thumbnailError: job.youtube_thumbnail_error || "",
@@ -254,6 +284,9 @@ try {
   if (!youtube && !instagram && !tiktok && !threads) {
     throw new Error("Tidak ada publish yang dijalankan.");
   }
+  if (config.youtube.required && !youtube?.videoId) {
+    throw new Error("YOUTUBE_PUBLISH_REQUIRED: platform lain mungkin berhasil, tetapi youtube_video_id kosong.");
+  }
 
   const now = new Date().toISOString();
   await patchItem("jobs", job.job_id, {
@@ -277,8 +310,8 @@ try {
   });
   await patchVideo(job.video_id, {
     status: "published",
-    youtube_video_id: youtube?.videoId || job.youtube_video_id,
-    youtube_url: youtube?.url || job.youtube_url,
+    published_youtube_video_id: youtube?.videoId || job.youtube_video_id,
+    published_youtube_url: youtube?.url || job.youtube_url,
     instagram_media_id: instagram?.mediaId || job.instagram_media_id,
     tiktok_publish_id: tiktok?.publishId || job.tiktok_publish_id,
     threads_media_id: threads?.mediaId || job.threads_media_id,
@@ -344,7 +377,7 @@ try {
       job_id: job.job_id,
       error: error.message
     }, null, 2));
-    process.exit(0);
+    process.exit(config.youtube.required && !hasYoutube ? 1 : 0);
   }
   await patchItem("jobs", job.job_id, {
     status: "failed_publish",

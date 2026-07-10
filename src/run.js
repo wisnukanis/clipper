@@ -1,4 +1,5 @@
-import { config } from "./config.js";
+import { canPublish, config } from "./config.js";
+import { assertYoutubePublishContract } from "./publish-contract.js";
 import { runWorkflow } from "./workflow.js";
 
 function argValue(name, fallback = "") {
@@ -52,6 +53,8 @@ if (hasArg("--dry-run")) {
   options.publish = false;
 }
 if (options.forcePublish === true) {
+  config.autoPublish = true;
+  config.dryRun = false;
   options.publish = true;
 }
 if (options.mode === "publish") {
@@ -63,7 +66,13 @@ if (options.mode === "discover" || options.mode === "render") {
 
 runWorkflow(options)
   .then((result) => {
+    const youtubeIds = assertYoutubePublishContract(result, {
+      required: Boolean(options.publish && canPublish() && config.youtube.required)
+    });
     console.log(JSON.stringify(result, null, 2));
+    if (youtubeIds.length) {
+      console.log(`YOUTUBE_PUBLISH_CONFIRMED: ${youtubeIds.join(",")}`);
+    }
   })
   .catch((error) => {
     console.error(error);

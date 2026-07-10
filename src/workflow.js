@@ -31,6 +31,15 @@ import {
 } from "./pending-uploads.js";
 
 export async function runWorkflow(options = {}) {
+  const context = { pendingUploadsFirst: null };
+  const result = await runWorkflowInternal(options, context);
+  if (context.pendingUploadsFirst) {
+    result.pending_uploads_first = context.pendingUploadsFirst;
+  }
+  return result;
+}
+
+async function runWorkflowInternal(options = {}, context = {}) {
   await ensureProjectDirs();
   await ensureQueueFiles();
   const dailyPlan = resolveDailyPlan(options);
@@ -44,7 +53,7 @@ export async function runWorkflow(options = {}) {
   const requestedSlot = String(options.slot || process.env.CLIPPER_SLOT || "all").toLowerCase();
   const mode = String(options.mode || "full").toLowerCase();
 
-  const publishRequired = Boolean(options.publish && canPublish());
+  const publishRequired = Boolean(options.publish && canPublish() && config.youtube.required);
   const preflight = await runPreflight({
     publishRequired,
     socialPublishRequired: false,
@@ -93,9 +102,14 @@ export async function runWorkflow(options = {}) {
       dryRun: false,
       limit: Number(process.env.YOUTUBE_DAILY_UPLOAD_LIMIT || 3) || 3
     }).catch((error) => ({ error: error.message }));
-    if (pendingFirst?.uploaded_count || pendingFirst?.error) {
+    context.pendingUploadsFirst = pendingFirst;
+    if (pendingFirst?.uploaded_count || pendingFirst?.pending_count || pendingFirst?.errors?.length || pendingFirst?.error) {
       await appendLog("pending_uploads_first", pendingFirst);
-      console.log(`[UPLOAD] pending queue diproses: uploaded=${pendingFirst.uploaded_count || 0}, pending=${pendingFirst.pending_count || 0}`);
+      console.log(
+        `[UPLOAD] pending queue diproses: uploaded=${pendingFirst.uploaded_count || 0}, `
+          + `pending=${pendingFirst.pending_count || 0}, errors=${pendingFirst.errors?.length || 0}`
+      );
+      await syncStateBestEffort("pending_uploads_first");
     }
   }
 
@@ -231,6 +245,7 @@ export async function runWorkflow(options = {}) {
         failedSelections
       });
     } catch (error) {
+      if (isTerminalPublishFailure(error)) throw error;
       const failed = summarizeFailedSelection(selection, error);
       failedSelections.push(failed);
       excludedVideoIds.add(selection.video.id);
@@ -436,6 +451,7 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
         slotSucceeded = true;
         break;
       } catch (error) {
+        if (isTerminalPublishFailure(error)) throw error;
         const sourceBlocked = isYoutubeSourceBlocked(error);
         failedSelections.push({
           slot_index: slotPlan.slot_index,
@@ -505,15 +521,21 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
       "Cek failedSelections di log untuk URL dan error detail."
     );
   }
+  const youtubePublishedCount = clips.filter((clip) => Boolean(clip.youtube_video_id)).length;
   return dailyReport({
-    status: options.mode === "discover" ? "discovered" : options.publish && canPublish() ? "mixed_daily_publish_done" : "mixed_daily_rendered",
+    status: options.mode === "discover"
+      ? "discovered"
+      : options.publish && canPublish()
+        ? youtubePublishedCount > 0 ? "mixed_daily_published" : "mixed_daily_publish_failed"
+        : "mixed_daily_rendered",
     dailyPlan,
     discoveryResult: aggregateDiscoveryResults(discoveryResults),
     discoveryResults,
     clips,
     failedSelections,
     successful_clip_count: successfulClipCount,
-    failed_clip_count: failedClipCount
+    failed_clip_count: failedClipCount,
+    published_clip_count: youtubePublishedCount
   });
 }
 
@@ -527,6 +549,34 @@ function isYoutubeSourceBlocked(error) {
     "cookies-from-browser",
     "bot-check"
   ].some((pattern) => message.includes(pattern));
+}
+
+function isTerminalPublishFailure(error) {
+  return ["YOUTUBE_PUBLISH_REQUIRED", "YOUTUBE_PUBLISH_DEFERRED"].includes(String(error?.code || ""));
+}
+
+async function syncStateBestEffort(context) {
+  try {
+    return await uploadStateToRemote();
+  } catch (error) {
+    console.warn(`State sync gagal setelah ${context}: ${error.message}`);
+    await appendLog("state_sync_failed", { context, error: error.message });
+    return { error: error.message };
+  }
+}
+
+function requiredPublishError(final, clipResults) {
+  const youtubeErrors = clipResults
+    .map((item) => item?.platformResults?.errors?.youtube || item?.error || "")
+    .filter(Boolean);
+  const deferred = final.publishStatus === "queued";
+  const detail = youtubeErrors.length ? ` Detail: ${[...new Set(youtubeErrors)].join("; ")}` : "";
+  const error = new Error(
+    `${deferred ? "YOUTUBE_PUBLISH_DEFERRED" : "YOUTUBE_PUBLISH_REQUIRED"}: `
+      + `render selesai tetapi tidak ada youtube_video_id (status=${final.publishStatus}).${detail}`
+  );
+  error.code = deferred ? "YOUTUBE_PUBLISH_DEFERRED" : "YOUTUBE_PUBLISH_REQUIRED";
+  return error;
 }
 
 async function selectQueuedWorkflowVideo({ options, excludedVideoIds, preferredVideoIds = [] }) {
@@ -773,8 +823,8 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
     });
 
     await maybeUpdateVideoStatus(final.videoStatus, {
-      youtube_video_id: lastPlatformResults.youtube?.videoId || video.youtube_video_id,
-      youtube_url: lastPlatformResults.youtube?.url || "",
+      published_youtube_video_id: lastPlatformResults.youtube?.videoId || "",
+      published_youtube_url: lastPlatformResults.youtube?.url || "",
       instagram_media_id: lastPlatformResults.instagram?.mediaId || "",
       facebook_video_id: lastPlatformResults.facebook?.videoId || "",
       facebook_url: lastPlatformResults.facebook?.url || "",
@@ -794,6 +844,10 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
       published_clip_count: final.publishedClips
     });
 
+    if (options.publish && canPublish() && config.youtube.required && final.publishedClips <= 0) {
+      throw requiredPublishError(final, clipResults);
+    }
+
     return {
       status: final.publishStatus,
       job_id: job.job_id,
@@ -804,6 +858,12 @@ async function processSelectedWorkflow({ selection, options, scheduledDailyLimit
       clips: clipResults.map(summarizeClipResult)
     };
   } catch (error) {
+    if (isTerminalPublishFailure(error)) {
+      await updateJob(job.job_id, { error_message: error.message });
+      await syncStateBestEffort("youtube_publish_required_failed");
+      await appendLog("youtube_publish_required_failed", { job_id: job.job_id, error: error.message });
+      throw error;
+    }
     await updateJob(job.job_id, {
       status: "failed",
       error_message: error.message
@@ -1323,8 +1383,11 @@ async function publishPlatforms({ job, video, output, caption, upload, thumbnail
       const youtubeMetadata = buildYoutubeMetadata({ job, output, caption: publishCaption });
       if (!await canUploadYoutubeToday()) {
         await savePendingUpload({
+          jobId: job.job_id,
           videoPath: output.finalAbsPath,
+          videoUrl: upload.videoUrl,
           thumbnailPath: thumbnail?.path || "",
+          thumbnailUrl: upload.thumbnailUrl,
           metadata: { ...metadata, ...youtubeMetadata },
           reason: "PENDING_DAILY_LIMIT"
         });
@@ -1340,20 +1403,46 @@ async function publishPlatforms({ job, video, output, caption, upload, thumbnail
       });
     });
     if (platformResults.youtube) {
-      await incrementYoutubeUploadCounter().catch(() => {});
+      const now = new Date().toISOString();
+      await updateJob(job.job_id, {
+        youtube_status: "published",
+        youtube_video_id: platformResults.youtube.videoId,
+        youtube_url: platformResults.youtube.url,
+        youtube_published_at: now
+      });
+      await appendLog("youtube_publish_confirmed", {
+        job_id: job.job_id,
+        youtube_video_id: platformResults.youtube.videoId,
+        youtube_url: platformResults.youtube.url
+      });
+      try {
+        await incrementYoutubeUploadCounter();
+      } catch (error) {
+        console.warn(`Counter YouTube gagal disimpan setelah upload berhasil: ${error.message}`);
+        await appendLog("youtube_counter_failed", {
+          job_id: job.job_id,
+          youtube_video_id: platformResults.youtube.videoId,
+          error: error.message
+        });
+      }
+      await syncStateBestEffort("youtube_publish_confirmed");
     }
     if (platformResults.quotaExceeded.youtube) {
       const youtubeMetadata = buildYoutubeMetadata({ job, output, caption: publishCaption });
       await savePendingUpload({
+        jobId: job.job_id,
         videoPath: output.finalAbsPath,
+        videoUrl: upload.videoUrl,
         thumbnailPath: thumbnail?.path || "",
+        thumbnailUrl: upload.thumbnailUrl,
         metadata: { ...metadata, ...youtubeMetadata },
         reason: "QUOTA_EXCEEDED",
         error: platformResults.errors.youtube || ""
-      }).catch(() => {});
+      });
       return platformResults;
     }
     if (platformResults.deferred.youtube) return platformResults;
+    if (!platformResults.youtube) return platformResults;
   }
 
   if (config.facebook.enabled) {
@@ -1772,6 +1861,8 @@ function dailyReport(result = {}) {
     const status = String(clip.status || "").toLowerCase();
     return ["scheduled", "published", "published_with_warnings", "queued"].includes(status);
   }).length;
+  const youtubePublishedCount = clips.filter((clip) => Boolean(clip.youtube_video_id)).length;
+  const queuedCount = clips.filter((clip) => String(clip.status || "").toLowerCase() === "queued").length;
   const candidateClipCount = clips.reduce((total, clip) => {
     return total + (Number(clip.candidate_clip_count) || 0);
   }, 0);
@@ -1800,7 +1891,10 @@ function dailyReport(result = {}) {
     jumlah_transcript_berhasil: renderedCount,
     jumlah_kandidat_clip_dibuat: candidateClipCount,
     jumlah_video_dirender: renderedCount,
-    jumlah_video_scheduled_published: scheduledOrPublishedCount,
+    jumlah_video_scheduled_published: youtubePublishedCount,
+    jumlah_video_publish_youtube: youtubePublishedCount,
+    jumlah_video_queued: queuedCount,
+    jumlah_video_scheduled_legacy: scheduledOrPublishedCount,
     jumlah_error_skipped: errorOrSkippedCount,
     shortage: renderedCount < plan.targetMin
       ? `Stok/render kurang dari target minimum ${plan.targetMin}; tersedia ${renderedCount}.`
@@ -1853,7 +1947,7 @@ async function appendHistoryEntry({ job, video, caption, output, upload, platfor
     clip_total: clipTotal,
     video_id: video.id,
     source_url: video.url,
-    youtube_video_id: video.youtube_video_id,
+    source_video_id: video.youtube_video_id,
     theme: job.theme,
     content_type: video.content_type || job.theme,
     source_title: video.source_title || output.title || "",

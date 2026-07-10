@@ -52,12 +52,20 @@ export async function hasProcessedVideo(video) {
 
 export async function hasPublishedToday(date = todayDate()) {
   const history = await readJson("history", []);
-  return history.some((entry) => entry.status === "published" && entry.publish_date === date);
+  return history.some((entry) => (
+    entry.status === "published"
+    && entry.publish_date === date
+    && Boolean(entry.youtube_video_id)
+  ));
 }
 
 export async function publishedCountToday(date = todayDate()) {
   const history = await readJson("history", []);
-  return history.filter((entry) => entry.status === "published" && entry.publish_date === date).length;
+  return history.filter((entry) => (
+    entry.status === "published"
+    && entry.publish_date === date
+    && Boolean(entry.youtube_video_id)
+  )).length;
 }
 
 export async function appendHistory(entry) {

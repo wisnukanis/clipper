@@ -121,6 +121,7 @@ permissions:
 
 jobs:
   publish:
+    name: ${{ github.event_name == 'schedule' && github.event.schedule == '0 22 * * *' && 'Discover candidates (no upload expected)' || 'Generate and publish to YouTube' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
 
@@ -185,6 +186,8 @@ jobs:
       FACEBOOK_TITLE_PREFIX: ${{ secrets.FACEBOOK_TITLE_PREFIX }}
 
       YOUTUBE_UPLOAD_ENABLED: ${{ secrets.YOUTUBE_UPLOAD_ENABLED || 'true' }}
+      YOUTUBE_PUBLISH_REQUIRED: ${{ secrets.YOUTUBE_PUBLISH_REQUIRED || 'true' }}
+      PENDING_UPLOAD_MAX_AGE_DAYS: ${{ secrets.PENDING_UPLOAD_MAX_AGE_DAYS || '7' }}
 
       TIKTOK_UPLOAD_PAUSED: ${{ secrets.TIKTOK_UPLOAD_PAUSED || 'true' }}
       TIKTOK_UPLOAD_ENABLED: ${{ secrets.TIKTOK_UPLOAD_ENABLED || 'false' }}
@@ -525,7 +528,8 @@ jobs:
       YTDLP_JS_RUNTIMES: node
       YTDLP_REMOTE_COMPONENTS: ejs:github
       YTDLP_COOKIES_TXT: ${{ secrets.YTDLP_COOKIES_TXT }}
-      YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36' }}
+      # Kosong berarti yt-dlp memilih user-agent yang sesuai versi extractornya.
+      YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
       YTDLP_REFERER: https://www.youtube.com/
       YTDLP_EXTRACTOR_ARGS: ${{ secrets.YTDLP_EXTRACTOR_ARGS }}
 

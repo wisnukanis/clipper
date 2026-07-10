@@ -727,6 +727,7 @@ Nilai penting untuk GitHub Actions:
 
 ```env
 YOUTUBE_UPLOAD_ENABLED=true
+YOUTUBE_PUBLISH_REQUIRED=true
 FACEBOOK_UPLOAD_ENABLED=true
 INSTAGRAM_UPLOAD_ENABLED=true
 INSTAGRAM_REEL_UPLOAD_METHOD=video_url
@@ -863,6 +864,7 @@ AUTO_DISCOVER_CHANNEL_MAX_RESULTS=3
 
 GRAPH_API_VERSION=v25.0
 YOUTUBE_UPLOAD_ENABLED=true
+YOUTUBE_PUBLISH_REQUIRED=true
 YOUTUBE_CLIENT_ID=
 YOUTUBE_CLIENT_SECRET=
 YOUTUBE_REFRESH_TOKEN=
@@ -1159,6 +1161,14 @@ Versi Meta Graph API untuk Facebook dan Instagram.
 #### `YOUTUBE_UPLOAD_ENABLED`
 
 Mengaktifkan publish ke YouTube. Di workflow produksi, YouTube adalah platform utama.
+
+#### `YOUTUBE_PUBLISH_REQUIRED`
+
+Jika `true` (default produksi), workflow hanya dianggap sukses setelah YouTube mengembalikan `youtube_video_id`. Render selesai, status platform lain, atau queue tanpa ID YouTube tidak boleh dilaporkan sebagai publish sukses.
+
+#### `PENDING_UPLOAD_MAX_AGE_DAYS`
+
+Batas umur antrean retry YouTube. File video/thumbnail yang masih aktif di queue dilindungi dari cleanup SFTP dan didownload ulang dari public storage ketika runner lokal sudah hilang.
 
 #### `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`
 

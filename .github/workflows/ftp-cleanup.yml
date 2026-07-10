@@ -63,6 +63,7 @@ jobs:
       SFTP_CLEANUP_DELETE_ALL: ${{ github.event.inputs.delete_all || 'false' }}
       SFTP_CLEANUP_SUBDIRS: ${{ github.event.inputs.subdirs || '' }}
       SFTP_CLEANUP_MATCH: ${{ github.event.inputs.match || '' }}
+      PENDING_UPLOAD_MAX_AGE_DAYS: ${{ secrets.PENDING_UPLOAD_MAX_AGE_DAYS || '7' }}
 
     steps:
       - name: Checkout
@@ -71,7 +72,7 @@ jobs:
       - name: Setup Node with cache
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
 

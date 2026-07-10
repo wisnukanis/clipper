@@ -934,7 +934,11 @@ function currentJob(state) {
 }
 
 function isPublishedJob(job) {
-  return job.status === "published" || job.publish_status === "published" || job.publish_status === "published_with_warnings";
+  const statusPublished = job.status === "published"
+    || job.publish_status === "published"
+    || job.publish_status === "published_with_warnings";
+  const youtubeDisabled = job.youtube_status === "disabled";
+  return statusPublished && (youtubeDisabled || Boolean(job.youtube_video_id));
 }
 
 function isFailed(status) {
@@ -956,7 +960,11 @@ function isAutoDiscoveredVideo(video) {
 }
 
 function publishedCountForDate(date, history, jobs) {
-  const fromHistory = history.filter((entry) => entry.status === "published" && entryDate(entry) === date).length;
+  const fromHistory = history.filter((entry) => (
+    entry.status === "published"
+    && Boolean(entry.youtube_video_id)
+    && entryDate(entry) === date
+  )).length;
   if (fromHistory) return fromHistory;
   return jobs.filter((job) => isPublishedJob(job) && dateKey(job.published_at || job.updated_at || job.created_at) === date).length;
 }

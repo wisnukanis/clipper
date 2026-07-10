@@ -7,6 +7,7 @@ const tokenUrl = "https://oauth2.googleapis.com/token";
 const uploadUrl = "https://www.googleapis.com/upload/youtube/v3/videos";
 const thumbnailUploadUrl = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set";
 const maxThumbnailBytes = 2 * 1024 * 1024;
+const minVideoBytes = 64 * 1024;
 
 function assertYoutubeConfig() {
   const missing = [];
@@ -34,6 +35,27 @@ export async function getYoutubeAccessToken() {
   } catch (error) {
     throw wrapGoogleError(error, "YouTube token refresh failed");
   }
+}
+
+export async function assertYoutubeVideoFile(videoPath) {
+  if (!videoPath) throw new Error("Path video YouTube kosong.");
+  const stat = await fsp.stat(videoPath);
+  if (!stat.isFile()) throw new Error(`Output YouTube bukan file: ${videoPath}`);
+  if (stat.size < minVideoBytes) {
+    throw new Error(`Output video terlalu kecil/kosong untuk YouTube: ${stat.size} bytes (${videoPath})`);
+  }
+
+  const handle = await fsp.open(videoPath, "r");
+  try {
+    const header = Buffer.alloc(64);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    if (!header.subarray(0, bytesRead).includes(Buffer.from("ftyp"))) {
+      throw new Error(`Output bukan container MP4 valid (header ftyp tidak ditemukan): ${videoPath}`);
+    }
+  } finally {
+    await handle.close();
+  }
+  return stat;
 }
 
 export async function setYoutubeThumbnail({ videoId, thumbnailPath, accessToken }) {
@@ -86,8 +108,8 @@ export async function setYoutubeThumbnail({ videoId, thumbnailPath, accessToken 
 }
 
 export async function publishToYoutube({ videoPath, title, description, tags = [], thumbnailPath }) {
+  const stat = await assertYoutubeVideoFile(videoPath);
   const accessToken = await getYoutubeAccessToken();
-  const stat = await fsp.stat(videoPath);
   const metadata = {
     snippet: {
       title: normalizeTitle(title),
@@ -135,7 +157,9 @@ export async function publishToYoutube({ videoPath, title, description, tags = [
       timeout: 30 * 60 * 1000
     });
     const id = upload.data?.id;
-    if (!id) throw new Error("YouTube upload selesai tetapi video id kosong.");
+    if (!id || !/^[A-Za-z0-9_-]{6,}$/.test(String(id))) {
+      throw new Error(`YouTube upload selesai tetapi video id tidak valid: ${String(id || "kosong")}`);
+    }
     const thumbnail = config.youtube.customThumbnailEnabled
       ? await setYoutubeThumbnail({ videoId: id, thumbnailPath, accessToken })
       : { ok: false, skipped: true, error: "" };
