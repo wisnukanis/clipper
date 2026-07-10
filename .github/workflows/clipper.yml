@@ -553,7 +553,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          # yt-dlp 2026.06.09+ requires Node 22+ for YouTube EJS solving.
+          node-version: 22
 
       - name: Ensure Node runtime for yt-dlp
         shell: bash
@@ -1045,8 +1046,11 @@ jobs:
       - name: Update yt-dlp
         shell: bash
         run: |
-          python -m pip install --upgrade --prefer-binary yt-dlp
+          # The default extra installs the matching yt-dlp-ejs package. This
+          # avoids depending only on GitHub component downloads at runtime.
+          python -m pip install --upgrade --prefer-binary "yt-dlp[default]"
           yt-dlp --version
+          python -m pip show yt-dlp-ejs
 
       - name: Write YouTube cookies
         if: ${{ env.YTDLP_COOKIES_TXT != '' }}
@@ -1204,8 +1208,8 @@ jobs:
           YTDLP_TEST_ARGS=(
             --cookies cookies.txt
             "${UA_ARGS[@]}"
-            --ignore-no-formats-error
-            --skip-download
+            --simulate
+            --format "bestaudio/best"
             --print title
           )
 
@@ -1235,7 +1239,6 @@ jobs:
           COOKIE_TEST_DELAY_SECONDS="${YTDLP_COOKIE_TEST_DELAY_SECONDS:-20}"
           YTDLP_OUTPUT=""
           YTDLP_STATUS=1
-          HAS_TEST_TITLE=0
 
           for attempt in $(seq 1 "$COOKIE_TEST_ATTEMPTS"); do
             echo "yt-dlp cookie test attempt $attempt/$COOKIE_TEST_ATTEMPTS"
@@ -1246,25 +1249,15 @@ jobs:
             set -e
 
             printf '%s\n' "$YTDLP_OUTPUT"
-            HAS_TEST_TITLE="$(printf '%s\n' "$YTDLP_OUTPUT" | awk '
-              /^[[:space:]]*$/ { next }
-              /^(WARNING|ERROR):/ { next }
-              { found = 1 }
-              END { print found ? 1 : 0 }
-            ')"
 
-            if [ "$YTDLP_STATUS" -eq 0 ] || [ "$HAS_TEST_TITLE" -eq 1 ]; then
-              if [ "$YTDLP_STATUS" -eq 0 ]; then
-                echo "yt-dlp cookie test passed."
-              else
-                echo "::warning::yt-dlp printed a title despite warnings/status $YTDLP_STATUS. Treating cookie precheck as usable and continuing to production."
-              fi
+            if [ "$YTDLP_STATUS" -eq 0 ]; then
+              echo "yt-dlp cookie and media-format test passed."
               exit 0
             fi
 
-            if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'Requested format is not available|Only images are available'; then
-              echo "::warning::yt-dlp cookie test could not validate downloadable formats for TEST_URL, but no login/cookie failure was detected. Continuing to production."
-              exit 0
+            if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'challenge solving failed|Requested format is not available|Only images are available|No video formats found'; then
+              echo "::error::yt-dlp tidak menemukan format audio/video karena YouTube EJS challenge gagal. Pastikan Node 22+ dan paket yt-dlp-ejs terpasang; jangan lanjut ke proses render."
+              exit 1
             fi
 
             if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser|sign in to confirm|not a bot|use --cookies|No video formats found'; then
@@ -1277,11 +1270,6 @@ jobs:
 
             break
           done
-
-          if [ "$HAS_TEST_TITLE" -eq 1 ]; then
-            echo "::warning::yt-dlp printed a title despite cookie warnings. Continuing to production."
-            exit 0
-          fi
 
           if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
             echo "::error::YTDLP_COOKIES_TXT masih dianggap tidak valid/terrotasi setelah $COOKIE_TEST_ATTEMPTS percobaan. Jika rerun tetap gagal, export ulang dari private/incognito: login YouTube, buka https://www.youtube.com/robots.txt di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT."
