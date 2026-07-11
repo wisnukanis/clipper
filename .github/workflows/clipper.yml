@@ -1,9 +1,6 @@
 name: Clipper Daily Automation
 
 on:
-  # Temporary canary trigger. Removed after one verified YouTube publication.
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       mode:
@@ -1198,7 +1195,7 @@ jobs:
           fi
 
       - name: Test YouTube cookies before automation
-        if: ${{ env.YTDLP_COOKIES_TXT != '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event_name == 'push' || vars.TEST_YOUTUBE_COOKIES == 'true') }}
+        if: ${{ env.YTDLP_COOKIES_TXT != '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || vars.TEST_YOUTUBE_COOKIES == 'true') }}
         working-directory: clipper
         shell: bash
         env:
@@ -1267,15 +1264,21 @@ jobs:
               exit 1
             fi
 
-            if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser|sign in to confirm|not a bot|use --cookies|No video formats found'; then
-              if [ "$attempt" -lt "$COOKIE_TEST_ATTEMPTS" ]; then
-                echo "::warning::YouTube/yt-dlp cookie test looked transient. Retrying in ${COOKIE_TEST_DELAY_SECONDS}s..."
-                sleep "$COOKIE_TEST_DELAY_SECONDS"
-                continue
-              fi
+            if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
+              echo "::error::YTDLP_COOKIES_TXT tidak valid/terrotasi. Export ulang cookies YouTube lalu update GitHub Secret YTDLP_COOKIES_TXT."
+              exit 1
             fi
 
-            break
+            if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'sign in to confirm|not a bot|use --cookies'; then
+              echo "::error::YouTube masih meminta login/cookies. Export ulang dari private/incognito session dan jangan buka lagi session itu setelah export."
+              exit 1
+            fi
+
+            if [ "$attempt" -lt "$COOKIE_TEST_ATTEMPTS" ]; then
+              echo "::warning::YouTube/yt-dlp cookie test failed; retrying in ${COOKIE_TEST_DELAY_SECONDS}s..."
+              sleep "$COOKIE_TEST_DELAY_SECONDS"
+              continue
+            fi
           done
 
           if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
@@ -1318,13 +1321,6 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "schedule" ] && [ "$EVENT_SCHEDULE" = "0 22 * * *" ]; then
             MODE="discover"
-          fi
-          if [ "$EVENT_NAME" = "push" ]; then
-            # One-video production canary for this deployment only.
-            MODE="full"
-            SLOT="1"
-            TARGET_COUNT="1"
-            FORCE_PUBLISH_INPUT="true"
           fi
           if [ "$EVENT_NAME" = "schedule" ]; then
             case "$EVENT_SCHEDULE" in
