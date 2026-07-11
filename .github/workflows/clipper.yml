@@ -1084,6 +1084,32 @@ jobs:
             exit 1
           fi
 
+          AUTH_COOKIE_NAMES=$(
+            awk -F '\t' '
+              $0 !~ /^#/ && tolower($1) ~ /(youtube|google)/ {
+                name=$6
+                if (name ~ /^(SID|HSID|SSID|APISID|SAPISID|LOGIN_INFO|SIDCC|__Secure-[13]P?SID|__Secure-[13]P?APISID|__Secure-[13]PSIDTS|__Secure-[13]PSIDCC)$/) {
+                  found[name]=1
+                }
+              }
+              END {
+                first=1
+                for (name in found) {
+                  if (!first) printf ","
+                  printf "%s", name
+                  first=0
+                }
+              }
+            ' clipper/cookies.txt
+          )
+          if [ -n "$AUTH_COOKIE_NAMES" ]; then
+            AUTH_COOKIE_COUNT=$(printf '%s' "$AUTH_COOKIE_NAMES" | tr ',' '\n' | wc -l | tr -d ' ')
+            echo "YouTube auth-like cookie names present: $AUTH_COOKIE_COUNT ($AUTH_COOKIE_NAMES)"
+          else
+            echo "::error::cookies.txt tidak punya cookie login penting seperti SID/LOGIN_INFO/__Secure-*SID. Export kemungkinan hanya cookie consent/visitor, bukan session YouTube yang login."
+            exit 1
+          fi
+
           FIRST_LINE=$(head -n 1 clipper/cookies.txt || true)
           if [[ "$FIRST_LINE" != "# Netscape HTTP Cookie File"* && "$FIRST_LINE" != "# HTTP Cookie File"* ]]; then
             echo "::warning::Baris pertama cookies bukan format standar Netscape/HTTP Cookie File."

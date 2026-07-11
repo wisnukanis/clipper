@@ -442,7 +442,7 @@ function parseJsonLines(stdout) {
     });
 }
 
-function ytDlpCommonArgs() {
+export function ytDlpCommonArgs() {
   const args = ["--ignore-config"];
   const cookiesFile = String(process.env.YTDLP_COOKIES_FILE || "").trim();
   if (cookiesFile) {
@@ -455,6 +455,9 @@ function ytDlpCommonArgs() {
   if (process.env.YTDLP_REFERER) args.push("--referer", process.env.YTDLP_REFERER);
   if (process.env.YTDLP_JS_RUNTIMES) args.push("--js-runtimes", process.env.YTDLP_JS_RUNTIMES);
   if (process.env.YTDLP_REMOTE_COMPONENTS) args.push("--remote-components", process.env.YTDLP_REMOTE_COMPONENTS);
+  if (process.env.YTDLP_EXTRACTOR_ARGS) {
+    args.push("--extractor-args", process.env.YTDLP_EXTRACTOR_ARGS);
+  }
   if (boolEnv("YTDLP_SKIP_AUTHCHECK", true)) {
     args.push("--extractor-args", "youtubetab:skip=authcheck");
   }
