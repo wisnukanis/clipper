@@ -1235,8 +1235,7 @@ jobs:
             UA_ARGS+=(--user-agent "$YTDLP_USER_AGENT")
           fi
 
-          YTDLP_TEST_ARGS=(
-            --cookies cookies.txt
+          YTDLP_COMMON_TEST_ARGS=(
             "${UA_ARGS[@]}"
             --simulate
             --format "bestaudio/best"
@@ -1249,8 +1248,31 @@ jobs:
             local normalized
             normalized="$(printf '%s' "${value:-}" | tr '[:upper:]' '[:lower:]')"
             if [ -n "${value:-}" ] && [ "$normalized" != "0" ] && [ "$normalized" != "false" ] && [ "$normalized" != "off" ] && [ "$normalized" != "none" ] && [ "$normalized" != "null" ]; then
-              YTDLP_TEST_ARGS+=("$option" "$value")
+              YTDLP_COMMON_TEST_ARGS+=("$option" "$value")
             fi
+          }
+
+          try_without_cookies() {
+            local no_cookie_output
+            local no_cookie_status
+
+            echo "::warning::Cookies terlihat invalid/terotasi. Mencoba yt-dlp tanpa cookies sebagai fallback untuk video publik..."
+            set +e
+            no_cookie_output="$(yt-dlp "${YTDLP_COMMON_TEST_ARGS[@]}" "$TEST_URL" 2>&1)"
+            no_cookie_status=$?
+            set -e
+
+            printf '%s\n' "$no_cookie_output"
+            if [ "$no_cookie_status" -eq 0 ]; then
+              echo "::warning::yt-dlp berhasil tanpa cookies. Menonaktifkan cookies.txt untuk sisa job agar cookies invalid tidak ikut dipakai."
+              mv cookies.txt cookies.invalid.txt
+              echo "YTDLP_COOKIES_FILE=" >> "$GITHUB_ENV"
+              echo "YTDLP_COOKIES_DISABLED=1" >> "$GITHUB_ENV"
+              exit 0
+            fi
+
+            echo "::error::Cookies invalid dan fallback tanpa cookies juga gagal. Runner GitHub tetap kena bot-check/login."
+            return 1
           }
 
           add_ytdlp_test_arg --referer "$YTDLP_REFERER"
@@ -1274,7 +1296,7 @@ jobs:
             echo "yt-dlp cookie test attempt $attempt/$COOKIE_TEST_ATTEMPTS"
 
             set +e
-            YTDLP_OUTPUT="$(yt-dlp "${YTDLP_TEST_ARGS[@]}" "$TEST_URL" 2>&1)"
+            YTDLP_OUTPUT="$(yt-dlp --cookies cookies.txt "${YTDLP_COMMON_TEST_ARGS[@]}" "$TEST_URL" 2>&1)"
             YTDLP_STATUS=$?
             set -e
 
@@ -1291,12 +1313,14 @@ jobs:
             fi
 
             if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
-              echo "::error::YTDLP_COOKIES_TXT tidak valid/terrotasi. Export ulang cookies YouTube lalu update GitHub Secret YTDLP_COOKIES_TXT."
+              try_without_cookies || true
+              echo "::error::YTDLP_COOKIES_TXT tidak valid/terrotasi. Export ulang cookies YouTube lalu update GitHub Secret YTDLP_COOKIES_TXT, atau isi YTDLP_EXTRACTOR_ARGS jika YouTube membutuhkan PO token."
               exit 1
             fi
 
             if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'sign in to confirm|not a bot|use --cookies'; then
-              echo "::error::YouTube masih meminta login/cookies. Export ulang dari private/incognito session dan jangan buka lagi session itu setelah export."
+              try_without_cookies || true
+              echo "::error::YouTube masih meminta login/cookies. Export ulang dari private/incognito session dan jangan buka lagi session itu setelah export, atau isi YTDLP_EXTRACTOR_ARGS jika YouTube membutuhkan PO token."
               exit 1
             fi
 
