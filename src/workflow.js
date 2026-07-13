@@ -483,8 +483,10 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
           });
           throw new Error(
             "YouTube memblokir download dari runner GitHub (bot-check/login). " +
-            "Kandidat ada, tapi tidak bisa diproses karena YTDLP_COOKIES_TXT tidak valid/ter-rotate. " +
-            "Export ulang cookies YouTube format Netscape lalu update GitHub Secret YTDLP_COOKIES_TXT."
+            "Kandidat ada, tapi tidak bisa diproses dari IP runner ini. " +
+            "Jika YTDLP_COOKIES_DISABLED=1, cookies invalid sudah dilepas dan fallback PO/no-cookie tetap ditolak. " +
+            "Solusi tersisa: export ulang cookies YouTube dari private/incognito session yang tidak dibuka lagi, " +
+            "atau gunakan sumber video/non-runner yang tidak kena bot-check."
           );
         }
       }
@@ -513,7 +515,8 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
     if (sourceBlocked) {
       throw new Error(
         "Tidak ada video final karena YouTube memblokir semua download dari runner GitHub (bot-check/login). " +
-        "Ini bukan kandidat kosong; update GitHub Secret YTDLP_COOKIES_TXT dengan cookies YouTube yang baru."
+        "Ini bukan kandidat kosong. Jika cookie canary menonaktifkan cookies, fallback PO/no-cookie juga ditolak; " +
+        "butuh cookies YouTube yang benar-benar valid atau sumber video yang tidak bergantung pada download YouTube dari GitHub runner."
       );
     }
     throw new Error(
