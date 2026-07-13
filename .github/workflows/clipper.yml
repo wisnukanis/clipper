@@ -532,6 +532,8 @@ jobs:
       YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
       YTDLP_REFERER: https://www.youtube.com/
       YTDLP_EXTRACTOR_ARGS: ${{ secrets.YTDLP_EXTRACTOR_ARGS }}
+      YTDLP_POT_PROVIDER_ENABLED: ${{ vars.YTDLP_POT_PROVIDER_ENABLED || 'true' }}
+      YTDLP_POT_PROVIDER_IMAGE: ${{ vars.YTDLP_POT_PROVIDER_IMAGE || 'brainicism/bgutil-ytdlp-pot-provider:node' }}
 
       YTDLP_SLEEP_REQUESTS: ${{ secrets.YTDLP_SLEEP_REQUESTS || '5' }}
       YTDLP_SLEEP_INTERVAL: ${{ secrets.YTDLP_SLEEP_INTERVAL || '8' }}
@@ -1056,6 +1058,36 @@ jobs:
           yt-dlp --version
           python -m pip show yt-dlp-ejs
 
+      - name: Start yt-dlp PO token provider
+        if: ${{ env.YTDLP_POT_PROVIDER_ENABLED == 'true' || env.YTDLP_POT_PROVIDER_ENABLED == '1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Installing yt-dlp bgutil PO token provider plugin..."
+          python -m pip install --upgrade --prefer-binary bgutil-ytdlp-pot-provider
+
+          echo "Starting bgutil PO token provider container..."
+          if docker ps -a --format '{{.Names}}' | grep -qx 'bgutil-provider'; then
+            docker rm -f bgutil-provider >/dev/null 2>&1 || true
+          fi
+          docker run --name bgutil-provider -d --init -p 127.0.0.1:4416:4416 "$YTDLP_POT_PROVIDER_IMAGE"
+
+          for attempt in $(seq 1 20); do
+            if docker ps --format '{{.Names}}' | grep -qx 'bgutil-provider'; then
+              echo "bgutil PO token provider is running."
+              docker logs bgutil-provider --tail 20 || true
+              exit 0
+            fi
+            echo "Waiting for bgutil PO token provider... attempt $attempt/20"
+            docker logs bgutil-provider --tail 20 || true
+            sleep 2
+          done
+
+          echo "::error::bgutil PO token provider failed to stay running."
+          docker logs bgutil-provider --tail 80 || true
+          exit 1
+
       - name: Write YouTube cookies
         if: ${{ env.YTDLP_COOKIES_TXT != '' }}
         shell: bash
@@ -1201,6 +1233,8 @@ jobs:
           echo "YTDLP_COOKIES_FILE=${YTDLP_COOKIES_FILE:-not_set}"
           echo "YTDLP_JS_RUNTIMES=$YTDLP_JS_RUNTIMES"
           echo "YTDLP_REMOTE_COMPONENTS=$YTDLP_REMOTE_COMPONENTS"
+          echo "YTDLP_POT_PROVIDER_ENABLED=$YTDLP_POT_PROVIDER_ENABLED"
+          echo "YTDLP_POT_PROVIDER_IMAGE=$YTDLP_POT_PROVIDER_IMAGE"
           if [ -n "$YTDLP_EXTRACTOR_ARGS" ]; then
             echo "YTDLP_EXTRACTOR_ARGS=configured"
           else
