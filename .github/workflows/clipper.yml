@@ -1309,6 +1309,15 @@ jobs:
               exit 0
             fi
 
+            pot_provider_enabled="$(printf '%s' "${YTDLP_POT_PROVIDER_ENABLED:-}" | tr '[:upper:]' '[:lower:]')"
+            if [ "$pot_provider_enabled" = "true" ] || [ "$pot_provider_enabled" = "1" ]; then
+              echo "::warning::Cookie canary masih kena bot-check, tapi PO token provider aktif. Lanjut tanpa cookies agar kandidat sebenarnya dicoba; publish contract tetap akan fail kalau tidak ada YouTube upload ID."
+              mv cookies.txt cookies.invalid.txt
+              echo "YTDLP_COOKIES_FILE=" >> "$GITHUB_ENV"
+              echo "YTDLP_COOKIES_DISABLED=1" >> "$GITHUB_ENV"
+              exit 0
+            fi
+
             echo "::error::Cookies invalid dan fallback tanpa cookies juga gagal. Runner GitHub tetap kena bot-check/login."
             return 1
           }
