@@ -1078,8 +1078,8 @@ jobs:
               echo "bgutil PO token provider is running."
               docker logs bgutil-provider --tail 20 || true
               if [ -z "${YTDLP_EXTRACTOR_ARGS:-}" ]; then
-                echo "YTDLP_EXTRACTOR_ARGS=youtube:player_client=mweb" >> "$GITHUB_ENV"
-                echo "No YTDLP_EXTRACTOR_ARGS configured; defaulting YouTube player client to mweb for PO token provider."
+                echo "YTDLP_EXTRACTOR_ARGS=youtubetab:skip=webpage;youtube:player_client=mweb;player_skip=webpage,configs" >> "$GITHUB_ENV"
+                echo "No YTDLP_EXTRACTOR_ARGS configured; defaulting YouTube extractor args to mweb with webpage/config skip for PO token provider."
               fi
               exit 0
             fi
