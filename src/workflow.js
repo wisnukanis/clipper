@@ -260,15 +260,13 @@ async function runWorkflowInternal(options = {}, context = {}) {
 
       if (sourceBlocked) {
         await uploadStateToRemote().catch(() => {});
-        await appendLog("queue_failover_stopped_source_blocked", {
+        await appendLog("queue_failover_source_blocked_retrying", {
           reason: "youtube_auth_required",
+          attempt,
+          max_attempts: maxAttempts,
           failed_video_count: failedSelections.length,
           failed_videos: failedSelections
         });
-        throw new Error(
-          "YouTube memblokir download dari runner GitHub (bot-check/login). " +
-          "Isi GitHub Secret YTDLP_COOKIES_TXT dengan cookies YouTube format Netscape, lalu jalankan ulang."
-        );
       }
     }
   }
@@ -317,9 +315,15 @@ async function createManualSelection(options) {
 }
 
 function queueFailoverLimit() {
-  const configured = Number(process.env.QUEUE_FAILOVER_ATTEMPTS || process.env.MAX_SCHEDULED_POSTS_PER_DAY || 5);
+  const configured = Number(process.env.QUEUE_FAILOVER_ATTEMPTS || 5);
   if (!Number.isFinite(configured) || configured <= 0) return 5;
   return Math.min(Math.floor(configured), 50);
+}
+
+function maxSlotBackupDiscoveries() {
+  const configured = Number(process.env.SLOT_BACKUP_DISCOVERY_ATTEMPTS || 2);
+  if (!Number.isFinite(configured) || configured <= 0) return 0;
+  return Math.min(Math.floor(configured), 10);
 }
 
 function summarizeFailedSelection(selection, error) {
@@ -394,6 +398,7 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
     const preferredVideoIds = (discoveryResult?.added || []).map((video) => video.id).filter(Boolean);
     let slotSucceeded = false;
     const maxSlotAttempts = queueFailoverLimit();
+    let backupDiscoveryCount = 0;
 
     for (let attempt = 1; attempt <= maxSlotAttempts; attempt += 1) {
       let selection = await selectQueuedWorkflowVideo({
@@ -416,6 +421,49 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
       }
 
       if (!selection) {
+        const shouldDiscoverBackup = attempt < maxSlotAttempts
+          && backupDiscoveryCount < maxSlotBackupDiscoveries()
+          && failedSelections.some((item) => item.slot_index === slotPlan.slot_index && item.terminal_source_block);
+        if (shouldDiscoverBackup) {
+          backupDiscoveryCount += 1;
+          const backupDiscovery = await discoverQueuedVideos({
+            ...options,
+            theme: slotPlan.content_type,
+            dailyPlan: slotDailyPlan,
+            slot: slotPlan.slot_index,
+            clipCount: 1
+          });
+          discoveryResults.push({
+            slot_index: slotPlan.slot_index,
+            slot_time_wib: slotPlan.slot_time_wib,
+            slot_content_type: slotPlan.content_type,
+            backup: true,
+            ...summarizeDiscoveryForReport(backupDiscovery)
+          });
+          const backupPreferredVideoIds = (backupDiscovery?.added || [])
+            .map((video) => video.id)
+            .filter(Boolean);
+          if (backupPreferredVideoIds.length) {
+            preferredVideoIds.push(...backupPreferredVideoIds.filter((id) => !preferredVideoIds.includes(id)));
+            await appendLog("slot_backup_discovery_added", {
+              slot_index: slotPlan.slot_index,
+              slot_time_wib: slotPlan.slot_time_wib,
+              slot_content_type: slotPlan.content_type,
+              attempt,
+              added_count: backupPreferredVideoIds.length,
+              added_video_ids: backupPreferredVideoIds
+            });
+            continue;
+          }
+          await appendLog("slot_backup_discovery_empty", {
+            slot_index: slotPlan.slot_index,
+            slot_time_wib: slotPlan.slot_time_wib,
+            slot_content_type: slotPlan.content_type,
+            attempt,
+            discovery_reason: backupDiscovery?.reason || ""
+          });
+        }
+
         if (attempt === 1) {
           failedSelections.push({
             slot_index: slotPlan.slot_index,
@@ -476,18 +524,16 @@ async function runMixedDailyWorkflow({ options, dailyPlan, scheduledDailyLimit, 
         });
 
         if (sourceBlocked) {
-          await appendLog("mixed_daily_stopped_source_blocked", {
+          await appendLog("slot_source_blocked_try_next_candidate", {
+            slot_index: slotPlan.slot_index,
+            slot_time_wib: slotPlan.slot_time_wib,
+            slot_content_type: slotPlan.content_type,
             reason: "youtube_auth_required",
+            attempt,
+            max_attempts: maxSlotAttempts,
             failed_video_count: failedSelections.length,
             failed_videos: failedSelections
           });
-          throw new Error(
-            "YouTube memblokir download dari runner GitHub (bot-check/login). " +
-            "Kandidat ada, tapi tidak bisa diproses dari IP runner ini. " +
-            "Jika YTDLP_COOKIES_DISABLED=1, cookies invalid sudah dilepas dan fallback PO/no-cookie tetap ditolak. " +
-            "Solusi tersisa: export ulang cookies YouTube dari private/incognito session yang tidak dibuka lagi, " +
-            "atau gunakan sumber video/non-runner yang tidak kena bot-check."
-          );
         }
       }
     }
