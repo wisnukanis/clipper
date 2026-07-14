@@ -538,6 +538,9 @@ jobs:
       YTDLP_EXTRACTOR_ARGS: ${{ secrets.YTDLP_EXTRACTOR_ARGS }}
       YTDLP_POT_PROVIDER_ENABLED: ${{ vars.YTDLP_POT_PROVIDER_ENABLED || 'true' }}
       YTDLP_POT_PROVIDER_IMAGE: ${{ vars.YTDLP_POT_PROVIDER_IMAGE || 'brainicism/bgutil-ytdlp-pot-provider:node' }}
+      YTDLP_POT_PROVIDER_URL: ${{ vars.YTDLP_POT_PROVIDER_URL || 'http://127.0.0.1:4416' }}
+      YTDLP_PROXY: ${{ secrets.YTDLP_PROXY }}
+      NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
 
       YTDLP_SLEEP_REQUESTS: ${{ secrets.YTDLP_SLEEP_REQUESTS || '5' }}
       YTDLP_SLEEP_INTERVAL: ${{ secrets.YTDLP_SLEEP_INTERVAL || '8' }}

@@ -383,14 +383,34 @@ def is_ytdlp_cookie_warning(error):
     return any(pattern in output for pattern in YTDLP_COOKIE_WARNING_PATTERNS)
 
 
+def notify_youtube_auth_required(message):
+    webhook_url = os.environ.get("NOTIFY_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        return
+
+    try:
+        payload = json.dumps({"content": message, "text": message}).encode("utf-8")
+        request = urllib.request.Request(
+            webhook_url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(request, timeout=10)
+    except Exception as exc:
+        log_warn(f"Gagal kirim notifikasi webhook cookies expired: {exc}")
+
+
 def raise_ytdlp_auth_error(error):
-    raise YoutubeAuthRequiredError(
+    message = (
         "YOUTUBE_AUTH_REQUIRED: YouTube meminta login/cookies saat yt-dlp mengambil video. "
         "Jika YTDLP_COOKIES_TXT sudah diisi, cookies kemungkinan sudah dirotasi/tidak valid. "
         "Export ulang dari private/incognito session: login YouTube, buka https://www.youtube.com/robots.txt "
         "di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT. "
         "Jika cookies baru tetap gagal, isi YTDLP_EXTRACTOR_ARGS sesuai panduan yt-dlp terbaru untuk YouTube/PO token."
-    ) from error
+    )
+    notify_youtube_auth_required(message)
+    raise YoutubeAuthRequiredError(message) from error
 
 
 def run_ytdlp(args, capture=False):
@@ -449,6 +469,8 @@ def ytdlp_common_args():
     cookies_browser = os.environ.get("YTDLP_COOKIES_FROM_BROWSER", "").strip()
     user_agent = os.environ.get("YTDLP_USER_AGENT", "").strip()
     referer = os.environ.get("YTDLP_REFERER", "").strip()
+    proxy = os.environ.get("YTDLP_PROXY", "").strip()
+    pot_provider_url = os.environ.get("YTDLP_POT_PROVIDER_URL", "").strip()
     js_runtimes = resolve_ytdlp_js_runtimes(os.environ.get("YTDLP_JS_RUNTIMES", "node"))
     remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github").strip()
     extractor_args = os.environ.get("YTDLP_EXTRACTOR_ARGS", "").strip()
@@ -460,11 +482,13 @@ def ytdlp_common_args():
     retry_sleep = os.environ.get("YTDLP_RETRY_SLEEP", "").strip()
     socket_timeout = os.environ.get("YTDLP_SOCKET_TIMEOUT", "").strip()
 
-    # Prioritas 1: pakai file cookies.txt
-    # Letakkan cookies.txt di root project:
-    # C:\xampp\htdocs\auto-video-clipper\cookies.txt
-    if not cookies_file and os.path.exists("cookies.txt"):
-        cookies_file = "cookies.txt"
+    # Prioritas 1: pakai file cookies.txt relatif ke root clipper.
+    # Ini lebih stabil daripada CWD karena workflow dapat memanggil script
+    # dari root repo, folder clipper, atau orchestrator lain.
+    if not cookies_file:
+        root_cookies_path = ROOT / "cookies.txt"
+        if root_cookies_path.exists():
+            cookies_file = str(root_cookies_path)
 
     if cookies_file:
         args.extend(["--cookies", cookies_file])
@@ -477,11 +501,18 @@ def ytdlp_common_args():
     if referer:
         args.extend(["--referer", referer])
 
+    if proxy:
+        args.extend(["--proxy", proxy])
+
     if remote_components:
         args.extend(["--remote-components", remote_components])
 
     if js_runtimes:
         args.extend(["--js-runtimes", js_runtimes])
+
+    if pot_provider_url:
+        pot_arg = f"youtubepot-bgutilhttp:base_url={pot_provider_url}"
+        extractor_args = f"{extractor_args};youtube:{pot_arg}" if extractor_args else f"youtube:{pot_arg}"
 
     if extractor_args:
         args.extend(["--extractor-args", extractor_args])
