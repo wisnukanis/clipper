@@ -512,7 +512,7 @@ def ytdlp_common_args():
 
     if pot_provider_url:
         pot_arg = f"youtubepot-bgutilhttp:base_url={pot_provider_url}"
-        extractor_args = f"{extractor_args};youtube:{pot_arg}" if extractor_args else f"youtube:{pot_arg}"
+        extractor_args = f"{extractor_args};{pot_arg}" if extractor_args else f"youtube:{pot_arg}"
 
     if extractor_args:
         args.extend(["--extractor-args", extractor_args])

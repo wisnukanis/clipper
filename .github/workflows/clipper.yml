@@ -1330,6 +1330,7 @@ jobs:
           }
 
           add_ytdlp_test_arg --referer "$YTDLP_REFERER"
+          add_ytdlp_test_arg --proxy "$YTDLP_PROXY"
           add_ytdlp_test_arg --js-runtimes "$YTDLP_JS_RUNTIMES"
           add_ytdlp_test_arg --remote-components "$YTDLP_REMOTE_COMPONENTS"
           add_ytdlp_test_arg --extractor-args "$YTDLP_EXTRACTOR_ARGS"
