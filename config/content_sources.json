@@ -73,6 +73,54 @@
       ]
     },
     {
+      "name": "Agak Laen Official",
+      "url": "https://www.youtube.com/@agaklaenofficial/videos",
+      "type": "youtube_channel",
+      "priority": 1,
+      "category": "podcast_lucu_hikmah",
+      "content_tone": "komedi_podcast",
+      "expect_humor": true,
+      "theme_prompt": "Prioritaskan momen obrolan komika yang lucu, celetukan spontan, cerita absurd tapi relate, atau punchline yang tetap punya pelajaran hidup ringan. Hindari bagian yang terlalu vulgar, terlalu internal, atau membutuhkan konteks panjang.",
+      "notes": "Source utama tambahan untuk podcast komedi Indonesia dengan chemistry kuat dan cerita pengalaman hidup yang sering lucu sekaligus relate.",
+      "allowed_keywords": [
+        "podcast", "agak laen", "cerita", "lucu", "komedi", "komika",
+        "stand up", "ngakak", "ketawa", "teman", "keluarga", "hidup",
+        "pengalaman", "relate", "blunder", "awkward", "malu", "kocak",
+        "perjuangan", "pelajaran", "ternyata", "masa kecil", "kerja",
+        "usaha", "sukses", "gagal"
+      ],
+      "blocked_keywords": [
+        "politik", "kontroversi", "skandal", "kriminal", "dewasa",
+        "judi", "provokasi", "perselingkuhan", "kasus", "cerai",
+        "KDRT", "bunuh diri", "depresi berat", "pelecehan", "korban",
+        "trauma", "kekerasan", "horor ekstrem", "mistis ekstrem"
+      ]
+    },
+    {
+      "name": "TonightShowNet",
+      "url": "https://www.youtube.com/@TonightShowNet/videos",
+      "type": "youtube_channel",
+      "priority": 1,
+      "category": "podcast_lucu_hikmah",
+      "content_tone": "talkshow_lucu_relate",
+      "expect_humor": true,
+      "theme_prompt": "Prioritaskan momen talkshow yang berupa cerita lucu, nostalgia, permainan kata, reaksi spontan host/guest, atau obrolan ringan yang punya insight kecil tentang hidup, keluarga, kerja, atau pertemanan. Hindari segmen game yang tidak berdiri sendiri atau terlalu bergantung visual studio.",
+      "notes": "Source utama tambahan untuk talkshow ringan Indonesia; cocok untuk klip lucu, nostalgia, dan obrolan relate yang mudah dipahami tanpa konteks panjang.",
+      "allowed_keywords": [
+        "tonight show", "podcast", "talkshow", "cerita", "lucu",
+        "nostalgia", "teman", "keluarga", "hidup", "pengalaman",
+        "ngakak", "ketawa", "relate", "blunder", "awkward", "malu",
+        "kocak", "pelajaran", "perjuangan", "karier", "kerja",
+        "masa kecil", "dulu", "ternyata"
+      ],
+      "blocked_keywords": [
+        "politik", "kontroversi", "skandal", "kriminal", "dewasa",
+        "judi", "rokok", "miras", "provokasi", "perselingkuhan",
+        "kasus", "cerai", "KDRT", "bunuh diri", "depresi berat",
+        "pelecehan", "korban", "trauma", "kekerasan"
+      ]
+    },
+    {
       "name": "CURHAT BANG Denny Sumargo",
       "url": "https://www.youtube.com/@curhatbang/videos",
       "type": "youtube_channel",
@@ -234,7 +282,12 @@
       "cerita awkward pengalaman nyata indonesia",
       "punchline podcast indonesia terbaik",
       "cerita lucu keluarga indonesia",
-      "storytime lucu relate kehidupan"
+      "storytime lucu relate kehidupan",
+      "raditya dika podcast cerita lucu keluarga",
+      "agak laen podcast cerita lucu hikmah",
+      "tonight show net cerita lucu relate",
+      "vindes podcast cerita lucu nostalgia",
+      "denny sumargo cerita hidup hikmah"
     ],
     "inspiratif_hikmah": [
       "renungan hidup islam indonesia",
