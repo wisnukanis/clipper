@@ -232,11 +232,15 @@ jobs:
       SFTP_PUBLIC_URL_RETRIES: ${{ secrets.SFTP_PUBLIC_URL_RETRIES || secrets.FTP_PUBLIC_URL_RETRIES || '8' }}
       SFTP_PUBLIC_URL_RETRY_DELAY_MS: ${{ secrets.SFTP_PUBLIC_URL_RETRY_DELAY_MS || secrets.FTP_PUBLIC_URL_RETRY_DELAY_MS || '2500' }}
 
-      AI_PROVIDER: openai
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://api.openai.com/v1' }}
-      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4.1-nano' }}
-      OPENAI_MODELS: ${{ secrets.OPENAI_MODELS || 'gpt-4.1-nano,gpt-5-nano,gpt-4o-mini' }}
+      AI_PROVIDER: ${{ secrets.AI_PROVIDER || vars.AI_PROVIDER || 'openai' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.MIXROUTE_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || secrets.MIXROUTE_BASE_URL || 'https://api.openai.com/v1' }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || secrets.MIXROUTE_MODEL || 'gpt-4.1-nano' }}
+      OPENAI_MODELS: ${{ secrets.OPENAI_MODELS || secrets.MIXROUTE_MODELS || 'gpt-4.1-nano,gpt-5-nano,gpt-4o-mini' }}
+      MIXROUTE_API_KEY: ${{ secrets.MIXROUTE_API_KEY }}
+      MIXROUTE_BASE_URL: ${{ secrets.MIXROUTE_BASE_URL }}
+      MIXROUTE_MODEL: ${{ secrets.MIXROUTE_MODEL }}
+      MIXROUTE_MODELS: ${{ secrets.MIXROUTE_MODELS }}
       OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE || '0.35' }}
       OPENAI_TRANSCRIBE_MODEL: ${{ secrets.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe' }}
       AI_REQUEST_TIMEOUT_SECONDS: ${{ secrets.AI_REQUEST_TIMEOUT_SECONDS || '25' }}
@@ -659,8 +663,8 @@ jobs:
             echo "::warning::THREADS_ACCESS_TOKEN belum diisi. Threads akan dilewati; workflow tetap fokus YouTube."
           fi
 
-          if [ "$AI_PROVIDER" = "openai" ] && [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error::AI_PROVIDER=openai tapi OPENAI_API_KEY belum diisi."
+          if { [ "$AI_PROVIDER" = "openai" ] || [ "$AI_PROVIDER" = "mixroute" ]; } && [ -z "$OPENAI_API_KEY" ] && [ -z "$MIXROUTE_API_KEY" ]; then
+            echo "::error::AI_PROVIDER=$AI_PROVIDER tapi OPENAI_API_KEY/MIXROUTE_API_KEY belum diisi."
             missing=1
           fi
 

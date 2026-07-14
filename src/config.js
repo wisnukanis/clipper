@@ -65,10 +65,24 @@ function encodePathSegment(value) {
 }
 
 function buildConfig() {
-  const openaiModels = listEnv("OPENAI_MODELS");
   const aiProvider = cleanText(process.env.AI_PROVIDER || "auto").toLowerCase();
-  const openaiModel = cleanText(process.env.OPENAI_MODEL || "gpt-4o-mini");
-  const openaiBaseUrl = cleanBaseUrl(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1");
+  const preferMixroute = aiProvider === "mixroute";
+  const openaiModels = preferMixroute
+    ? listEnv("MIXROUTE_MODELS", "OPENAI_MODELS")
+    : listEnv("OPENAI_MODELS", "MIXROUTE_MODELS");
+  const openaiModel = cleanText(
+    preferMixroute
+      ? (process.env.MIXROUTE_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini")
+      : (process.env.OPENAI_MODEL || process.env.MIXROUTE_MODEL || "gpt-4o-mini")
+  );
+  const openaiBaseUrl = cleanBaseUrl(
+    preferMixroute
+      ? (process.env.MIXROUTE_BASE_URL || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1")
+      : (process.env.OPENAI_BASE_URL || process.env.MIXROUTE_BASE_URL || "https://api.openai.com/v1")
+  );
+  const openaiApiKey = preferMixroute
+    ? (process.env.MIXROUTE_API_KEY || process.env.OPENAI_API_KEY || "")
+    : (process.env.OPENAI_API_KEY || process.env.MIXROUTE_API_KEY || "");
   const openaiDefaultModels = openaiBaseUrl === "https://api.openai.com/v1"
     ? ["gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"]
     : [];
@@ -189,7 +203,7 @@ function buildConfig() {
     instagramIgUserId: cleanText(process.env.INSTAGRAM_IG_USER_ID),
     instagramAccessToken: cleanText(process.env.INSTAGRAM_ACCESS_TOKEN),
     ai: {
-      provider: ["auto", "gemini", "openai"].includes(aiProvider) ? aiProvider : "auto",
+      provider: ["auto", "gemini", "openai", "mixroute"].includes(aiProvider) ? aiProvider : "auto",
       requiredForPublish: boolEnv("AI_REQUIRED_FOR_PUBLISH", false)
     },
     gemini: {
@@ -197,7 +211,7 @@ function buildConfig() {
       model: cleanText(process.env.GEMINI_MODEL || "gemini-flash-latest")
     },
     openai: {
-      apiKey: process.env.OPENAI_API_KEY || "",
+      apiKey: openaiApiKey,
       baseUrl: openaiBaseUrl,
       model: openaiModel,
       models: uniqueList([openaiModel, ...openaiModels, ...openaiDefaultModels]),

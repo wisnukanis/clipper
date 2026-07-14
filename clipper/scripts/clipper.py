@@ -130,18 +130,35 @@ def parse_keys_from_env(*names):
     return list(dict.fromkeys(keys))
 
 
+def first_env(*names, default=""):
+    for name in names:
+        value = os.environ.get(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return default
+
+
 def cfg():
     ai_provider = os.environ.get("AI_PROVIDER", "auto").strip().lower()
-    if ai_provider not in {"auto", "openai", "gemini"}:
+    if ai_provider not in {"auto", "openai", "gemini", "mixroute"}:
         ai_provider = "auto"
 
     transcribe_provider = os.environ.get("TRANSCRIBE_PROVIDER", "deepgram").strip().lower()
     if transcribe_provider not in {"offline", "auto", "deepgram"}:
         transcribe_provider = "deepgram"
 
-    openai_base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    openai_models = parse_keys(os.environ.get("OPENAI_MODELS"))
-    openai_model = os.environ.get("OPENAI_MODEL", "gpt-4.1-nano")
+    prefer_mixroute = ai_provider == "mixroute"
+    openai_base_url = first_env(
+        *(["MIXROUTE_BASE_URL", "OPENAI_BASE_URL"] if prefer_mixroute else ["OPENAI_BASE_URL", "MIXROUTE_BASE_URL"]),
+        default="https://api.openai.com/v1",
+    ).rstrip("/")
+    openai_models = parse_keys_from_env(
+        *(["MIXROUTE_MODELS", "OPENAI_MODELS"] if prefer_mixroute else ["OPENAI_MODELS", "MIXROUTE_MODELS"])
+    )
+    openai_model = first_env(
+        *(["MIXROUTE_MODEL", "OPENAI_MODEL"] if prefer_mixroute else ["OPENAI_MODEL", "MIXROUTE_MODEL"]),
+        default="gpt-4.1-nano",
+    )
     default_openai_models = ["gpt-4.1-nano", "gpt-5-nano", "gpt-4o-mini"] if openai_base_url == "https://api.openai.com/v1" else []
     openai_models = list(dict.fromkeys([
         item for item in [openai_model, *openai_models, *default_openai_models] if item
@@ -249,8 +266,10 @@ def cfg():
         "deepgram_model": os.environ.get("DEEPGRAM_MODEL", "nova-3"),
         "deepgram_language": os.environ.get("DEEPGRAM_LANGUAGE") or os.environ.get("VIDEO_LANGUAGE", "id"),
         "deepgram_timeout": parse_int(os.environ.get("DEEPGRAM_TIMEOUT_SECONDS"), 900),
-        "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
-        "openai_base_url": os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+        "openai_api_key": first_env(
+            *(["MIXROUTE_API_KEY", "OPENAI_API_KEY"] if prefer_mixroute else ["OPENAI_API_KEY", "MIXROUTE_API_KEY"])
+        ),
+        "openai_base_url": openai_base_url,
         "openai_transcribe_model": os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe"),
         "openai_transcribe_timeout": parse_int(os.environ.get("OPENAI_TRANSCRIBE_TIMEOUT_SECONDS"), 900),
         "offline_model": os.environ.get("OFFLINE_TRANSCRIBE_MODEL", "small"),
@@ -1482,7 +1501,7 @@ def call_json_with_ai_fallback(prompt, config, label):
     if result is not None:
         return result
 
-    result = try_openai() if provider in {"auto", "openai"} else None
+    result = try_openai() if provider in {"auto", "openai", "mixroute"} else None
     if result is not None:
         return result
 

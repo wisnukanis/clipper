@@ -801,6 +801,10 @@ OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-nano
 OPENAI_MODELS=gpt-4.1-nano,gpt-5-nano,gpt-4o-mini
+MIXROUTE_API_KEY=
+MIXROUTE_BASE_URL=
+MIXROUTE_MODEL=
+MIXROUTE_MODELS=
 OPENAI_TEMPERATURE=0.45
 OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 AI_REQUEST_TIMEOUT_SECONDS=25
@@ -1020,15 +1024,19 @@ Jumlah maksimal polling container Threads sebelum dianggap belum siap. Default: 
 
 #### `AI_PROVIDER`
 
-Provider AI untuk caption, thumbnail, review subtitle, dan pemilihan highlight dikunci ke `openai`. Transkripsi tetap memakai Deepgram, lalu fallback ke OpenAI hanya jika Deepgram gagal.
+Provider AI untuk caption, thumbnail, review subtitle, dan pemilihan highlight. Nilai yang didukung: `auto`, `openai`, `gemini`, atau `mixroute`. Transkripsi tetap memakai Deepgram, lalu fallback ke endpoint OpenAI-compatible hanya jika Deepgram gagal.
 
 #### `OPENAI_API_KEY`
 
 API key OpenAI untuk semua AI teks.
 
+Jika `OPENAI_API_KEY` kosong, workflow juga bisa memakai `MIXROUTE_API_KEY` sebagai fallback untuk provider OpenAI-compatible.
+
 #### `OPENAI_BASE_URL`
 
 Base URL OpenAI API atau provider OpenAI-compatible. Default: `https://api.openai.com/v1`. Contoh: `https://ai.dinoiki.com/v1`.
+
+Untuk MixRoute, isi `MIXROUTE_BASE_URL` sesuai endpoint dari dashboard MixRoute. Jika `AI_PROVIDER=mixroute`, nilai `MIXROUTE_*` akan diprioritaskan dibanding `OPENAI_*`.
 
 #### `OPENAI_MODEL`
 
@@ -1037,6 +1045,18 @@ Model OpenAI utama untuk caption/thumbnail. Default: `gpt-4.1-nano`.
 #### `OPENAI_MODELS`
 
 Urutan fallback model OpenAI. Default: `gpt-4.1-nano,gpt-5-nano,gpt-4o-mini`.
+
+#### `MIXROUTE_API_KEY`, `MIXROUTE_BASE_URL`, `MIXROUTE_MODEL`, `MIXROUTE_MODELS`
+
+Konfigurasi khusus MixRoute. Gunakan ini kalau ingin memisahkan credential MixRoute dari `OPENAI_*`. Mode paling jelas:
+
+```env
+AI_PROVIDER=mixroute
+MIXROUTE_API_KEY=
+MIXROUTE_BASE_URL=
+MIXROUTE_MODEL=
+MIXROUTE_MODELS=
+```
 
 #### `OPENAI_TRANSCRIBE_MODEL`
 
