@@ -540,6 +540,7 @@ jobs:
       YTDLP_POT_PROVIDER_IMAGE: ${{ vars.YTDLP_POT_PROVIDER_IMAGE || 'brainicism/bgutil-ytdlp-pot-provider:node' }}
       YTDLP_POT_PROVIDER_URL: ${{ vars.YTDLP_POT_PROVIDER_URL || 'http://127.0.0.1:4416' }}
       YTDLP_PROXY: ${{ secrets.YTDLP_PROXY }}
+      YTDLP_USE_NIGHTLY: ${{ secrets.YTDLP_USE_NIGHTLY || vars.YTDLP_USE_NIGHTLY || 'false' }}
       NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
 
       YTDLP_SLEEP_REQUESTS: ${{ secrets.YTDLP_SLEEP_REQUESTS || '5' }}
@@ -1056,13 +1057,42 @@ jobs:
             echo "::warning::Tidak ada requirements Python ditemukan; lanjut dengan dependency yang sudah tersedia."
           fi
 
+      - name: Restore last known-good yt-dlp version
+        id: ytdlp_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ytdlp-last-good
+          key: ytdlp-last-good-${{ github.run_id }}
+          restore-keys: |
+            ytdlp-last-good-
+
       - name: Update yt-dlp
         shell: bash
         run: |
           # The default extra installs the matching yt-dlp-ejs package. This
           # avoids depending only on GitHub component downloads at runtime.
-          python -m pip install --upgrade --prefer-binary "yt-dlp[default]"
-          yt-dlp --version
+          PREVIOUS_VERSION="$(yt-dlp --version 2>/dev/null || echo 'not_installed')"
+          if [ -f .ytdlp-last-good ]; then
+            LAST_GOOD_VERSION="$(tr -d '[:space:]' < .ytdlp-last-good)"
+          else
+            LAST_GOOD_VERSION=""
+          fi
+          echo "YTDLP_LAST_GOOD_VERSION=$LAST_GOOD_VERSION" >> "$GITHUB_ENV"
+
+          if [ "${YTDLP_USE_NIGHTLY:-false}" = "true" ] || [ "${YTDLP_USE_NIGHTLY:-false}" = "1" ]; then
+            python -m pip install --upgrade --pre --prefer-binary "yt-dlp[default]"
+          else
+            python -m pip install --upgrade --prefer-binary "yt-dlp[default]"
+          fi
+
+          NEW_VERSION="$(yt-dlp --version)"
+          echo "YTDLP_PREVIOUS_VERSION=$PREVIOUS_VERSION" >> "$GITHUB_ENV"
+          echo "YTDLP_NEW_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
+          echo "YTDLP_ACTIVE_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
+          if [ "$PREVIOUS_VERSION" != "$NEW_VERSION" ]; then
+            echo "::notice::yt-dlp diupdate: $PREVIOUS_VERSION -> $NEW_VERSION (last known-good: ${LAST_GOOD_VERSION:-belum ada}, nightly: ${YTDLP_USE_NIGHTLY:-false})"
+          fi
+          printf '%s\n' "$NEW_VERSION"
           python -m pip show yt-dlp-ejs
 
       - name: Start yt-dlp PO token provider
@@ -1252,6 +1282,14 @@ jobs:
             echo "YTDLP_EXTRACTOR_ARGS=not_set"
           fi
           echo "YTDLP_REFERER=$YTDLP_REFERER"
+          if [ -n "$YTDLP_PROXY" ]; then
+            echo "YTDLP_PROXY=configured"
+          else
+            echo "YTDLP_PROXY=not_set"
+          fi
+          echo "YTDLP_USE_NIGHTLY=${YTDLP_USE_NIGHTLY:-false}"
+          echo "YTDLP_NEW_VERSION=${YTDLP_NEW_VERSION:-not_set}"
+          echo "YTDLP_LAST_GOOD_VERSION=${YTDLP_LAST_GOOD_VERSION:-not_set}"
           echo "YTDLP_SLEEP_REQUESTS=$YTDLP_SLEEP_REQUESTS"
           echo "YTDLP_SLEEP_INTERVAL=$YTDLP_SLEEP_INTERVAL"
           echo "YTDLP_MAX_SLEEP_INTERVAL=$YTDLP_MAX_SLEEP_INTERVAL"
@@ -1295,6 +1333,54 @@ jobs:
             if [ -n "${value:-}" ] && [ "$normalized" != "0" ] && [ "$normalized" != "false" ] && [ "$normalized" != "off" ] && [ "$normalized" != "none" ] && [ "$normalized" != "null" ]; then
               YTDLP_COMMON_TEST_ARGS+=("$option" "$value")
             fi
+          }
+
+          notify_webhook() {
+            local message="$1"
+            if [ -n "${NOTIFY_WEBHOOK_URL:-}" ]; then
+              curl -s -X POST -H "Content-Type: application/json" \
+                -d "$(printf '{"content":%s,"text":%s}' \
+                  "$(printf '%s' "$message" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" \
+                  "$(printf '%s' "$message" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" \
+                "$NOTIFY_WEBHOOK_URL" >/dev/null 2>&1 || true
+            fi
+          }
+
+          try_last_good_ytdlp() {
+            local fallback_output
+            local fallback_status
+            local fallback_install_status
+
+            if [ -z "${YTDLP_LAST_GOOD_VERSION:-}" ] || [ "${YTDLP_LAST_GOOD_VERSION:-}" = "${YTDLP_NEW_VERSION:-}" ]; then
+              return 1
+            fi
+
+            echo "::warning::yt-dlp ${YTDLP_NEW_VERSION:-unknown} kena bot-check. Mencoba fallback ke versi last known-good: $YTDLP_LAST_GOOD_VERSION"
+            set +e
+            python -m pip install --prefer-binary "yt-dlp[default]==$YTDLP_LAST_GOOD_VERSION"
+            fallback_install_status=$?
+            set -e
+
+            if [ "$fallback_install_status" -ne 0 ]; then
+              echo "::warning::Gagal install fallback yt-dlp $YTDLP_LAST_GOOD_VERSION dari PyPI."
+              return 1
+            fi
+
+            set +e
+            fallback_output="$(yt-dlp --cookies cookies.txt "${YTDLP_COMMON_TEST_ARGS[@]}" "$TEST_URL" 2>&1)"
+            fallback_status=$?
+            set -e
+
+            printf '%s\n' "$fallback_output"
+            if [ "$fallback_status" -eq 0 ]; then
+              echo "::notice::Fallback ke yt-dlp $YTDLP_LAST_GOOD_VERSION berhasil. Versi ini dipakai untuk run ini."
+              echo "YTDLP_ACTIVE_VERSION=$YTDLP_LAST_GOOD_VERSION" >> "$GITHUB_ENV"
+              notify_webhook "yt-dlp ${YTDLP_NEW_VERSION:-unknown} kena bot-check, otomatis fallback ke versi last known-good $YTDLP_LAST_GOOD_VERSION dan berhasil."
+              exit 0
+            fi
+
+            echo "::warning::Fallback ke yt-dlp $YTDLP_LAST_GOOD_VERSION tetap gagal."
+            return 1
           }
 
           try_without_cookies() {
@@ -1363,20 +1449,25 @@ jobs:
             fi
 
             if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'challenge solving failed|Requested format is not available|Only images are available|No video formats found'; then
+              try_last_good_ytdlp || true
               echo "::error::yt-dlp tidak menemukan format audio/video karena YouTube EJS challenge gagal. Pastikan Node 22+ dan paket yt-dlp-ejs terpasang; jangan lanjut ke proses render."
               exit 1
             fi
 
             if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
+              notify_webhook "Cookies YouTube tidak valid/terotasi setelah attempt $attempt/$COOKIE_TEST_ATTEMPTS (yt-dlp ${YTDLP_NEW_VERSION:-unknown}). Perlu export ulang cookies dan update GitHub Secret YTDLP_COOKIES_TXT."
               try_without_cookies || true
               echo "::error::YTDLP_COOKIES_TXT tidak valid/terrotasi. Export ulang cookies YouTube lalu update GitHub Secret YTDLP_COOKIES_TXT, atau isi YTDLP_EXTRACTOR_ARGS jika YouTube membutuhkan PO token."
               exit 1
             fi
 
             if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'sign in to confirm|not a bot|use --cookies'; then
-              try_without_cookies || true
-              echo "::error::YouTube masih meminta login/cookies. Export ulang dari private/incognito session dan jangan buka lagi session itu setelah export, atau isi YTDLP_EXTRACTOR_ARGS jika YouTube membutuhkan PO token."
-              exit 1
+              if [ "$attempt" -lt "$COOKIE_TEST_ATTEMPTS" ]; then
+                echo "::warning::YouTube masih meminta login/cookies atau bot-check. Retrying in ${COOKIE_TEST_DELAY_SECONDS}s..."
+                sleep "$COOKIE_TEST_DELAY_SECONDS"
+                continue
+              fi
+              break
             fi
 
             if [ "$attempt" -lt "$COOKIE_TEST_ATTEMPTS" ]; then
@@ -1387,16 +1478,33 @@ jobs:
           done
 
           if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'no longer valid|rotated in the browser'; then
+            notify_webhook "Cookies YouTube tidak valid/terotasi setelah $COOKIE_TEST_ATTEMPTS percobaan (yt-dlp ${YTDLP_NEW_VERSION:-unknown}). Perlu export ulang cookies dan update GitHub Secret YTDLP_COOKIES_TXT."
             echo "::error::YTDLP_COOKIES_TXT masih dianggap tidak valid/terrotasi setelah $COOKIE_TEST_ATTEMPTS percobaan. Jika rerun tetap gagal, export ulang dari private/incognito: login YouTube, buka https://www.youtube.com/robots.txt di tab yang sama, export youtube.com cookies format Netscape, lalu update GitHub Secret YTDLP_COOKIES_TXT."
             exit 1
           fi
 
           if printf '%s\n' "$YTDLP_OUTPUT" | grep -Eiq 'sign in to confirm|not a bot|use --cookies'; then
-            echo "::error::YouTube masih meminta login/cookies setelah $COOKIE_TEST_ATTEMPTS percobaan. Ikuti panduan export cookies yt-dlp: gunakan private/incognito session dan jangan buka lagi session itu setelah export."
+            try_last_good_ytdlp || true
+            notify_webhook "YouTube masih menolak (bot-check) setelah $COOKIE_TEST_ATTEMPTS percobaan (yt-dlp ${YTDLP_NEW_VERSION:-unknown}). Fallback versi lama gagal/tidak tersedia; cek YTDLP_PROXY."
+            echo "::error::YouTube masih meminta login/cookies setelah $COOKIE_TEST_ATTEMPTS percobaan. Ikuti panduan export cookies yt-dlp: gunakan private/incognito session dan jangan buka lagi session itu setelah export, atau cek YTDLP_PROXY."
             exit 1
           fi
 
           exit "$YTDLP_STATUS"
+
+      - name: Save known-good yt-dlp version
+        if: ${{ success() && env.YTDLP_ACTIVE_VERSION != '' }}
+        shell: bash
+        run: |
+          echo -n "$YTDLP_ACTIVE_VERSION" > .ytdlp-last-good
+          echo "Menyimpan yt-dlp $YTDLP_ACTIVE_VERSION sebagai last known-good untuk run berikutnya."
+
+      - name: Persist last known-good yt-dlp cache
+        if: ${{ success() && env.YTDLP_ACTIVE_VERSION != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .ytdlp-last-good
+          key: ytdlp-last-good-${{ github.run_id }}
 
       - name: Check configuration
         shell: bash
