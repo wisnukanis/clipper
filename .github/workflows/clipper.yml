@@ -535,7 +535,7 @@ jobs:
       # Kosong berarti yt-dlp memilih user-agent yang sesuai versi extractornya.
       YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
       YTDLP_REFERER: https://www.youtube.com/
-      YTDLP_EXTRACTOR_ARGS: ${{ secrets.YTDLP_EXTRACTOR_ARGS }}
+      YTDLP_EXTRACTOR_ARGS: ${{ secrets.YTDLP_EXTRACTOR_ARGS || 'youtube:player_client=android,web' }}
       YTDLP_POT_PROVIDER_ENABLED: ${{ vars.YTDLP_POT_PROVIDER_ENABLED || 'true' }}
       YTDLP_POT_PROVIDER_IMAGE: ${{ vars.YTDLP_POT_PROVIDER_IMAGE || 'brainicism/bgutil-ytdlp-pot-provider:node' }}
       YTDLP_POT_PROVIDER_URL: ${{ vars.YTDLP_POT_PROVIDER_URL || 'http://127.0.0.1:4416' }}

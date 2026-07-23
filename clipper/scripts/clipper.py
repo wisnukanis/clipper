@@ -473,7 +473,7 @@ def ytdlp_common_args():
     pot_provider_url = os.environ.get("YTDLP_POT_PROVIDER_URL", "").strip()
     js_runtimes = resolve_ytdlp_js_runtimes(os.environ.get("YTDLP_JS_RUNTIMES", "node"))
     remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github").strip()
-    extractor_args = os.environ.get("YTDLP_EXTRACTOR_ARGS", "").strip()
+    extractor_args = os.environ.get("YTDLP_EXTRACTOR_ARGS", "youtube:player_client=android,web").strip()
     sleep_requests = os.environ.get("YTDLP_SLEEP_REQUESTS", "").strip()
     sleep_interval = os.environ.get("YTDLP_SLEEP_INTERVAL", "").strip()
     max_sleep_interval = os.environ.get("YTDLP_MAX_SLEEP_INTERVAL", "").strip()
@@ -489,11 +489,12 @@ def ytdlp_common_args():
         root_cookies_path = ROOT / "cookies.txt"
         if root_cookies_path.exists():
             cookies_file = str(root_cookies_path)
-
     if cookies_file:
         args.extend(["--cookies", cookies_file])
     elif cookies_browser:
         args.extend(["--cookies-from-browser", cookies_browser])
+    elif os.path.exists("cookies.txt"):
+        args.extend(["--cookies", "cookies.txt"])
 
     if user_agent:
         args.extend(["--user-agent", user_agent])
