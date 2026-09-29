@@ -535,7 +535,7 @@ jobs:
       # Kosong berarti yt-dlp memilih user-agent yang sesuai versi extractornya.
       YTDLP_USER_AGENT: ${{ secrets.YTDLP_USER_AGENT }}
       YTDLP_REFERER: https://www.youtube.com/
-      YTDLP_EXTRACTOR_ARGS: ${{ secrets.YTDLP_EXTRACTOR_ARGS || 'youtube:player_client=android,web' }}
+      YTDLP_EXTRACTOR_ARGS: ${{ secrets.YTDLP_EXTRACTOR_ARGS || 'youtube:player_client=ios,android,mweb' }}
       YTDLP_POT_PROVIDER_ENABLED: ${{ vars.YTDLP_POT_PROVIDER_ENABLED || 'true' }}
       YTDLP_POT_PROVIDER_IMAGE: ${{ vars.YTDLP_POT_PROVIDER_IMAGE || 'brainicism/bgutil-ytdlp-pot-provider:node' }}
       YTDLP_POT_PROVIDER_URL: ${{ vars.YTDLP_POT_PROVIDER_URL || 'http://127.0.0.1:4416' }}
@@ -754,6 +754,7 @@ jobs:
           fi
 
       - name: Persist refreshed Instagram token secret
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
@@ -773,8 +774,11 @@ jobs:
             exit 0
           fi
 
-          printf '%s' "$INSTAGRAM_ACCESS_TOKEN" | gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
-          echo "Instagram token GitHub Secret updated."
+          if ! printf '%s' "$INSTAGRAM_ACCESS_TOKEN" | gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"; then
+            echo "::warning::Gagal menyimpan INSTAGRAM_ACCESS_TOKEN ke GitHub Secrets (kemungkinan GH_REPO_SECRET_TOKEN expired/invalid). Token baru tetap dipakai untuk upload run ini."
+          else
+            echo "Instagram token GitHub Secret updated."
+          fi
 
       - name: Refresh Facebook token if possible
         shell: bash
@@ -790,6 +794,7 @@ jobs:
           fi
 
       - name: Persist refreshed Facebook token secret
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
@@ -810,13 +815,19 @@ jobs:
           fi
 
           if [ "${FACEBOOK_TOKEN_REFRESHED:-false}" = "true" ]; then
-            printf '%s' "$FACEBOOK_PAGE_ACCESS_TOKEN" | gh secret set FACEBOOK_PAGE_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
-            echo "Facebook Page token GitHub Secret updated."
+            if ! printf '%s' "$FACEBOOK_PAGE_ACCESS_TOKEN" | gh secret set FACEBOOK_PAGE_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"; then
+              echo "::warning::Gagal menyimpan FACEBOOK_PAGE_ACCESS_TOKEN ke GitHub Secrets (kemungkinan GH_REPO_SECRET_TOKEN expired/invalid). Token baru tetap dipakai untuk upload run ini."
+            else
+              echo "Facebook Page token GitHub Secret updated."
+            fi
           fi
 
           if [ "${FACEBOOK_USER_TOKEN_REFRESHED:-false}" = "true" ] && [ -n "${FACEBOOK_USER_ACCESS_TOKEN:-}" ]; then
-            printf '%s' "$FACEBOOK_USER_ACCESS_TOKEN" | gh secret set FACEBOOK_USER_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
-            echo "Facebook user token GitHub Secret updated."
+            if ! printf '%s' "$FACEBOOK_USER_ACCESS_TOKEN" | gh secret set FACEBOOK_USER_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"; then
+              echo "::warning::Gagal menyimpan FACEBOOK_USER_ACCESS_TOKEN ke GitHub Secrets (kemungkinan GH_REPO_SECRET_TOKEN expired/invalid). Token baru tetap dipakai untuk upload run ini."
+            else
+              echo "Facebook user token GitHub Secret updated."
+            fi
           fi
 
       - name: Setup Python
@@ -965,6 +976,7 @@ jobs:
           fi
 
       - name: Persist refreshed TikTok token secrets
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
@@ -985,21 +997,19 @@ jobs:
           fi
 
           if [ -n "${TIKTOK_ACCESS_TOKEN:-}" ]; then
-            printf '%s' "$TIKTOK_ACCESS_TOKEN" | gh secret set TIKTOK_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
-            echo "TikTok access token GitHub Secret updated."
+            printf '%s' "$TIKTOK_ACCESS_TOKEN" | gh secret set TIKTOK_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" || echo "::warning::Gagal update secret TIKTOK_ACCESS_TOKEN."
           fi
 
           if [ -n "${TIKTOK_REFRESH_TOKEN:-}" ]; then
-            printf '%s' "$TIKTOK_REFRESH_TOKEN" | gh secret set TIKTOK_REFRESH_TOKEN --repo "$GITHUB_REPOSITORY"
-            echo "TikTok refresh token GitHub Secret updated."
+            printf '%s' "$TIKTOK_REFRESH_TOKEN" | gh secret set TIKTOK_REFRESH_TOKEN --repo "$GITHUB_REPOSITORY" || echo "::warning::Gagal update secret TIKTOK_REFRESH_TOKEN."
           fi
 
           if [ -n "${TIKTOK_OPEN_ID:-}" ]; then
-            printf '%s' "$TIKTOK_OPEN_ID" | gh secret set TIKTOK_OPEN_ID --repo "$GITHUB_REPOSITORY"
+            printf '%s' "$TIKTOK_OPEN_ID" | gh secret set TIKTOK_OPEN_ID --repo "$GITHUB_REPOSITORY" || echo "::warning::Gagal update secret TIKTOK_OPEN_ID."
           fi
 
           if [ -n "${TIKTOK_SCOPE:-}" ]; then
-            printf '%s' "$TIKTOK_SCOPE" | gh secret set TIKTOK_SCOPE --repo "$GITHUB_REPOSITORY"
+            printf '%s' "$TIKTOK_SCOPE" | gh secret set TIKTOK_SCOPE --repo "$GITHUB_REPOSITORY" || echo "::warning::Gagal update secret TIKTOK_SCOPE."
           fi
 
       - name: Refresh Threads token if possible
@@ -1016,6 +1026,7 @@ jobs:
           fi
 
       - name: Persist refreshed Threads token secret
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_SECRET_TOKEN }}
@@ -1035,11 +1046,15 @@ jobs:
             exit 0
           fi
 
-          printf '%s' "$THREADS_ACCESS_TOKEN" | gh secret set THREADS_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
-          if [ -n "${THREADS_TOKEN_ISSUED_AT:-}" ]; then
-            printf '%s' "$THREADS_TOKEN_ISSUED_AT" | gh secret set THREADS_TOKEN_ISSUED_AT --repo "$GITHUB_REPOSITORY"
+          if ! printf '%s' "$THREADS_ACCESS_TOKEN" | gh secret set THREADS_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"; then
+            echo "::warning::Gagal menyimpan THREADS_ACCESS_TOKEN ke GitHub Secrets (kemungkinan GH_REPO_SECRET_TOKEN expired/invalid)."
+          else
+            echo "Threads token GitHub Secret updated."
           fi
-          echo "Threads token GitHub Secret updated."
+
+          if [ -n "${THREADS_TOKEN_ISSUED_AT:-}" ]; then
+            printf '%s' "$THREADS_TOKEN_ISSUED_AT" | gh secret set THREADS_TOKEN_ISSUED_AT --repo "$GITHUB_REPOSITORY" || true
+          fi
 
       - name: Install Python dependencies
         shell: bash
