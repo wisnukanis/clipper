@@ -473,7 +473,7 @@ def ytdlp_common_args():
     pot_provider_url = os.environ.get("YTDLP_POT_PROVIDER_URL", "").strip()
     js_runtimes = resolve_ytdlp_js_runtimes(os.environ.get("YTDLP_JS_RUNTIMES", "node"))
     remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github").strip()
-    extractor_args = os.environ.get("YTDLP_EXTRACTOR_ARGS", "youtube:player_client=android,web").strip()
+    extractor_args = os.environ.get("YTDLP_EXTRACTOR_ARGS", "youtube:player_client=ios,android,mweb").strip()
     sleep_requests = os.environ.get("YTDLP_SLEEP_REQUESTS", "").strip()
     sleep_interval = os.environ.get("YTDLP_SLEEP_INTERVAL", "").strip()
     max_sleep_interval = os.environ.get("YTDLP_MAX_SLEEP_INTERVAL", "").strip()
